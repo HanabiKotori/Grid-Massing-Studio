@@ -27,6 +27,7 @@ import {
   ELEVATOR_DEFAULT_COUNT,
   INFRA_DEFAULTS,
   INFRA_LABELS,
+  WINDOW_SILL,
   clampInfraDims,
   isFurnitureKind,
   type InfraDims,
@@ -38,6 +39,7 @@ import {
 } from './core/amapWeather'
 import { Stage, type QualityLevel, type WalkState, type WalkView } from './core/Stage'
 import { loadStoredProject, saveStoredProject } from './core/projectStore'
+import sampleSceneJson from './data/sample-scene.json'
 import {
   DEFAULT_PARTICLE_DENSITIES,
   WEATHER_LABELS,
@@ -63,12 +65,20 @@ const venueNameInput = ref<HTMLInputElement | null>(null)
 const booths = ref<Booth[]>([])
 const infras = ref<Infra[]>([])
 const selectedInfraId = ref<string | null>(null)
+const selectedInfraIds = ref<string[]>([])
 const mode = ref<EditorMode>('idle')
 const draftPoints = ref<Pt[]>([])
 const draftHeight = ref(6)
 /** 正在绘制的展台类型 */
 const boothKind = ref<BoothKind>('massing')
 const selectedIds = ref<string[]>([])
+interface BoothPasteClipboard {
+  booths: Booth[]
+  infras: Infra[]
+  center: Pt
+}
+let pasteClipboard: BoothPasteClipboard | null = null
+let pendingInfraCopy: Infra | null = null
 const gridOn = ref(true)
 const dimOn = ref(false)
 const northDeg = ref(0)
@@ -107,7 +117,9 @@ const sunIsDay = computed(
   () => Math.sin((sunProgress.value - 0.25) * Math.PI * 2) > 0,
 )
 const venueXray = ref(false)
-const labelsOn = ref(true)
+const boothLabelsOn = ref(true)
+const infraLabelsOn = ref(false)
+const labelsOn = computed(() => boothLabelsOn.value && infraLabelsOn.value)
 const areaOn = ref(false)
 const venueNoTop = ref(true)
 const toastMsg = ref('')
@@ -115,6 +127,7 @@ const showHelp = ref(false)
 const showWeather = ref(false)
 type ToolMenu = 'view' | 'display' | 'quality' | 'data'
 const toolMenu = ref<ToolMenu | null>(null)
+const toolSubMenu = ref<'names' | null>(null)
 const weather = ref<WeatherKind>('clear')
 const weatherOn = ref(true)
 const liveWeatherOn = ref(false)
@@ -261,7 +274,9 @@ const showWelcome = computed(
 )
 const draftArea = computed(() => (draftPoints.value.length >= 3 ? polygonArea(draftPoints.value) : 0))
 const isDrawing = computed(() => mode.value === 'draw-venue' || mode.value === 'draw-booth')
-const isPlacing = computed(() => mode.value.startsWith('place-'))
+const isPlacing = computed(
+  () => mode.value.startsWith('place-') || mode.value === 'paste-booths',
+)
 const rotateDisplay = computed(() => {
   if (rotateDeg.value === null) return ''
   const d = ((rotateDeg.value % 360) + 360) % 360
@@ -501,6 +516,126 @@ function addBooth(points: Pt[], height: number, kind: BoothKind) {
   if (venue.value) stage?.fit(venue.value.points, venue.value.height, 2.6)
 }
 
+function copySelectedBooths() {
+  if (renderOnly.value || mode.value !== 'idle') return
+  pendingInfraCopy = null
+  const sourceBooths = booths.value.filter((b) => selectedIds.value.includes(b.id))
+  if (!sourceBooths.length) {
+    toast('请先选中要复制的展台')
+    return
+  }
+
+  // 家具和落地设施跟随展台一起复制；门窗依附场馆墙，不纳入复制
+  const sourceInfras = infras.value.filter(
+    (it) =>
+      it.kind !== 'gate' &&
+      it.kind !== 'window' &&
+      sourceBooths.some((booth) => pointInPolygon(it, booth.points)),
+  )
+  const allPoints = sourceBooths.flatMap((booth) => booth.points)
+  const bnd = boundsOf(allPoints)
+  const center = {
+    x: (bnd.minX + bnd.maxX) / 2,
+    z: (bnd.minZ + bnd.maxZ) / 2,
+  }
+  const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+  pasteClipboard = {
+    booths: clone(sourceBooths),
+    infras: clone(sourceInfras),
+    center,
+  }
+  selectedIds.value = []
+  clearInfraSelection()
+  mode.value = 'paste-booths'
+  toast(
+    `已复制 ${sourceBooths.length} 个展台${sourceInfras.length ? ` / ${sourceInfras.length} 个设施` : ''} · 点击放置，Esc 取消`,
+  )
+}
+
+function copySelectedInfra() {
+  if (renderOnly.value || mode.value !== 'idle') return
+  const target = infras.value.find((it) => it.id === selectedInfraId.value)
+  if (!target) return
+  pendingInfraCopy = JSON.parse(JSON.stringify(target)) as Infra
+  pasteClipboard = null
+  clearInfraSelection()
+  selectedIds.value = []
+  mode.value = PLACE_MODE[target.kind]
+  toast(`已复制 ${target.name} · 点击放置，Esc 取消`)
+}
+
+function cancelBoothPaste() {
+  pasteClipboard = null
+  selectedIds.value = []
+  mode.value = 'idle'
+  toast('已取消复制')
+}
+
+/** 复制组点击落位；坐标是新组中心 */
+function placePastedBooths(target: Pt) {
+  const clip = pasteClipboard
+  if (!clip) return
+  const dx = target.x - clip.center.x
+  const dz = target.z - clip.center.z
+  const inner = venueInner()
+  const movedBooths = clip.booths.map((booth) => ({
+    ...booth,
+    points: booth.points.map((p) => ({ x: p.x + dx, z: p.z + dz })),
+  }))
+
+  for (const booth of movedBooths) {
+    if (inner && !polygonInsidePolygon(booth.points, inner)) {
+      toast('复制后的展台需完全位于场馆内部')
+      return
+    }
+  }
+  const clash = movedBooths.find((booth) =>
+    booths.value.some((existing) => overlaps(booth.points, existing.points)),
+  )
+  if (clash) {
+    toast(`复制位置与「${clash.name}」重叠，请换个位置`)
+    return
+  }
+
+  const groupMap = new Map<string, string>()
+  const nextBooths = movedBooths.map((booth) => {
+    seq += 1
+    const groupId = booth.groupId
+      ? groupMap.get(booth.groupId) ??
+        (() => {
+          const id = nextGroupId()
+          groupMap.set(booth.groupId!, id)
+          return id
+        })()
+      : undefined
+    return {
+      ...booth,
+      id: `b${Date.now().toString(36)}-${seq}`,
+      ...(groupId ? { groupId } : { groupId: undefined }),
+    }
+  })
+  const nextInfras = clip.infras.map((it) => {
+    infraSeq += 1
+    return {
+      ...it,
+      id: `inf${Date.now().toString(36)}-${infraSeq}`,
+      x: it.x + dx,
+      z: it.z + dz,
+    }
+  })
+
+  booths.value = [...booths.value, ...nextBooths]
+  infras.value = [...infras.value, ...nextInfras]
+  selectedIds.value = nextBooths.map((booth) => booth.id)
+  clearInfraSelection()
+  pasteClipboard = null
+  mode.value = 'idle'
+  toast(
+    `已复制 ${nextBooths.length} 个展台${nextInfras.length ? ` / ${nextInfras.length} 个设施` : ''}`,
+  )
+}
+
 function confirmHeight() {
   const m = mode.value
   const pts = draftPoints.value
@@ -519,13 +654,12 @@ function confirmHeight() {
     booths.value = kept
     selectedIds.value = selectedIds.value.filter((id) => kept.some((b) => b.id === id))
 
-    // 出入口依附旧墙体，重绘场馆后需要重新放置
-    const removedGate = infras.value.some(
-      (it) => it.id === selectedInfraId.value && it.kind === 'gate',
+    // 出入口与窗户依附旧墙体，重绘场馆后需要重新放置
+    infras.value = infras.value.filter(
+      (it) => it.kind !== 'gate' && it.kind !== 'window',
     )
-    infras.value = infras.value.filter((it) => it.kind !== 'gate')
     cleanupFurniture()
-    if (removedGate) selectedInfraId.value = null
+    clearInfraSelection()
 
     mode.value = 'idle'
     draftPoints.value = []
@@ -549,6 +683,7 @@ const PLACE_MODE: Record<InfraKind, EditorMode> = {
   stairs: 'place-stairs',
   restroom: 'place-restroom',
   gate: 'place-gate',
+  window: 'place-window',
   elevator: 'place-elevator',
   wall: 'place-wall',
   chair: 'place-chair',
@@ -562,6 +697,7 @@ function kindOfPlaceMode(m: EditorMode): InfraKind | null {
   if (m === 'place-stairs') return 'stairs'
   if (m === 'place-restroom') return 'restroom'
   if (m === 'place-gate') return 'gate'
+  if (m === 'place-window') return 'window'
   if (m === 'place-elevator') return 'elevator'
   if (m === 'place-wall') return 'wall'
   if (m === 'place-chair') return 'chair'
@@ -573,7 +709,8 @@ function kindOfPlaceMode(m: EditorMode): InfraKind | null {
 }
 
 function beginInfraPlace(kind: InfraKind) {
-  if (kind === 'gate' && !venue.value) {
+  pendingInfraCopy = null
+  if ((kind === 'gate' || kind === 'window') && !venue.value) {
     toast('请先绘制场馆')
     return
   }
@@ -583,15 +720,17 @@ function beginInfraPlace(kind: InfraKind) {
   }
   if (mode.value !== 'idle') return
   selectedIds.value = []
-  selectedInfraId.value = null
+  clearInfraSelection()
   draftPoints.value = []
   mode.value = PLACE_MODE[kind]
   toast(
     kind === 'gate'
       ? '移动到场馆墙体或墙面上，点击放置出入口'
-      : isFurnitureKind(kind)
-        ? `点击展台内部放置${INFRA_LABELS[kind]} · 右键旋转 90°`
-        : `点击地面放置${INFRA_LABELS[kind]} · 右键旋转 90°`,
+      : kind === 'window'
+        ? '移动到场馆外墙上，点击放置窗户'
+        : isFurnitureKind(kind)
+          ? `点击展台内部放置${INFRA_LABELS[kind]} · 右键旋转 90°`
+          : `点击地面放置${INFRA_LABELS[kind]} · 右键旋转 90°`,
   )
 }
 
@@ -689,37 +828,157 @@ function furnitureInsideBooth(
   return host ? furnitureInsidePolygon(host.points, x, z, width, depth, rotation) : false
 }
 
+/** 判断两个贴墙设施是否在同一条墙线上并发生长度重叠 */
+function wallRunOverlap(
+  a: { x: number; z: number; width: number; rotation: number },
+  b: { x: number; z: number; width: number; rotation: number },
+): boolean {
+  if (Math.abs(Math.sin(a.rotation - b.rotation)) > 0.2) return false
+  const ux = Math.cos(a.rotation)
+  const uz = -Math.sin(a.rotation)
+  const vx = Math.sin(a.rotation)
+  const vz = Math.cos(a.rotation)
+  const dx = b.x - a.x
+  const dz = b.z - a.z
+  const along = dx * ux + dz * uz
+  const perp = dx * vx + dz * vz
+  return Math.abs(perp) <= 0.6 && Math.abs(along) < (a.width + b.width) / 2 - 0.02
+}
+
+function gateWindowConflict(
+  x: number,
+  z: number,
+  width: number,
+  rotation: number,
+  ignoreId?: string,
+): boolean {
+  const candidate = { x, z, width, rotation }
+  return infras.value.some(
+    (it) =>
+      it.id !== ignoreId &&
+      it.kind === 'gate' &&
+      wallRunOverlap(candidate, it),
+  )
+}
+
+function windowGateConflict(
+  x: number,
+  z: number,
+  width: number,
+  rotation: number,
+  ignoreId?: string,
+): boolean {
+  const candidate = { x, z, width, rotation }
+  return infras.value.some(
+    (it) =>
+      it.id !== ignoreId &&
+      it.kind === 'window' &&
+      wallRunOverlap(candidate, it),
+  )
+}
+
+/** 基础设施旋转后的轴对齐包围盒 */
+function infraAabb(it: Pick<Infra, 'x' | 'z' | 'width' | 'depth' | 'rotation'>) {
+  const points = [
+    { x: it.x, z: it.z },
+    ...infraCorners(it.x, it.z, it.width, it.depth, it.rotation),
+  ]
+  return {
+    minX: Math.min(...points.map((p) => p.x)),
+    maxX: Math.max(...points.map((p) => p.x)),
+    minZ: Math.min(...points.map((p) => p.z)),
+    maxZ: Math.max(...points.map((p) => p.z)),
+  }
+}
+
+function intervalGap(aMin: number, aMax: number, bMin: number, bMax: number) {
+  return Math.max(0, bMin - aMax, aMin - bMax)
+}
+
+/** 两个设施是否贴边相邻；多选时至少要与已选组内一个设施接触 */
+function infraTouching(
+  a: Pick<Infra, 'x' | 'z' | 'width' | 'depth' | 'rotation'>,
+  b: Pick<Infra, 'x' | 'z' | 'width' | 'depth' | 'rotation'>,
+): boolean {
+  const A = infraAabb(a)
+  const B = infraAabb(b)
+  return (
+    intervalGap(A.minX, A.maxX, B.minX, B.maxX) <= 0.08 &&
+    intervalGap(A.minZ, A.maxZ, B.minZ, B.maxZ) <= 0.08
+  )
+}
+
+/** 多选设施是否通过贴边关系连成一整组 */
+function infraIdsConnected(ids: string[]): boolean {
+  if (ids.length < 2) return true
+  const set = new Set(ids)
+  const byId = new Map(infras.value.map((it) => [it.id, it]))
+  const start = byId.get(ids[0])
+  if (!start) return false
+  const visited = new Set<string>([start.id])
+  const queue = [start]
+  while (queue.length) {
+    const current = queue.shift()!
+    for (const id of set) {
+      if (visited.has(id)) continue
+      const other = byId.get(id)
+      if (!other || !infraTouching(current, other)) continue
+      visited.add(id)
+      queue.push(other)
+    }
+  }
+  return visited.size === ids.length
+}
+
 /** 设施落地时不与展台、其他设施重叠；gate 由墙体吸附单独处理 */
 function infraSpotFree(
   x: number,
   z: number,
   spec: Pick<Infra, 'kind' | 'width' | 'depth' | 'rotation'>,
-  ignoreId?: string,
+  ignoreId?: string | Set<string>,
 ): boolean {
   if (spec.kind === 'gate') return true
+  const ignoreIds =
+    typeof ignoreId === 'string' ? new Set([ignoreId]) : ignoreId
 
   const furniture = isFurnitureKind(spec.kind)
   const cos = Math.cos(spec.rotation)
   const sin = Math.sin(spec.rotation)
-  const samples = [{ x, z }, ...infraCorners(x, z, spec.width, spec.depth, spec.rotation)]
+  // 贴边接触时允许 1.5 cm 的边界误差，但不允许真实重叠
+  const edgeEps = 0.015
+  const boothSamples = [
+    { x, z },
+    ...infraCorners(
+      x,
+      z,
+      Math.max(0.02, spec.width - edgeEps * 2),
+      Math.max(0.02, spec.depth - edgeEps * 2),
+      spec.rotation,
+    ),
+  ]
 
   // 家具本就位于展台内部，跳过与展台的互斥检查
   if (!furniture) {
     for (const b of booths.value) {
-      if (samples.some((p) => pointInPolygon(p, b.points))) return false
+      if (boothSamples.some((p) => pointInPolygon(p, b.points))) return false
       // 展台顶点落在设施内部（设施覆盖展台的情况）
       for (const p of b.points) {
         const dx = p.x - x
         const dz = p.z - z
         const lx = dx * cos - dz * sin
         const lz = dx * sin + dz * cos
-        if (Math.abs(lx) <= spec.width / 2 && Math.abs(lz) <= spec.depth / 2) return false
+        if (
+          Math.abs(lx) <= Math.max(0, spec.width / 2 - edgeEps) &&
+          Math.abs(lz) <= Math.max(0, spec.depth / 2 - edgeEps)
+        ) {
+          return false
+        }
       }
     }
   }
 
   for (const it of infras.value) {
-    if (it.id === ignoreId || it.kind === 'gate') continue
+    if (ignoreIds?.has(it.id) || it.kind === 'gate') continue
     // 墙面之间允许连接/交叉
     if (spec.kind === 'wall' && it.kind === 'wall') continue
     if (
@@ -746,16 +1005,33 @@ function handlePlaceInfra(
   kind: InfraKind,
   spot: { x: number; z: number; rotation: number; hostHeight?: number },
 ) {
-  if (kind === 'gate' && !venue.value) {
+  if ((kind === 'gate' || kind === 'window') && !venue.value) {
     toast('请先绘制场馆')
     mode.value = 'idle'
     return
   }
 
   const hostHeight =
-    kind === 'gate' ? (spot.hostHeight ?? venue.value?.height) : venue.value?.height
-  const dims = clampInfraDims(kind, INFRA_DEFAULTS[kind], hostHeight)
+    kind === 'gate' || kind === 'window'
+      ? (spot.hostHeight ?? venue.value?.height)
+      : venue.value?.height
+  const copied = pendingInfraCopy?.kind === kind ? pendingInfraCopy : null
+  const dims = clampInfraDims(
+    kind,
+    copied
+      ? { width: copied.width, depth: copied.depth, height: copied.height }
+      : INFRA_DEFAULTS[kind],
+    hostHeight,
+  )
   const rotation = spot.rotation
+  if (kind === 'window' && gateWindowConflict(spot.x, spot.z, dims.width, rotation)) {
+    toast('这里已有出入口，不能安装窗户')
+    return
+  }
+  if (kind === 'gate' && windowGateConflict(spot.x, spot.z, dims.width, rotation)) {
+    toast('这里已有窗户，不能安装出入口')
+    return
+  }
   if (
     isFurnitureKind(kind) &&
     !furnitureInsideBooth(kind, spot.x, spot.z, dims.width, dims.depth, rotation)
@@ -782,20 +1058,30 @@ function handlePlaceInfra(
     width: dims.width,
     depth: dims.depth,
     height: dims.height,
-    ...(kind === 'gate' ? { open: false } : {}),
-    ...(kind === 'elevator' ? { count: ELEVATOR_DEFAULT_COUNT } : {}),
+    ...(kind === 'window'
+      ? { sill: copied?.sill ?? WINDOW_SILL }
+      : {}),
+    ...(kind === 'gate' ? { open: copied?.open ?? false } : {}),
+    ...(kind === 'elevator'
+      ? { count: copied?.count ?? ELEVATOR_DEFAULT_COUNT }
+      : {}),
   }
 
+  pendingInfraCopy = null
   infras.value = [...infras.value, item]
   selectedIds.value = []
-  selectedInfraId.value = item.id
+  setInfraSelection([item.id])
   mode.value = 'idle'
-  toast(`${item.name} 已添加 · 高 ${item.height.toFixed(1)} m`)
+  toast(
+    copied
+      ? `已复制 ${copied.name} · 高 ${item.height.toFixed(1)} m`
+      : `${item.name} 已添加 · 高 ${item.height.toFixed(1)} m`,
+  )
 }
 
 function selectInfra(id: string) {
-  selectedInfraId.value = id
   selectedIds.value = []
+  setInfraSelection([id])
 }
 
 function selectInfraFromPanel(id: string) {
@@ -818,11 +1104,11 @@ function renameInfra(id: string, name: string) {
 function deleteInfra(id: string) {
   const target = infras.value.find((it) => it.id === id)
   infras.value = infras.value.filter((it) => it.id !== id)
-  if (selectedInfraId.value === id) selectedInfraId.value = null
+  setInfraSelection(selectedInfraIds.value.filter((x) => x !== id))
   toast(target ? `已删除 ${target.name}` : '已删除基础设施')
 }
 
-function updateInfraDims(id: string, patch: Partial<InfraDims>) {
+function updateInfraDims(id: string, patch: Partial<InfraDims> & { sill?: number }) {
   infras.value = infras.value.map((it) => {
     if (it.id !== id) return it
     const dims = clampInfraDims(
@@ -830,7 +1116,22 @@ function updateInfraDims(id: string, patch: Partial<InfraDims>) {
       { width: it.width, depth: it.depth, height: it.height, ...patch },
       venue.value?.height,
     )
-    const next = { ...it, ...dims }
+    let next = { ...it, ...dims }
+    if (it.kind === 'window') {
+      const venueHeight = venue.value?.height ?? 6
+      const currentSill = it.sill ?? WINDOW_SILL
+      const maxSill = Math.max(0.2, venueHeight - next.height - 0.15)
+      const sill =
+        patch.sill === undefined
+          ? currentSill
+          : Math.min(maxSill, Math.max(0.2, patch.sill))
+      const maxHeight = Math.max(1, venueHeight - sill - 0.15)
+      next = {
+        ...next,
+        sill: Math.round(sill * 10) / 10,
+        height: Math.min(next.height, maxHeight),
+      }
+    }
     if (isFurnitureKind(it.kind)) {
       if (
         !furnitureInsideBooth(
@@ -850,6 +1151,20 @@ function updateInfraDims(id: string, patch: Partial<InfraDims>) {
         return it
       }
     }
+    if (it.kind === 'window') {
+      if (gateWindowConflict(next.x, next.z, next.width, next.rotation, id)) {
+        toast('调整尺寸后会碰到出入口')
+        return it
+      }
+      if (!infraSpotFree(next.x, next.z, next, id)) {
+        toast('调整尺寸后会与其他对象重叠')
+        return it
+      }
+    }
+    if (it.kind === 'gate' && windowGateConflict(next.x, next.z, next.width, next.rotation, id)) {
+      toast('调整尺寸后会碰到窗户')
+      return it
+    }
     return next
   })
 }
@@ -865,6 +1180,14 @@ function moveInfra(id: string, x: number, z: number, rotation: number) {
     toast('家具需完整位于展台内部，已恢复原位')
     return
   }
+  if (target.kind === 'window' && gateWindowConflict(x, z, target.width, rotation, id)) {
+    toast('这里已有出入口，已恢复原位')
+    return
+  }
+  if (target.kind === 'gate' && windowGateConflict(x, z, target.width, rotation, id)) {
+    toast('这里已有窗户，已恢复原位')
+    return
+  }
   if (!infraSpotFree(x, z, target, id)) {
     toast('该位置已被占用，已恢复原位')
     return
@@ -873,9 +1196,59 @@ function moveInfra(id: string, x: number, z: number, rotation: number) {
   toast(`${target.name} 已移动`)
 }
 
+/** 相邻多选整体拖动：全部通过校验后一次性写回 */
+function moveInfraGroup(
+  targets: { id: string; x: number; z: number; rotation: number }[],
+) {
+  if (targets.length < 2) return
+  const targetMap = new Map(targets.map((target) => [target.id, target]))
+  const moving = new Set(targets.map((target) => target.id))
+  const next: Infra[] = []
+
+  for (const item of infras.value) {
+    const target = targetMap.get(item.id)
+    if (!target) {
+      next.push(item)
+      continue
+    }
+    if (
+      isFurnitureKind(item.kind) &&
+      !furnitureInsideBooth(
+        item.kind,
+        target.x,
+        target.z,
+        item.width,
+        item.depth,
+        target.rotation,
+      )
+    ) {
+      toast(`${item.name} 会超出展台范围，已恢复原位`)
+      return
+    }
+    if (!infraSpotFree(
+      target.x,
+      target.z,
+      { ...item, rotation: target.rotation },
+      moving,
+    )) {
+      toast('整体移动后会与其他对象重叠，已恢复原位')
+      return
+    }
+    next.push({
+      ...item,
+      x: target.x,
+      z: target.z,
+      rotation: target.rotation,
+    })
+  }
+
+  infras.value = next
+  toast(`已整体移动 ${targets.length} 个设施`)
+}
+
 function rotateInfra(id: string, dir: 1 | -1) {
   const target = infras.value.find((it) => it.id === id)
-  if (!target || target.kind === 'gate') return
+  if (!target || target.kind === 'gate' || target.kind === 'window') return
 
   const turn = (dir * Math.PI) / 2
   const rotation = (((target.rotation + turn) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
@@ -1042,7 +1415,7 @@ function applySnapshot(snap: SceneSnapshot) {
   }
   venueNoTop.value = snap.venue ? !snap.venue.ceiling : venueNoTop.value
   selectedIds.value = []
-  selectedInfraId.value = null
+  clearInfraSelection()
   mode.value = 'idle'
   draftPoints.value = []
 
@@ -1112,6 +1485,7 @@ const INFRA_KIND_SET = new Set<InfraKind>([
   'stairs',
   'restroom',
   'gate',
+  'window',
   'elevator',
   'wall',
   'chair',
@@ -1175,6 +1549,10 @@ function readBooth(raw: unknown, index: number): Booth | null {
       ? r.id.trim()
       : `imp-${Date.now().toString(36)}-${index}`
   const groupId = typeof r.groupId === 'string' && r.groupId ? r.groupId : undefined
+  const exhibitor =
+    typeof r.exhibitor === 'string' && r.exhibitor.trim()
+      ? r.exhibitor.trim().slice(0, 60)
+      : undefined
   const logo = typeof r.logo === 'string' ? normalizeLogo(r.logo) : undefined
   const data =
     r.data && typeof r.data === 'object' && !Array.isArray(r.data)
@@ -1197,6 +1575,7 @@ function readBooth(raw: unknown, index: number): Booth | null {
     ...(canopy !== undefined ? { canopy } : {}),
     ...(noTop ? { noTop } : {}),
     ...(groupId ? { groupId } : {}),
+    ...(exhibitor ? { exhibitor } : {}),
     ...(logo ? { logo } : {}),
     ...(data ? { data } : {}),
     ...(mark ? { mark } : {}),
@@ -1227,6 +1606,18 @@ function readInfra(raw: unknown, index: number, venueHeight?: number): Infra | n
     },
     venueHeight,
   )
+  let windowSill = WINDOW_SILL
+  let windowHeight = dims.height
+  if (kindTyped === 'window') {
+    const rawSill = Number(r.sill)
+    const sill = Number.isFinite(rawSill) ? rawSill : WINDOW_SILL
+    const maxSill = Math.max(0.2, (venueHeight ?? 6) - dims.height - 0.15)
+    windowSill = Math.min(maxSill, Math.max(0.2, sill))
+    windowHeight = Math.min(
+      dims.height,
+      Math.max(1, (venueHeight ?? 6) - windowSill - 0.15),
+    )
+  }
 
   const rotation = Number(r.rotation)
   const name =
@@ -1246,6 +1637,9 @@ function readInfra(raw: unknown, index: number, venueHeight?: number): Infra | n
     z,
     rotation: Number.isFinite(rotation) ? rotation : 0,
     ...dims,
+    ...(kindTyped === 'window'
+      ? { height: windowHeight, sill: Math.round(windowSill * 10) / 10 }
+      : {}),
     ...(kindTyped === 'gate' ? { depth: 0.5, open: !!r.open } : {}),
     ...(kindTyped === 'elevator'
       ? {
@@ -1272,6 +1666,7 @@ function exportBoothList(): Booth[] {
     ...(boothKindOf(b) === 'scaffold' ? { canopy: b.canopy !== false } : {}),
     ...(boothKindOf(b) === 'massing' && b.noTop ? { noTop: true } : {}),
     ...(b.groupId ? { groupId: b.groupId } : {}),
+    ...(b.exhibitor ? { exhibitor: b.exhibitor } : {}),
     ...(b.logo ? { logo: normalizeLogo(b.logo) } : {}),
     ...(b.data ? { data: cloneData(b.data) } : {}),
     ...(b.mark ? { mark: b.mark } : b.marked ? { mark: 'red' as BoothMark } : {}),
@@ -1313,12 +1708,12 @@ function downloadScene() {
   toast('场景 JSON 已导出')
 }
 
-function downloadReportImage() {
+async function downloadReportImage() {
   if (!venue.value) {
     toast('请先绘制场馆')
     return
   }
-  const dataUrl = stage?.captureReportImage({
+  const dataUrl = await stage?.captureReportImage({
     title: venueName.value.trim() || '场馆白膜',
     subtitle: `${polygonArea(venue.value.points).toFixed(1)} m² · ${booths.value.length} 个展台 · ${infras.value.length} 个设施`,
     stats: [
@@ -1454,7 +1849,7 @@ function applySceneJson(input: unknown): boolean {
   booths.value = nextBooths
   infras.value = validInfras
   selectedIds.value = []
-  selectedInfraId.value = null
+  clearInfraSelection()
   mode.value = 'idle'
   draftPoints.value = []
   seq = Math.max(nextBooths.length, 1)
@@ -1493,7 +1888,7 @@ function setRenderOnly(on: boolean) {
   if (on) {
     if (mode.value !== 'idle') mode.value = 'idle'
     selectedIds.value = []
-    selectedInfraId.value = null
+    clearInfraSelection()
     draftPoints.value = []
     if (walkState.value !== 'off') stage?.stopWalk()
   }
@@ -1516,7 +1911,7 @@ function deleteVenue() {
   booths.value = []
   infras.value = []
   selectedIds.value = []
-  selectedInfraId.value = null
+  clearInfraSelection()
   draftPoints.value = []
   mode.value = 'idle'
   toast('已清空场馆、展台与基础设施')
@@ -1887,14 +2282,69 @@ function rotateBooth(id: string, deg: number) {
   })
 }
 
+function setInfraSelection(ids: string[]) {
+  let valid = [...new Set(ids)].filter((id) =>
+    infras.value.some((it) => it.id === id),
+  )
+  // 删除或取消中间设施后若剩余对象断开，只保留最后选中的一个
+  if (valid.length > 1 && !infraIdsConnected(valid)) {
+    valid = [valid[valid.length - 1]]
+  }
+  selectedInfraIds.value = valid
+  selectedInfraId.value = valid[valid.length - 1] ?? null
+}
+
+function clearInfraSelection() {
+  selectedInfraIds.value = []
+  selectedInfraId.value = null
+}
+
 function handlePick(id: string | null, additive = false, kind: 'booth' | 'infra' = 'booth') {
   if (kind === 'infra') {
-    selectedInfraId.value = id
     selectedIds.value = []
+    if (!id) {
+      if (!additive) clearInfraSelection()
+      return
+    }
+    const target = infras.value.find((it) => it.id === id)
+    if (!target) return
+    const current = selectedInfraIds.value
+    if (additive) {
+      if (current.includes(id)) {
+        setInfraSelection(current.filter((x) => x !== id))
+        return
+      }
+      const wallItem =
+        target.kind === 'gate' ||
+        target.kind === 'window' ||
+        current.some((x) => {
+          const it = infras.value.find((v) => v.id === x)
+          return it?.kind === 'gate' || it?.kind === 'window'
+        })
+      if (current.length && wallItem) {
+        toast('门窗只能单独选择')
+        return
+      }
+      const touches = current.some((x) => {
+        const it = infras.value.find((v) => v.id === x)
+        return it ? infraTouching(target, it) : false
+      })
+      if (current.length && !touches) {
+        toast('多选的设施必须相互挨着')
+        return
+      }
+      setInfraSelection([...current, id])
+      return
+    }
+    if (current.includes(id)) {
+      selectedInfraId.value = id
+      return
+    }
+    setInfraSelection([id])
     return
   }
 
-  selectedInfraId.value = null
+  clearInfraSelection()
   if (!id) {
     if (!additive) selectedIds.value = []
     return
@@ -1919,9 +2369,28 @@ const selectionIsOneGroup = computed(() => {
   return booths.value.filter((b) => b.groupId === gid).length === list.length
 })
 
+function toggleBoothLabels() {
+  boothLabelsOn.value = !boothLabelsOn.value
+  stage?.setBoothLabelsVisible(boothLabelsOn.value)
+}
+
+function toggleInfraLabels() {
+  infraLabelsOn.value = !infraLabelsOn.value
+  stage?.setInfraLabelsVisible(infraLabelsOn.value)
+}
+
+/** 帮助快捷入口同时控制两类名称 */
 function toggleLabels() {
-  labelsOn.value = !labelsOn.value
-  stage?.setLabelsVisible(labelsOn.value)
+  const on = !(boothLabelsOn.value && infraLabelsOn.value)
+  boothLabelsOn.value = on
+  infraLabelsOn.value = on
+  stage?.setBoothLabelsVisible(on)
+  stage?.setInfraLabelsVisible(on)
+}
+
+function toggleNameSubmenu() {
+  if (toolMenu.value !== 'display') return
+  toolSubMenu.value = toolSubMenu.value === 'names' ? null : 'names'
 }
 
 function toggleAreas() {
@@ -1934,6 +2403,17 @@ function renameBooth(id: string, name: string) {
   if (!b || b.name === name) return
   booths.value = booths.value.map((x) => (x.id === id ? { ...x, name } : x))
   toast(`已重命名为「${name}」`)
+}
+
+function setBoothExhibitor(id: string, value: string) {
+  const b = booths.value.find((x) => x.id === id)
+  if (!b) return
+  const exhibitor = value.trim().slice(0, 60)
+  if ((b.exhibitor ?? '') === exhibitor) return
+  booths.value = booths.value.map((x) =>
+    x.id === id ? { ...x, exhibitor: exhibitor || undefined } : x,
+  )
+  toast(exhibitor ? `展商名称：${exhibitor}` : '已清除展商名称')
 }
 
 function setBoothLogo(id: string, logo: string) {
@@ -1965,6 +2445,7 @@ function fitView() {
 
 function toggleToolMenu(menu: ToolMenu) {
   toolMenu.value = toolMenu.value === menu ? null : menu
+  toolSubMenu.value = null
 }
 
 function runTool(action: () => void) {
@@ -2343,131 +2824,19 @@ function exitMobileWalk() {
   stage?.stopWalk()
 }
 
-/** 按展馆平面图设计的示例：约 100 × 56m，22 个展台 + 楼梯 / 洗手间 / 出入口 */
-/** W1 示例：130 × 70m，19 个展台（咖啡洽谈区为光地）+ 34 个设施 + 7 件家具 */
+/** 载入内置示例：使用当前 IndexedDB 导出的 W1 场景 */
 function loadSample() {
-  const box = (x1: number, z1: number, x2: number, z2: number): Pt[] => [
-    { x: x1, z: z1 },
-    { x: x2, z: z1 },
-    { x: x2, z: z2 },
-    { x: x1, z: z2 },
-  ]
-
-  // 按墙面 10m 刻度：横向 13 格、纵向 7 格，即 130 × 70m
-  const pts: Pt[] = [
-    { x: -65, z: -35 },
-    { x: 65, z: -35 },
-    { x: 65, z: 35 },
-    { x: -65, z: 35 },
-  ]
-
-  const BOOTH_H = 3
-  const samples: {
-    name: string
-    x1: number
-    z1: number
-    x2: number
-    z2: number
-    kind?: BoothKind
-  }[] = [
-    // E 区（北侧）
-    { name: 'W1E01', x1: -49, z1: -31, x2: -30, z2: -21 },
-    { name: 'W1E02', x1: -24, z1: -31, x2: -5, z2: -21 },
-    { name: 'W1E03', x1: 1, z1: -31, x2: 15, z2: -21 },
-    { name: 'W1E05', x1: 19, z1: -31, x2: 32, z2: -21 },
-    { name: 'W1E06', x1: 38, z1: -31, x2: 50, z2: -21 },
-    // C 区（中上）
-    { name: 'W1C01', x1: -49, z1: -18, x2: -23, z2: 18, kind: 'scaffold' },
-    { name: 'W1C02', x1: -20, z1: -18, x2: -8, z2: -2 },
-    { name: 'W1C03', x1: -2, z1: -18, x2: 17, z2: -2 },
-    { name: 'W1C05', x1: 20, z1: -18, x2: 29, z2: -2 },
-    { name: 'W1C06', x1: 32, z1: -14, x2: 50, z2: -2 },
-    // B 区（中下）
-    { name: 'W1B02', x1: -20, z1: 1, x2: -8, z2: 18 },
-    { name: 'W1B03', x1: -2, z1: 1, x2: 29, z2: 18 },
-    { name: 'W1B06', x1: 35, z1: 6, x2: 50, z2: 18 },
-    // A 区（南侧）
-    { name: 'W1A01', x1: -49, z1: 21, x2: -26, z2: 31 },
-    { name: 'W1A02', x1: -23, z1: 21, x2: -3, z2: 31 },
-    { name: 'W1A03', x1: 0, z1: 21, x2: 12, z2: 31 },
-    { name: 'W1A05', x1: 15, z1: 21, x2: 25, z2: 31 },
-    { name: 'W1A06', x1: 28, z1: 21, x2: 38, z2: 31 },
-    { name: '咖啡洽谈区', x1: 41, z1: 21, x2: 47, z2: 31, kind: 'openfloor' },
-  ]
-
-  venue.value = { points: pts, height: 7, ceiling: !venueNoTop.value }
-  seq = samples.length
-  booths.value = samples.map((s, i) => {
-    const kind = s.kind ?? 'massing'
-    return {
-      id: `sample-${i + 1}`,
-      name: s.name,
-      points: box(s.x1, s.z1, s.x2, s.z2),
-      height: kind === 'openfloor' ? OPEN_FLOOR_HEIGHT : BOOTH_H,
-      ...(kind === 'massing' ? {} : { kind }),
-    }
-  })
-
-  infras.value = [
-    // 左右侧厅：西北角
-    { id: 'sample-inf-1', kind: 'restroom', name: '洗手间 01', x: -60, z: -30, rotation: 0, width: 2, depth: 2, height: 3 },
-    { id: 'sample-inf-2', kind: 'stairs', name: '楼梯 01', x: -60, z: -26, rotation: 0, width: 2, depth: 4, height: 3 },
-    // 左右侧厅：东北角
-    { id: 'sample-inf-3', kind: 'restroom', name: '洗手间 02', x: 60, z: -30, rotation: 0, width: 2, depth: 2, height: 3 },
-    { id: 'sample-inf-4', kind: 'stairs', name: '楼梯 02', x: 60, z: -26, rotation: 0, width: 2, depth: 4, height: 3 },
-    // 左侧中部 / 西南角
-    { id: 'sample-inf-5', kind: 'restroom', name: '洗手间 03', x: -60, z: 0, rotation: 0, width: 2, depth: 2, height: 3 },
-    { id: 'sample-inf-6', kind: 'stairs', name: '楼梯 03', x: -60, z: 26, rotation: 0, width: 2, depth: 4, height: 3 },
-    // 东南角
-    { id: 'sample-inf-7', kind: 'restroom', name: '洗手间 04', x: 60, z: 30, rotation: 0, width: 2, depth: 2, height: 3 },
-    { id: 'sample-inf-8', kind: 'stairs', name: '楼梯 04', x: 60, z: 26, rotation: 0, width: 2, depth: 4, height: 3 },
-    // 图中 01-10 出入口
-    { id: 'sample-inf-9', kind: 'gate', name: '出入口 01', x: -37, z: 35, rotation: 0, width: 5, depth: 0.5, height: 4, open: false },
-    { id: 'sample-inf-10', kind: 'gate', name: '出入口 02', x: -13, z: 35, rotation: 0, width: 5, depth: 0.5, height: 4, open: false },
-    { id: 'sample-inf-11', kind: 'gate', name: '出入口 03', x: 20, z: 35, rotation: 0, width: 5, depth: 0.5, height: 4, open: false },
-    { id: 'sample-inf-12', kind: 'gate', name: '出入口 04', x: 65, z: 20, rotation: -Math.PI / 2, width: 5, depth: 0.5, height: 4, open: false },
-    { id: 'sample-inf-13', kind: 'gate', name: '出入口 05', x: 65, z: -20, rotation: -Math.PI / 2, width: 5, depth: 0.5, height: 4, open: false },
-    { id: 'sample-inf-14', kind: 'gate', name: '出入口 06', x: 44, z: -35, rotation: 0, width: 5, depth: 0.5, height: 4, open: false },
-    { id: 'sample-inf-15', kind: 'gate', name: '出入口 07', x: 17, z: -35, rotation: 0, width: 5, depth: 0.5, height: 4, open: false },
-    { id: 'sample-inf-16', kind: 'gate', name: '出入口 08', x: -39, z: -35, rotation: 0, width: 5, depth: 0.5, height: 4, open: false },
-    { id: 'sample-inf-17', kind: 'gate', name: '出入口 09', x: -65, z: -20, rotation: Math.PI / 2, width: 5, depth: 0.5, height: 4, open: false },
-    { id: 'sample-inf-18', kind: 'gate', name: '出入口 10', x: -65, z: 20, rotation: Math.PI / 2, width: 5, depth: 0.5, height: 4, open: false },
-    // 左右侧厅的细线内墙（WC / 楼梯间），东侧留 2m 门洞
-    { id: 'sample-inf-19', kind: 'wall', name: '展馆内墙 01', x: -55, z: -31, rotation: Math.PI / 2, width: 8, depth: 0.2, height: 4 },
-    { id: 'sample-inf-20', kind: 'wall', name: '展馆内墙 02', x: -55, z: -23, rotation: Math.PI / 2, width: 4, depth: 0.2, height: 4 },
-    { id: 'sample-inf-21', kind: 'wall', name: '展馆内墙 03', x: -60, z: -21, rotation: 0, width: 10, depth: 0.2, height: 4 },
-    { id: 'sample-inf-22', kind: 'wall', name: '展馆内墙 04', x: 55, z: -31, rotation: Math.PI / 2, width: 8, depth: 0.2, height: 4 },
-    { id: 'sample-inf-23', kind: 'wall', name: '展馆内墙 05', x: 55, z: -23, rotation: Math.PI / 2, width: 4, depth: 0.2, height: 4 },
-    { id: 'sample-inf-24', kind: 'wall', name: '展馆内墙 06', x: 60, z: -21, rotation: 0, width: 10, depth: 0.2, height: 4 },
-    { id: 'sample-inf-25', kind: 'wall', name: '展馆内墙 07', x: -55, z: -3, rotation: Math.PI / 2, width: 4, depth: 0.2, height: 4 },
-    { id: 'sample-inf-26', kind: 'wall', name: '展馆内墙 08', x: -55, z: 3, rotation: Math.PI / 2, width: 4, depth: 0.2, height: 4 },
-    { id: 'sample-inf-27', kind: 'wall', name: '展馆内墙 09', x: -60, z: -5, rotation: 0, width: 10, depth: 0.2, height: 4 },
-    { id: 'sample-inf-28', kind: 'wall', name: '展馆内墙 10', x: -60, z: 5, rotation: 0, width: 10, depth: 0.2, height: 4 },
-    { id: 'sample-inf-29', kind: 'wall', name: '展馆内墙 11', x: -55, z: 24, rotation: Math.PI / 2, width: 6, depth: 0.2, height: 4 },
-    { id: 'sample-inf-30', kind: 'wall', name: '展馆内墙 12', x: -55, z: 32, rotation: Math.PI / 2, width: 6, depth: 0.2, height: 4 },
-    { id: 'sample-inf-31', kind: 'wall', name: '展馆内墙 13', x: -60, z: 21, rotation: 0, width: 10, depth: 0.2, height: 4 },
-    { id: 'sample-inf-32', kind: 'wall', name: '展馆内墙 14', x: 55, z: 24, rotation: Math.PI / 2, width: 6, depth: 0.2, height: 4 },
-    { id: 'sample-inf-33', kind: 'wall', name: '展馆内墙 15', x: 55, z: 32, rotation: Math.PI / 2, width: 6, depth: 0.2, height: 4 },
-    { id: 'sample-inf-34', kind: 'wall', name: '展馆内墙 16', x: 60, z: 21, rotation: 0, width: 10, depth: 0.2, height: 4 },
-    // 咖啡洽谈区（光地）内的家具
-    { id: 'sample-inf-35', kind: 'sofa', name: '沙发 01', x: 44, z: 22.8, rotation: 0, width: 3, depth: 1, height: 1.2 },
-    { id: 'sample-inf-36', kind: 'sofa', name: '沙发 02', x: 44, z: 29.2, rotation: Math.PI, width: 3, depth: 1, height: 1.2 },
-    { id: 'sample-inf-37', kind: 'armchair', name: '扶手椅 01', x: 42.2, z: 26, rotation: Math.PI / 2, width: 1, depth: 1, height: 1 },
-    { id: 'sample-inf-38', kind: 'armchair', name: '扶手椅 02', x: 45.8, z: 26, rotation: -Math.PI / 2, width: 1, depth: 1, height: 1 },
-    { id: 'sample-inf-39', kind: 'table-square', name: '方茶几 01', x: 44, z: 26, rotation: 0, width: 2, depth: 1, height: 0.5 },
-    { id: 'sample-inf-40', kind: 'table-round', name: '圆茶几 01', x: 41.8, z: 23.6, rotation: 0, width: 1, depth: 1, height: 1 },
-    { id: 'sample-inf-41', kind: 'chair', name: '圆座椅 01', x: 41.8, z: 24.8, rotation: 0, width: 0.6, depth: 0.6, height: 0.5 },
-  ]
-  infraSeq = infras.value.length
+  if (renderOnly.value) return
+  if (!applySceneJson(sampleSceneJson)) return
 
   selectedIds.value = []
-  selectedInfraId.value = null
+  clearInfraSelection()
   mode.value = 'idle'
   draftPoints.value = []
-  labelsOn.value = false
+  boothLabelsOn.value = false
+  infraLabelsOn.value = false
   stage?.setLabelsVisible(false)
-  toast('W1 示例展馆已载入 · 130 × 70m / 19 个展台 + 7 件家具')
-  nextTick(() => stage?.fit(pts, 7))
+  toast(`W1 示例场景已载入 · ${booths.value.length} 个展台 / ${infras.value.length} 个设施`)
 }
 
 // ---------- 同步与生命周期 ----------
@@ -2508,11 +2877,22 @@ function syncMode() {
   if (!stage) return
   const m = mode.value
   const placeKind = kindOfPlaceMode(m)
+  if (!placeKind && m !== 'paste-booths') pendingInfraCopy = null
   if (!placeKind) stage.stopInfraPlace()
   if (m !== 'idle' && walkState.value !== 'off') stage.stopWalk()
-  if (placeKind) {
+  if (m === 'paste-booths') {
+    if (!pasteClipboard) {
+      mode.value = 'idle'
+      return
+    }
     stage.setMode('draw')
-    stage.startInfraPlace(placeKind)
+    stage.startBoothPaste(pasteClipboard)
+  } else if (placeKind) {
+    stage.setMode('draw')
+    stage.startInfraPlace(
+      placeKind,
+      pendingInfraCopy?.kind === placeKind ? pendingInfraCopy : undefined,
+    )
   } else if (m === 'draw-venue' || m === 'draw-booth') stage.setMode('draw')
   else if (m === 'height-venue' || m === 'height-booth') stage.setMode('confirm')
   else stage.setMode('idle')
@@ -2554,7 +2934,11 @@ watch(walkState, (state) => {
     minimapExpanded.value = false
   }
 })
-watch(selectedInfraId, (id) => stage?.setSelectedInfra(id))
+watch(
+  selectedInfraIds,
+  (ids) => stage?.setSelectedInfras(ids),
+  { deep: true },
+)
 watch(draftPoints, (v) => stage?.setDraft(v), { deep: true })
 watch(selectedIds, (ids) => stage?.setSelected(ids), { deep: true })
 watch(mode, syncMode)
@@ -2684,8 +3068,16 @@ function onKey(e: KeyboardEvent) {
       mergeDialog.value = null
       return
     }
-    if (isPlacing.value) mode.value = 'idle'
-    else if (mode.value === 'draw-venue' || mode.value === 'draw-booth') cancelDraft()
+    if (mode.value === 'paste-booths') {
+      cancelBoothPaste()
+      return
+    }
+    if (isPlacing.value) {
+      const wasCopy = !!pendingInfraCopy
+      pendingInfraCopy = null
+      mode.value = 'idle'
+      if (wasCopy) toast('已取消复制')
+    } else if (mode.value === 'draw-venue' || mode.value === 'draw-booth') cancelDraft()
     else if (mode.value === 'height-venue' || mode.value === 'height-booth') backToDraw()
     else selectedIds.value = []
     if (typing) (el as HTMLInputElement).blur()
@@ -2709,6 +3101,16 @@ function onKey(e: KeyboardEvent) {
 
   if ((e.metaKey || e.ctrlKey) && !e.altKey) {
     const key = e.key.toLowerCase()
+    if (key === 'c' && !e.shiftKey) {
+      if (selectedIds.value.length) {
+        e.preventDefault()
+        copySelectedBooths()
+      } else if (selectedInfraId.value) {
+        e.preventDefault()
+        copySelectedInfra()
+      }
+      return
+    }
     if (key === 'z') {
       e.preventDefault()
       if (mode.value === 'draw-venue' || mode.value === 'draw-booth') {
@@ -2783,7 +3185,9 @@ onMounted(() => {
     onMinimapHold: (on) => (minimapExpanded.value = on),
     onToggleGate: (id) => toggleGate(id),
     onPlaceInfra: (kind, spot) => handlePlaceInfra(kind, spot),
+    onPlacePaste: (center) => placePastedBooths(center),
     onMoveInfra: (id, x, z, rotation) => moveInfra(id, x, z, rotation),
+    onMoveInfras: (targets) => moveInfraGroup(targets),
     onNorthAngle: (deg) => (northDeg.value = Math.round(deg * 10) / 10),
     onSunTime: (p) => (sunProgress.value = p),
     onQualityChange: (level, auto) => {
@@ -2799,7 +3203,8 @@ onMounted(() => {
   stage.setParticleDensities(particleDensities.value)
   stage.setWeatherVisibility(weatherVisibility.value / 100)
   stage.setGridVisible(gridOn.value)
-  stage.setLabelsVisible(labelsOn.value)
+  stage.setBoothLabelsVisible(boothLabelsOn.value)
+  stage.setInfraLabelsVisible(infraLabelsOn.value)
   stage.setBoothAreasVisible(areaOn.value)
   stage.setDimensionsVisible(dimOn.value)
   stage.setReadOnly(renderOnly.value)
@@ -3104,14 +3509,42 @@ onBeforeUnmount(() => {
             显示<span class="tool-caret" />
           </button>
           <div v-if="!isMobile && toolMenu === 'display'" class="tool-menu" role="menu">
-            <button
-              class="tool-btn"
-              :class="{ on: labelsOn }"
-              role="menuitem"
-              @click="runTool(toggleLabels)"
-            >
-              名称
-            </button>
+            <div class="tool-subgroup">
+              <button
+                class="tool-btn tool-parent tool-parent-sub"
+                :class="{ on: toolSubMenu === 'names' }"
+                role="menuitem"
+                aria-haspopup="menu"
+                :aria-expanded="toolSubMenu === 'names'"
+                @click.stop="toggleNameSubmenu"
+              >
+                名称<span class="tool-caret" />
+              </button>
+              <div
+                v-if="toolSubMenu === 'names'"
+                class="tool-menu tool-menu-nested"
+                role="menu"
+              >
+                <button
+                  class="tool-btn"
+                  :class="{ on: boothLabelsOn }"
+                  role="menuitemcheckbox"
+                  :aria-checked="boothLabelsOn"
+                  @click.stop="toggleBoothLabels"
+                >
+                  展台
+                </button>
+                <button
+                  class="tool-btn"
+                  :class="{ on: infraLabelsOn }"
+                  role="menuitemcheckbox"
+                  :aria-checked="infraLabelsOn"
+                  @click.stop="toggleInfraLabels"
+                >
+                  基础设施
+                </button>
+              </div>
+            </div>
             <button
               class="tool-btn"
               :class="{ on: dimOn }"
@@ -3241,13 +3674,39 @@ onBeforeUnmount(() => {
         </template>
         <template v-else-if="toolMenu === 'display'">
           <button
-            class="tool-btn"
-            :class="{ on: labelsOn }"
+            class="tool-btn tool-parent tool-parent-sub"
+            :class="{ on: toolSubMenu === 'names' }"
             role="menuitem"
-            @click="runTool(toggleLabels)"
+            aria-haspopup="menu"
+            :aria-expanded="toolSubMenu === 'names'"
+            @click.stop="toggleNameSubmenu"
           >
-            名称
+            名称<span class="tool-caret" />
           </button>
+          <div
+            v-if="toolSubMenu === 'names'"
+            class="tool-mobile-sub3"
+            role="menu"
+          >
+            <button
+              class="tool-btn"
+              :class="{ on: boothLabelsOn }"
+              role="menuitemcheckbox"
+              :aria-checked="boothLabelsOn"
+              @click.stop="toggleBoothLabels"
+            >
+              展台
+            </button>
+            <button
+              class="tool-btn"
+              :class="{ on: infraLabelsOn }"
+              role="menuitemcheckbox"
+              :aria-checked="infraLabelsOn"
+              @click.stop="toggleInfraLabels"
+            >
+              基础设施
+            </button>
+          </div>
           <button
             class="tool-btn"
             :class="{ on: dimOn }"
@@ -3529,6 +3988,7 @@ onBeforeUnmount(() => {
       :xray="venueXray"
       :no-top="venueNoTop"
       @rename="renameBooth"
+      @exhibitor="setBoothExhibitor"
       @logo="setBoothLogo"
       @remove-logo="removeBoothLogo"
       @logo-error="toast"

@@ -103,7 +103,7 @@ function draw() {
     const hw = item.width / 2
     const hd = item.depth / 2
 
-    if (item.kind === 'wall' || item.kind === 'gate') {
+    if (item.kind === 'wall' || item.kind === 'gate' || item.kind === 'window') {
       const x1 = mapX(item.x - ux * hw)
       const y1 = mapY(item.z - uz * hw)
       const x2 = mapX(item.x + ux * hw)
@@ -114,7 +114,9 @@ function draw() {
       ctx.strokeStyle =
         item.kind === 'gate'
           ? 'rgba(110, 210, 160, 0.95)'
-          : 'rgba(160, 180, 200, 0.9)'
+          : item.kind === 'window'
+            ? 'rgba(140, 210, 235, 0.95)'
+            : 'rgba(160, 180, 200, 0.9)'
       ctx.lineWidth = Math.max(1.4, item.depth * scale)
       ctx.lineCap = 'round'
       ctx.stroke()

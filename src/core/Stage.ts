@@ -19,7 +19,12 @@ import {
 } from './build'
 import { OPEN_FLOOR_HEIGHT, boothKindOf } from './booth'
 import { groupColor } from './groupColor'
-import { INFRA_DEFAULTS, isFurnitureKind } from './infra'
+import {
+  ELEVATOR_DEFAULT_COUNT,
+  INFRA_DEFAULTS,
+  WINDOW_SILL,
+  isFurnitureKind,
+} from './infra'
 import { CloudShadow } from './CloudShadow'
 import { WeatherSystem } from './WeatherSystem'
 import {
@@ -55,6 +60,12 @@ function detectGpuQuality(gpu: string): QualityLevel {
 export type WalkState = 'off' | 'pick' | 'enter' | 'walk'
 export type WalkView = 'first' | 'third'
 
+export interface BoothPastePayload {
+  booths: Booth[]
+  infras: Infra[]
+  center: Pt
+}
+
 export interface ReportImageOptions {
   title: string
   subtitle?: string
@@ -83,7 +94,11 @@ export interface StageOptions {
     kind: InfraKind,
     spot: { x: number; z: number; rotation: number; hostHeight?: number },
   ) => void
+  /** 复制展台组后点击落位，参数为新组中心 */
+  onPlacePaste?: (center: Pt) => void
   onMoveInfra?: (id: string, x: number, z: number, rotation: number) => void
+  /** 相邻基础设施整体拖动后的落位 */
+  onMoveInfras?: (targets: { id: string; x: number; z: number; rotation: number }[]) => void
   /** 世界北方向在屏幕上的角度：0 为向上，正值顺时针 */
   onNorthAngle?: (deg: number) => void
   /** 模拟时间进度：0 = 午夜，0.5 = 正午 */
@@ -101,6 +116,7 @@ export interface StageOptions {
 }
 
 const SNAP = 1
+const EDGE_SNAP = 0.5
 const GRID_HALF = 80
 const ACCENT = 0x2f5fe0
 /** 标记分组配色 */
@@ -196,7 +212,16 @@ interface DragState {
   baseRotY: number
 }
 
-/** 基础设施拖动：直接移动 mesh，释放后再回写数据 */
+interface InfraDragItem {
+  id: string
+  spec: Infra
+  group: THREE.Group
+  x: number
+  z: number
+  rotation: number
+}
+
+/** 基础设施拖动：直接移动 mesh，释放后再回写数据；items 支持相邻多选整体拖动 */
 interface InfraDragState {
   id: string
   spec: Infra
@@ -207,6 +232,7 @@ interface InfraDragState {
   z: number
   rotation: number
   moved: boolean
+  items: InfraDragItem[]
 }
 
 function disposeDeep(root: THREE.Object3D) {
@@ -249,8 +275,111 @@ function clearGroup(group: THREE.Group) {
 
 function openingsSig(list: MassingOpening[]): string {
   return list
-    .map((o) => `${o.x.toFixed(2)},${o.z.toFixed(2)},${o.width.toFixed(2)},${o.height.toFixed(2)}`)
+    .map(
+      (o) =>
+        `${o.x.toFixed(2)},${o.z.toFixed(2)},${o.width.toFixed(2)},${o.height.toFixed(2)},${(o.sill ?? 0).toFixed(2)}`,
+    )
     .join('|')
+}
+
+interface SnapBox {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+}
+
+function snapBoxOfPoints(points: Pt[]): SnapBox {
+  let minX = Infinity
+  let maxX = -Infinity
+  let minZ = Infinity
+  let maxZ = -Infinity
+  for (const p of points) {
+    minX = Math.min(minX, p.x)
+    maxX = Math.max(maxX, p.x)
+    minZ = Math.min(minZ, p.z)
+    maxZ = Math.max(maxZ, p.z)
+  }
+  return { minX, maxX, minZ, maxZ }
+}
+
+function snapBoxOfInfra(infra: Infra): SnapBox {
+  const ux = Math.cos(infra.rotation)
+  const uz = -Math.sin(infra.rotation)
+  const vx = Math.sin(infra.rotation)
+  const vz = Math.cos(infra.rotation)
+  const hw = infra.width / 2
+  const hd = infra.depth / 2
+  const corners = [
+    { x: infra.x + ux * hw + vx * hd, z: infra.z + uz * hw + vz * hd },
+    { x: infra.x + ux * hw - vx * hd, z: infra.z + uz * hw - vz * hd },
+    { x: infra.x - ux * hw - vx * hd, z: infra.z - uz * hw - vz * hd },
+    { x: infra.x - ux * hw + vx * hd, z: infra.z - uz * hw + vz * hd },
+  ]
+  return snapBoxOfPoints(corners)
+}
+
+function rangeGap(aMin: number, aMax: number, bMin: number, bMax: number): number {
+  return Math.max(0, bMin - aMax, aMin - bMax)
+}
+
+/** 把移动盒的边缘吸附到附近目标盒的边缘，返回吸附后的位移与目标框 */
+function snapEdgeDelta(
+  moving: SnapBox,
+  dx: number,
+  dz: number,
+  targets: SnapBox[],
+  threshold: number,
+): { dx: number; dz: number; target: SnapBox | null } {
+  let bestX = 0
+  let bestZ = 0
+  let xTarget: SnapBox | null = null
+  let zTarget: SnapBox | null = null
+  let xBest = threshold + 0.0001
+  let zBest = threshold + 0.0001
+
+  const m = {
+    minX: moving.minX + dx,
+    maxX: moving.maxX + dx,
+    minZ: moving.minZ + dz,
+    maxZ: moving.maxZ + dz,
+  }
+
+  // 先处理 X 方向；另一轴需要足够接近，避免吸到远处对象
+  for (const target of targets) {
+    if (rangeGap(m.minZ, m.maxZ, target.minZ, target.maxZ) > threshold) continue
+    const candidates = [target.minX - m.maxX, target.maxX - m.minX]
+    for (const adjust of candidates) {
+      const dist = Math.abs(adjust)
+      if (dist < xBest) {
+        xBest = dist
+        bestX = adjust
+        xTarget = target
+      }
+    }
+  }
+  m.minX += bestX
+  m.maxX += bestX
+
+  for (const target of targets) {
+    if (rangeGap(m.minX, m.maxX, target.minX, target.maxX) > threshold) continue
+    const candidates = [target.minZ - m.maxZ, target.maxZ - m.minZ]
+    for (const adjust of candidates) {
+      const dist = Math.abs(adjust)
+      if (dist < zBest) {
+        zBest = dist
+        bestZ = adjust
+        zTarget = target
+      }
+    }
+  }
+
+  return { dx: dx + bestX, dz: dz + bestZ, target: xTarget ?? zTarget }
+}
+
+/** 兼容纯 base64 与旧版 data URL 两种 Logo 存储 */
+function boothLogoDataUrl(logo: string): string {
+  return logo.startsWith('data:') ? logo : `data:image/png;base64,${logo}`
 }
 
 /** 展台正面标识：Logo 在左、名称在右，合成到一张透明画布 */
@@ -259,16 +388,22 @@ function boothSignTexture(b: Booth): { texture: THREE.CanvasTexture; aspect: num
 
   const fontSize = 64
   const font = `600 ${fontSize}px "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif`
+  const subFont = '500 34px "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif'
   const padding = 24
   const logoBox = 160
   const gap = 28
   const maxTextW = 900
+  const exhibitor = b.exhibitor?.trim() ?? ''
 
   const measureCtx = document.createElement('canvas').getContext('2d')
   let textW = b.name.length * fontSize * 0.72
   if (measureCtx) {
     measureCtx.font = font
     textW = measureCtx.measureText(b.name).width
+    if (exhibitor) {
+      measureCtx.font = subFont
+      textW = Math.max(textW, measureCtx.measureText(exhibitor).width)
+    }
   }
 
   const width = Math.ceil(padding * 2 + logoBox + gap + Math.min(textW, maxTextW))
@@ -279,10 +414,21 @@ function boothSignTexture(b: Booth): { texture: THREE.CanvasTexture; aspect: num
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
 
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'left'
   ctx.font = font
   ctx.fillStyle = '#191b1f'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(b.name, padding + logoBox + gap, height / 2 + 2, maxTextW)
+  ctx.fillText(
+    b.name,
+    padding + logoBox + gap,
+    height / 2 + (exhibitor ? -22 : 2),
+    maxTextW,
+  )
+  if (exhibitor) {
+    ctx.font = subFont
+    ctx.fillStyle = '#5f6875'
+    ctx.fillText(exhibitor, padding + logoBox + gap, height / 2 + 30, maxTextW)
+  }
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
@@ -296,8 +442,7 @@ function boothSignTexture(b: Booth): { texture: THREE.CanvasTexture; aspect: num
     ctx.drawImage(img, padding + (logoBox - dw) / 2, (height - dh) / 2, dw, dh)
     texture.needsUpdate = true
   }
-  // 兼容纯 base64 与旧版 data URL 两种存储
-  img.src = b.logo.startsWith('data:') ? b.logo : `data:image/png;base64,${b.logo}`
+  img.src = boothLogoDataUrl(b.logo)
 
   return { texture, aspect: width / height }
 }
@@ -405,6 +550,14 @@ export class Stage {
   private groupMembers = new Map<string, string[]>()
   private pickables: THREE.Object3D[] = []
   private previewGroup: THREE.Group | null = null
+  private pasteGhost: THREE.Group | null = null
+  private pasteCenter: Pt = { x: 0, z: 0 }
+  private pasteTarget: Pt | null = null
+  private pasteBaseBox: SnapBox | null = null
+  private pasteTargets: SnapBox[] = []
+  private snapGuide: THREE.Line | null = null
+  private infraPlaceWidth = 1
+  private infraPlaceDepth = 1
   private selectionBoxes = new Map<string, { helper: THREE.Box3Helper; base: THREE.Box3 }>()
   private labels: {
     obj: CSS2DObject
@@ -412,9 +565,10 @@ export class Stage {
     base: THREE.Vector3
     height: number
   }[] = []
-  private labelsVisible = true
+  private boothLabelsVisible = true
+  private infraLabelsVisible = false
   private presentation = false
-  private labelsBeforePresentation = true
+  private labelsBeforePresentation = { booth: true, infra: true }
   private areaLabels: CSS2DObject[] = []
   private areasVisible = false
   private selectedIds: string[] = []
@@ -429,8 +583,8 @@ export class Stage {
   /** 家具在展台台面上的落位高度 */
   private infraBaseYMap = new Map<string, number>()
   private infraPickables: THREE.Object3D[] = []
-  private selectedInfraId: string | null = null
-  private infraBox: THREE.Box3Helper | null = null
+  private selectedInfraIds: string[] = []
+  private infraBoxes = new Map<string, THREE.Box3Helper>()
   private infraKind: InfraKind | null = null
   private infraPlaceRotation = 0
   private prevRightMouse: THREE.MOUSE | null | undefined
@@ -1233,15 +1387,48 @@ export class Stage {
       })
   }
 
-  /** 场馆外墙门洞：安装在内墙上的出入口不参与外墙开洞 */
+  /** 两段设施是否在同一条墙线上并发生长度重叠 */
+  private wallRunOverlap(
+    a: { x: number; z: number; width: number; rotation: number },
+    b: { x: number; z: number; width: number; rotation: number },
+  ): boolean {
+    if (Math.abs(Math.sin(a.rotation - b.rotation)) > 0.2) return false
+    const ux = Math.cos(a.rotation)
+    const uz = -Math.sin(a.rotation)
+    const vx = Math.sin(a.rotation)
+    const vz = Math.cos(a.rotation)
+    const dx = b.x - a.x
+    const dz = b.z - a.z
+    const along = dx * ux + dz * uz
+    const perp = dx * vx + dz * vz
+    return Math.abs(perp) <= 0.6 && Math.abs(along) < (a.width + b.width) / 2 - 0.02
+  }
+
+  /** 场馆外墙洞口：外墙出入口 + 未与出入口冲突的窗户；内墙出入口不参与 */
   private gateOpenings(): MassingOpening[] {
-    return this.infras
+    const gates = this.infras
       .filter(
         (it) =>
           it.kind === 'gate' &&
           !this.infras.some((w) => w.kind === 'wall' && this.gateOnWall(it, w)),
       )
       .map((it) => ({ x: it.x, z: it.z, width: it.width, height: it.height }))
+    const windows = this.infras
+      .filter(
+        (it) =>
+          it.kind === 'window' &&
+          !this.infras.some(
+            (gate) => gate.kind === 'gate' && this.wallRunOverlap(it, gate),
+          ),
+      )
+      .map((it) => ({
+        x: it.x,
+        z: it.z,
+        width: it.width,
+        height: it.height,
+        sill: it.sill ?? WINDOW_SILL,
+      }))
+    return [...gates, ...windows]
   }
 
   /** 出入口位置/尺寸变化时重建墙体，避免重复重建 */
@@ -1265,6 +1452,8 @@ export class Stage {
     const group = this.venueGroup
     if (!group) return
     const on = this.venueXray
+    // 漫游选点时即使未手动开启 X-Ray，也让有顶场馆的顶板半透明
+    const pickCeiling = this.walkState === 'pick' && !!this.venue?.ceiling
 
     group.traverse((o) => {
       const mesh = o as THREE.Mesh
@@ -1289,12 +1478,14 @@ export class Stage {
         return
       }
 
+      const ceiling = mesh.name === 'ceiling'
+      const transparent = ceiling ? on || pickCeiling : on
       const m = mat as THREE.MeshStandardMaterial
       // transparent / side 已在构建时固定，切换时只改材质状态，避免重编译 shader
-      m.opacity = on ? 0.42 : 1
-      m.depthWrite = !on
+      m.opacity = transparent ? (ceiling ? 0.32 : 0.42) : 1
+      m.depthWrite = !transparent
       // 半透明时不再投射硬阴影，避免把馆内压暗
-      mesh.castShadow = !on
+      mesh.castShadow = !transparent
     })
   }
 
@@ -1309,20 +1500,22 @@ export class Stage {
     this.labels = []
   }
 
+  /** 同时控制展台和基础设施名称 */
   setLabelsVisible(visible: boolean) {
-    this.labelsVisible = visible
     this.setBoothLabelsVisible(visible)
     this.setInfraLabelsVisible(visible)
   }
 
-  private setBoothLabelsVisible(visible: boolean) {
+  setBoothLabelsVisible(visible: boolean) {
+    this.boothLabelsVisible = visible
     for (const { obj, line } of this.labels) {
       obj.visible = visible
       line.visible = visible
     }
   }
 
-  private setInfraLabelsVisible(visible: boolean) {
+  setInfraLabelsVisible(visible: boolean) {
+    this.infraLabelsVisible = visible
     for (const { obj, line } of this.infraLabels) {
       obj.visible = visible
       line.visible = visible
@@ -1494,15 +1687,34 @@ export class Stage {
   }
 
   /** 展台名称标注：一条竖直线 + 名称气泡 */
-  private addLabel(parent: THREE.Object3D, name: string, pts: Pt[], height: number) {
+  private addLabel(
+    parent: THREE.Object3D,
+    name: string,
+    pts: Pt[],
+    height: number,
+    exhibitor?: string,
+  ) {
     const c = centroid(pts)
     const el = document.createElement('div')
     el.className = 'booth-label'
-    el.textContent = name
+    el.dataset.boothName = name
+    el.dataset.exhibitor = exhibitor ?? ''
+    if (exhibitor) {
+      el.classList.add('has-exhibitor')
+      const primary = document.createElement('span')
+      primary.className = 'booth-label-name'
+      primary.textContent = name
+      const sub = document.createElement('span')
+      sub.className = 'booth-label-exhibitor'
+      sub.textContent = exhibitor
+      el.append(primary, sub)
+    } else {
+      el.textContent = name
+    }
 
     const obj = new CSS2DObject(el)
     obj.position.set(c.x, height + 1.62, c.z)
-    obj.visible = this.labelsVisible
+    obj.visible = this.boothLabelsVisible
     obj.center.set(0.5, 1)
     parent.add(obj)
 
@@ -1522,7 +1734,7 @@ export class Stage {
     )
     line.name = 'label-leader'
     line.renderOrder = 6
-    line.visible = this.labelsVisible
+    line.visible = this.boothLabelsVisible
     parent.add(line)
 
     this.labels.push({
@@ -1603,7 +1815,7 @@ export class Stage {
         this.groupMeshes.set(gid, mesh)
         this.modelRoot.add(mesh)
         for (const b of list) {
-          this.addLabel(mesh, b.name, b.points, boothVisibleHeight(b))
+          this.addLabel(mesh, b.name, b.points, boothVisibleHeight(b), b.exhibitor)
           this.addAreaLabel(mesh, b)
         }
       } else {
@@ -1695,7 +1907,7 @@ export class Stage {
     g.userData.boothId = b.id
     this.boothGroups.set(b.id, g)
     this.modelRoot.add(g)
-    this.addLabel(g, b.name, b.points, boothVisibleHeight(b))
+    this.addLabel(g, b.name, b.points, boothVisibleHeight(b), b.exhibitor)
     this.addAreaLabel(g, b)
   }
 
@@ -1723,7 +1935,7 @@ export class Stage {
       this.infraPickables.push(g)
     }
     this.applyVenueOpenings()
-    this.setSelectedInfra(this.selectedInfraId)
+    this.setSelectedInfras(this.selectedInfraIds)
     this.refreshDimensions()
   }
 
@@ -1763,16 +1975,18 @@ export class Stage {
     el.className = 'booth-label infra-label'
     el.textContent = it.name
 
-    const top = it.height + 1.25
+    const labelBase =
+      it.kind === 'window' ? (it.sill ?? WINDOW_SILL) + it.height : it.height
+    const top = labelBase + 1.25
     const obj = new CSS2DObject(el)
     obj.position.set(0, top, 0)
     obj.center.set(0.5, 1)
-    obj.visible = this.labelsVisible
+    obj.visible = this.infraLabelsVisible
     group.add(obj)
 
     const line = new THREE.Line(
       new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, it.height + 0.03, 0),
+        new THREE.Vector3(0, labelBase + 0.03, 0),
         new THREE.Vector3(0, top - 0.1, 0),
       ]),
       new THREE.LineBasicMaterial({
@@ -1783,7 +1997,7 @@ export class Stage {
       }),
     )
     line.name = 'label-leader'
-    line.visible = this.labelsVisible
+    line.visible = this.infraLabelsVisible
     line.renderOrder = 6
     group.add(line)
 
@@ -1791,41 +2005,60 @@ export class Stage {
   }
 
   setSelectedInfra(id: string | null) {
-    this.selectedInfraId = id
-    if (this.infraBox) {
-      this.scene.remove(this.infraBox)
-      disposeDeep(this.infraBox)
-      this.infraBox = null
-    }
-    if (!id) return
-
-    const g = this.infraGroups.get(id)
-    if (!g) return
-    g.updateMatrixWorld(true)
-    const helper = new THREE.Box3Helper(new THREE.Box3().setFromObject(g), ACCENT)
-    const mat = helper.material as THREE.LineBasicMaterial
-    mat.transparent = true
-    mat.opacity = 0.95
-    mat.depthTest = false
-    helper.renderOrder = 5
-    this.infraBox = helper
-    this.scene.add(helper)
+    this.setSelectedInfras(id ? [id] : [])
   }
 
-  /** 进入基础设施放置（预览跟随鼠标）；由 setMode('idle') 自动退出 */
-  startInfraPlace(kind: InfraKind) {
+  setSelectedInfras(ids: string[]) {
+    const next = [...new Set(ids)].filter((id) => this.infraGroups.has(id))
+    this.selectedInfraIds = next
+
+    for (const helper of this.infraBoxes.values()) {
+      this.scene.remove(helper)
+      disposeDeep(helper)
+    }
+    this.infraBoxes.clear()
+
+    for (const id of next) {
+      const group = this.infraGroups.get(id)
+      if (!group) continue
+      group.updateMatrixWorld(true)
+      const helper = new THREE.Box3Helper(
+        new THREE.Box3().setFromObject(group),
+        ACCENT,
+      )
+      const mat = helper.material as THREE.LineBasicMaterial
+      mat.transparent = true
+      mat.opacity = 0.95
+      mat.depthTest = false
+      helper.renderOrder = 5
+      this.infraBoxes.set(id, helper)
+      this.scene.add(helper)
+    }
+  }
+
+  private setInfraBoxesVisible(visible: boolean) {
+    for (const helper of this.infraBoxes.values()) helper.visible = visible
+  }
+
+  /** 进入基础设施放置（预览跟随鼠标）；可传入复制源以保留尺寸和朝向 */
+  startInfraPlace(kind: InfraKind, source?: Infra) {
     this.stopInfraPlace()
     this.setBoothTopsXray(isFurnitureKind(kind))
     this.infraKind = kind
-    this.infraPlaceRotation = 0
+    const base = INFRA_DEFAULTS[kind]
+    this.infraPlaceWidth = source?.width ?? base.width
+    this.infraPlaceDepth = source?.depth ?? base.depth
+    const height =
+      source?.height ??
+      (kind === 'gate' && this.venue
+        ? Math.min(base.height, Math.max(1, this.venue.height - 0.2))
+        : kind === 'window' && this.venue
+          ? Math.min(base.height, Math.max(1, this.venue.height - WINDOW_SILL - 0.2))
+          : base.height)
+    this.infraPlaceRotation = source?.rotation ?? 0
     // 放置期间右键用于旋转，禁用 OrbitControls 的右键平移
     this.prevRightMouse = this.controls.mouseButtons.RIGHT
     this.controls.mouseButtons.RIGHT = this.spaceNav ? THREE.MOUSE.PAN : undefined
-    const base = INFRA_DEFAULTS[kind]
-    const height =
-      kind === 'gate' && this.venue
-        ? Math.min(base.height, Math.max(1, this.venue.height - 0.2))
-        : base.height
     const ghost = buildInfra(
       {
         id: 'ghost',
@@ -1833,10 +2066,15 @@ export class Stage {
         name: '',
         x: 0,
         z: 0,
-        rotation: 0,
-        width: base.width,
-        depth: base.depth,
+        rotation: this.infraPlaceRotation,
+        width: source?.width ?? base.width,
+        depth: source?.depth ?? base.depth,
         height,
+        ...(kind === 'window' ? { sill: source?.sill ?? WINDOW_SILL } : {}),
+        ...(kind === 'elevator'
+          ? { count: source?.count ?? ELEVATOR_DEFAULT_COUNT }
+          : {}),
+        ...(kind === 'gate' ? { open: source?.open ?? false } : {}),
       },
       true,
     )
@@ -1850,6 +2088,7 @@ export class Stage {
     this.infraKind = null
     this.infraPlaceRotation = 0
     this.infraSpot = null
+    this.updateSnapGuide(null)
     this.controls.mouseButtons.RIGHT = this.prevRightMouse ?? THREE.MOUSE.PAN
     this.prevRightMouse = undefined
     this.snapRing.visible = false
@@ -1862,8 +2101,8 @@ export class Stage {
     this.setBoothTopsXray(false)
   }
 
-  /** 离点击点最近的墙段（场馆外墙或内墙），出入口吸附到墙中心线 */
-  private nearestWall(p: Pt): {
+  /** 离点击点最近的墙段，出入口吸附到墙中心线；窗户只吸附场馆外墙 */
+  private nearestWall(p: Pt, venueOnly = false): {
     x: number
     z: number
     rotation: number
@@ -1899,6 +2138,7 @@ export class Stage {
     }
 
     // 内墙：沿墙长方向的两端
+    if (venueOnly) return best
     for (const it of this.infras) {
       if (it.kind !== 'wall') continue
       const ux = Math.cos(it.rotation)
@@ -1918,26 +2158,74 @@ export class Stage {
       ghost.visible = false
       this.infraSpot = null
       this.snapRing.visible = false
+      this.updateSnapGuide(null)
       return
     }
 
-    let spot: { x: number; z: number; rotation: number } | null
-    if (this.infraKind === 'gate') {
-      spot = this.nearestWall(raw)
+    let spot: {
+      x: number
+      z: number
+      rotation: number
+      hostHeight?: number
+    } | null = null
+    let snapTarget: SnapBox | null = null
+    if (this.infraKind === 'gate' || this.infraKind === 'window') {
+      const wall = this.nearestWall(raw, this.infraKind === 'window')
+      if (wall) {
+        const snapped = this.snapWallItemEdge(
+          wall.x,
+          wall.z,
+          wall.rotation,
+          this.infraPlaceWidth,
+          '__placement__',
+        )
+        spot = {
+          x: snapped?.x ?? wall.x,
+          z: snapped?.z ?? wall.z,
+          rotation: wall.rotation,
+          hostHeight: wall.hostHeight,
+        }
+        snapTarget = snapped ? snapBoxOfInfra(snapped.target) : null
+      }
     } else {
       const p = snapToGrid(raw, SNAP)
-      spot =
-        Math.abs(p.x) <= GRID_HALF && Math.abs(p.z) <= GRID_HALF
-          ? { x: p.x, z: p.z, rotation: this.infraPlaceRotation }
-          : null
+      if (Math.abs(p.x) <= GRID_HALF && Math.abs(p.z) <= GRID_HALF) {
+        const baseBox = snapBoxOfInfra({
+          id: '__placement__',
+          kind: this.infraKind!,
+          name: '',
+          x: 0,
+          z: 0,
+          rotation: this.infraPlaceRotation,
+          width: this.infraPlaceWidth,
+          depth: this.infraPlaceDepth,
+          height: 1,
+        })
+        const snapped = snapEdgeDelta(
+          baseBox,
+          p.x,
+          p.z,
+          this.infraSnapTargets('__placement__'),
+          EDGE_SNAP,
+        )
+        spot = {
+          x: snapped.dx,
+          z: snapped.dz,
+          rotation: this.infraPlaceRotation,
+        }
+        snapTarget = snapped.target
+      }
     }
 
     if (!spot) {
       ghost.visible = false
       this.infraSpot = null
       this.snapRing.visible = false
+      this.updateSnapGuide(null)
       return
     }
+
+    this.updateSnapGuide(snapTarget)
 
     this.infraSpot = spot
     const placeKind = this.infraKind
@@ -1949,9 +2237,9 @@ export class Stage {
     this.snapRing.position.set(spot.x, 0.05, spot.z)
   }
 
-  /** 放置时右键旋转 90°（出入口朝向由墙面决定） */
+  /** 放置时右键旋转 90°（出入口与窗户朝向由墙面决定） */
   private rotateInfraPlace() {
-    if (!this.infraKind || this.infraKind === 'gate') return
+    if (!this.infraKind || this.infraKind === 'gate' || this.infraKind === 'window') return
     this.infraPlaceRotation =
       (this.infraPlaceRotation + Math.PI / 2) % (Math.PI * 2)
     if (this.infraSpot) this.infraSpot.rotation = this.infraPlaceRotation
@@ -2156,6 +2444,148 @@ export class Stage {
   }
 
   /** 同一合并组的成员一起变换 */
+  /** 拖动时显示即将贴边的目标包围盒 */
+  private updateSnapGuide(box: SnapBox | null) {
+    if (!box) {
+      if (this.snapGuide) this.snapGuide.visible = false
+      return
+    }
+    if (!this.snapGuide) {
+      const geometry = new THREE.BufferGeometry()
+      geometry.setAttribute(
+        'position',
+        new THREE.BufferAttribute(new Float32Array(15), 3).setUsage(
+          THREE.DynamicDrawUsage,
+        ),
+      )
+      const material = new THREE.LineBasicMaterial({
+        color: 0xf0b44c,
+        transparent: true,
+        opacity: 0.95,
+        depthTest: false,
+      })
+      const line = new THREE.Line(geometry, material)
+      line.name = 'edge-snap-guide'
+      line.renderOrder = 8
+      line.frustumCulled = false
+      this.snapGuide = line
+      this.scene.add(line)
+    }
+    const y = 0.08
+    const points = [
+      [box.minX, y, box.minZ],
+      [box.maxX, y, box.minZ],
+      [box.maxX, y, box.maxZ],
+      [box.minX, y, box.maxZ],
+      [box.minX, y, box.minZ],
+    ]
+    const attr = this.snapGuide.geometry.getAttribute('position') as THREE.BufferAttribute
+    points.forEach(([x, yy, z], index) => attr.setXYZ(index, x, yy, z))
+    attr.needsUpdate = true
+    this.snapGuide.geometry.computeBoundingSphere()
+    this.snapGuide.visible = true
+  }
+
+  /** 展台拖动时的吸附目标：其他展台与不在本组内的落地设施 */
+  private boothSnapTargets(activeId: string): SnapBox[] {
+    const ignore = new Set(this.dragIds(activeId))
+    const activePoints: Pt[] = []
+    for (const id of ignore) activePoints.push(...(this.boothSpecs.get(id)?.points ?? []))
+    const targets: SnapBox[] = []
+    for (const [id, booth] of this.boothSpecs) {
+      if (ignore.has(id)) continue
+      targets.push(snapBoxOfPoints(booth.points))
+    }
+    for (const infra of this.infras) {
+      if (isFurnitureKind(infra.kind) || infra.kind === 'gate' || infra.kind === 'window') {
+        continue
+      }
+      if (activePoints.length && pointInPolygon(infra, activePoints)) continue
+      targets.push(snapBoxOfInfra(infra))
+    }
+    return targets
+  }
+
+  /** 设施拖动时的吸附目标：其他展台与设施 */
+  private infraSnapTargets(activeId: string | Set<string>): SnapBox[] {
+    const ignore =
+      typeof activeId === 'string' ? new Set([activeId]) : activeId
+    const targets: SnapBox[] = []
+    for (const booth of this.boothSpecs.values()) {
+      targets.push(snapBoxOfPoints(booth.points))
+    }
+    for (const infra of this.infras) {
+      if (ignore.has(infra.id)) continue
+      targets.push(snapBoxOfInfra(infra))
+    }
+    return targets
+  }
+
+  /** 展台复制待放置时：吸附到现有展台与外部落地设施 */
+  private boothPasteSnapTargets(booths: Booth[]): SnapBox[] {
+    const sourcePoints = booths.flatMap((booth) => booth.points)
+    const targets: SnapBox[] = []
+    for (const booth of this.boothSpecs.values()) {
+      targets.push(snapBoxOfPoints(booth.points))
+    }
+    for (const infra of this.infras) {
+      if (isFurnitureKind(infra.kind) || infra.kind === 'gate' || infra.kind === 'window') {
+        continue
+      }
+      if (sourcePoints.length && pointInPolygon(infra, sourcePoints)) continue
+      targets.push(snapBoxOfInfra(infra))
+    }
+    return targets
+  }
+
+  /** 门窗沿墙滑动时吸附到同墙线上的另一个门窗边缘 */
+  private snapWallItemEdge(
+    x: number,
+    z: number,
+    rotation: number,
+    width: number,
+    ignoreId: string,
+  ): { x: number; z: number; target: Infra } | null {
+    const ux = Math.cos(rotation)
+    const uz = -Math.sin(rotation)
+    const vx = Math.sin(rotation)
+    const vz = Math.cos(rotation)
+    let bestAbs = EDGE_SNAP + 0.0001
+    let bestAdjust = 0
+    let bestTarget: Infra | null = null
+
+    for (const target of this.infras) {
+      if (
+        target.id === ignoreId ||
+        (target.kind !== 'gate' && target.kind !== 'window')
+      ) {
+        continue
+      }
+      if (Math.abs(Math.sin(target.rotation - rotation)) > 0.2) continue
+      const dx = target.x - x
+      const dz = target.z - z
+      const perp = dx * vx + dz * vz
+      if (Math.abs(perp) > 0.6) continue
+      const along = dx * ux + dz * uz
+      const half = (width + target.width) / 2
+      for (const adjust of [along - half, along + half]) {
+        const dist = Math.abs(adjust)
+        if (dist < bestAbs) {
+          bestAbs = dist
+          bestAdjust = adjust
+          bestTarget = target
+        }
+      }
+    }
+
+    if (!bestTarget || Math.abs(bestAdjust) > EDGE_SNAP) return null
+    return {
+      x: x + ux * bestAdjust,
+      z: z + uz * bestAdjust,
+      target: bestTarget,
+    }
+  }
+
   private dragIds(id: string): string[] {
     const spec = this.boothSpecs.get(id)
     if (spec?.groupId) {
@@ -2307,6 +2737,119 @@ export class Stage {
     this.previewRoot.add(this.previewGroup)
   }
 
+  /** 进入展台复制粘贴放置：显示半透明幽灵组并跟随鼠标 */
+  startBoothPaste(payload: BoothPastePayload) {
+    this.stopBoothPaste()
+    if (!payload.booths.length && !payload.infras.length) return
+
+    const root = new THREE.Group()
+    root.name = 'booth-paste-ghost'
+    const common = {
+      thickness: 0.1,
+      wallColor: 0xdbe4ff,
+      floorColor: 0xc9d7ff,
+      edgeColor: ACCENT,
+      transparent: true,
+      opacity: 0.42,
+      edges: true,
+    }
+
+    for (const b of payload.booths) {
+      const kind = boothKindOf(b)
+      const group =
+        kind === 'scaffold'
+          ? buildScaffoldBooth(b.points, {
+              ...common,
+              height: b.height,
+              canopy: b.canopy !== false,
+            })
+          : kind === 'openfloor'
+            ? buildOpenFloorBooth(b.points, { ...common, height: b.height })
+            : buildBooth(b.points, {
+                ...common,
+                height: b.height,
+                noTop: b.noTop === true,
+              })
+      root.add(group)
+    }
+
+    for (const it of payload.infras) {
+      if (it.kind === 'gate' || it.kind === 'window') continue
+      const ghost = buildInfra(it, true)
+      if (isFurnitureKind(it.kind)) {
+        const host = payload.booths.find((b) => pointInPolygon(it, b.points))
+        ghost.position.y =
+          host && boothKindOf(host) !== 'massing'
+            ? Math.min(OPEN_FLOOR_HEIGHT, host.height)
+            : 0
+      }
+      root.add(ghost)
+    }
+
+    this.pasteCenter = { ...payload.center }
+    this.pasteBaseBox = payload.booths.length
+      ? snapBoxOfPoints(payload.booths.flatMap((booth) => booth.points))
+      : null
+    this.pasteTargets = this.boothPasteSnapTargets(payload.booths)
+    this.pasteTarget = { x: payload.center.x + 4, z: payload.center.z + 4 }
+    root.position.set(
+      this.pasteTarget.x - this.pasteCenter.x,
+      0,
+      this.pasteTarget.z - this.pasteCenter.z,
+    )
+    this.previewRoot.add(root)
+    this.pasteGhost = root
+    this.snapRing.visible = true
+    this.snapRing.position.set(this.pasteTarget.x, 0.05, this.pasteTarget.z)
+    this.host.style.cursor = 'crosshair'
+    this.opts.onHover?.(this.pasteTarget)
+  }
+
+  stopBoothPaste() {
+    if (!this.pasteGhost) return
+    this.previewRoot.remove(this.pasteGhost)
+    disposeDeep(this.pasteGhost)
+    this.pasteGhost = null
+    this.pasteTarget = null
+    this.pasteBaseBox = null
+    this.pasteTargets = []
+    this.snapRing.visible = false
+    this.updateSnapGuide(null)
+    this.opts.onHover?.(null)
+  }
+
+  private updateBoothPaste(raw: Pt) {
+    if (!this.pasteGhost) return
+    let target = snapToGrid(raw, SNAP)
+    let snapTarget: SnapBox | null = null
+    if (this.pasteBaseBox) {
+      const baseDx = target.x - this.pasteCenter.x
+      const baseDz = target.z - this.pasteCenter.z
+      const snapped = snapEdgeDelta(
+        this.pasteBaseBox,
+        baseDx,
+        baseDz,
+        this.pasteTargets,
+        EDGE_SNAP,
+      )
+      target = {
+        x: this.pasteCenter.x + snapped.dx,
+        z: this.pasteCenter.z + snapped.dz,
+      }
+      snapTarget = snapped.target
+    }
+    this.pasteTarget = target
+    this.pasteGhost.position.set(
+      target.x - this.pasteCenter.x,
+      0,
+      target.z - this.pasteCenter.z,
+    )
+    this.snapRing.visible = true
+    this.snapRing.position.set(target.x, 0.05, target.z)
+    this.updateSnapGuide(snapTarget)
+    this.opts.onHover?.(target)
+  }
+
   setMode(mode: StageMode) {
     this.mode = mode
     this.host.style.cursor = mode === 'draw' ? 'crosshair' : 'default'
@@ -2314,6 +2857,7 @@ export class Stage {
       this.snapRing.visible = false
       this.rubber.visible = false
       if (this.infraKind) this.stopInfraPlace()
+      this.stopBoothPaste()
       this.opts.onHover?.(null)
     }
   }
@@ -2547,6 +3091,7 @@ export class Stage {
   private onPointerDown = (e: PointerEvent) => {
     this.down = { x: e.clientX, y: e.clientY, t: performance.now() }
     this.rightClick = null
+    this.updateSnapGuide(null)
     // 让画布接管焦点，避免 Enter 误触面板按钮
     this.renderer.domElement.focus({ preventScroll: true })
 
@@ -2572,7 +3117,7 @@ export class Stage {
       if (infraId) {
         const spec = this.infras.find((it) => it.id === infraId)
         // 出入口沿墙吸附，不参与右键旋转
-        if (spec && spec.kind !== 'gate') {
+        if (spec && spec.kind !== 'gate' && spec.kind !== 'window') {
           this.rightClick = { x: e.clientX, y: e.clientY, t: performance.now(), infraId }
         }
         return
@@ -2590,25 +3135,57 @@ export class Stage {
 
     const infraId = this.pickInfraAt(e.clientX, e.clientY)
     if (infraId) {
-      this.opts.onPick?.(infraId, false, 'infra')
+      const additive = e.ctrlKey || e.metaKey || e.shiftKey
+      const alreadySelected = this.selectedInfraIds.includes(infraId)
+      if (additive || !alreadySelected) {
+        this.opts.onPick?.(infraId, additive, 'infra')
+      }
+      if (additive) return
+
       const spec = this.infras.find((it) => it.id === infraId)
       const group = this.infraGroups.get(infraId)
-      if (spec && group && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-        this.infraDrag = {
-          id: infraId,
-          spec,
-          group,
-          sx: e.clientX,
-          sy: e.clientY,
-          x: spec.x,
-          z: spec.z,
-          rotation: spec.rotation,
-          moved: false,
+      if (!spec || !group) return
+
+      const ids =
+        alreadySelected && this.selectedInfraIds.length > 1
+          ? this.selectedInfraIds
+          : [infraId]
+      const items: InfraDragItem[] = []
+      for (const id of ids) {
+        const itemSpec = this.infras.find((it) => it.id === id)
+        const itemGroup = this.infraGroups.get(id)
+        if (!itemSpec || !itemGroup) continue
+        // 门窗依附墙面，不参与整体拖动
+        if (ids.length > 1 && (itemSpec.kind === 'gate' || itemSpec.kind === 'window')) {
+          items.length = 0
+          break
         }
-        this.controls.enabled = false
-        this.host.style.cursor = 'grabbing'
-        if (this.infraBox) this.infraBox.visible = false
+        items.push({
+          id,
+          spec: itemSpec,
+          group: itemGroup,
+          x: itemSpec.x,
+          z: itemSpec.z,
+          rotation: itemSpec.rotation,
+        })
       }
+      if (!items.length) return
+
+      this.infraDrag = {
+        id: infraId,
+        spec,
+        group,
+        sx: e.clientX,
+        sy: e.clientY,
+        x: spec.x,
+        z: spec.z,
+        rotation: spec.rotation,
+        moved: false,
+        items,
+      }
+      this.controls.enabled = false
+      this.host.style.cursor = 'grabbing'
+      this.setInfraBoxesVisible(false)
       return
     }
 
@@ -2641,6 +3218,7 @@ export class Stage {
   private onPointerUp = (e: PointerEvent) => {
     const down = this.down
     this.down = null
+    this.updateSnapGuide(null)
 
     // 右键单击（未拖动）旋转对象；右键拖动仍交给 OrbitControls 平移
     if (e.button === 2) {
@@ -2678,15 +3256,34 @@ export class Stage {
       this.infraDrag = null
       this.controls.enabled = true
       this.host.style.cursor = 'default'
-      infraDrag.group.position.set(
-        infraDrag.spec.x,
-        this.infraBaseYMap.get(infraDrag.spec.id) ?? 0,
-        infraDrag.spec.z,
-      )
-      infraDrag.group.rotation.y = infraDrag.spec.rotation
-      if (this.infraBox) this.infraBox.visible = true
+      for (const item of infraDrag.items) {
+        item.group.position.set(
+          item.spec.x,
+          this.infraBaseYMap.get(item.spec.id) ?? 0,
+          item.spec.z,
+        )
+        item.group.rotation.y = item.spec.rotation
+      }
+      this.setInfraBoxesVisible(true)
       if (infraDrag.moved) {
-        this.opts.onMoveInfra?.(infraDrag.id, infraDrag.x, infraDrag.z, infraDrag.rotation)
+        if (infraDrag.items.length > 1) {
+          this.opts.onMoveInfras?.(
+            infraDrag.items.map((item) => ({
+              id: item.id,
+              x: item.x,
+              z: item.z,
+              rotation: item.rotation,
+            })),
+          )
+        } else {
+          const item = infraDrag.items[0]
+          this.opts.onMoveInfra?.(
+            infraDrag.id,
+            item?.x ?? infraDrag.x,
+            item?.z ?? infraDrag.z,
+            item?.rotation ?? infraDrag.rotation,
+          )
+        }
       }
       return
     }
@@ -2720,6 +3317,10 @@ export class Stage {
     if (dist > 6 || performance.now() - down.t > 900) return
 
     if (this.mode === 'draw') {
+      if (this.pasteGhost) {
+        if (this.pasteTarget) this.opts.onPlacePaste?.(this.pasteTarget)
+        return
+      }
       if (this.infraKind) {
         if (this.infraSpot) this.opts.onPlaceInfra?.(this.infraKind, this.infraSpot)
         return
@@ -2747,23 +3348,65 @@ export class Stage {
     const p = this.groundPoint(e.clientX, e.clientY)
     if (!p) return
 
-    if (d.spec.kind === 'gate') {
-      const wall = this.nearestWall(p)
-      if (!wall) return
-      d.x = wall.x
-      d.z = wall.z
+    if (d.spec.kind === 'gate' || d.spec.kind === 'window') {
+      const wall = this.nearestWall(p, d.spec.kind === 'window')
+      if (!wall) {
+        this.updateSnapGuide(null)
+        return
+      }
+      const snapped = this.snapWallItemEdge(
+        wall.x,
+        wall.z,
+        wall.rotation,
+        d.spec.width,
+        d.id,
+      )
+      d.x = snapped?.x ?? wall.x
+      d.z = snapped?.z ?? wall.z
       d.rotation = wall.rotation
-      d.group.position.set(wall.x, 0, wall.z)
+      d.group.position.set(d.x, 0, d.z)
       d.group.rotation.y = wall.rotation
+      const item = d.items[0]
+      if (item) {
+        item.x = d.x
+        item.z = d.z
+        item.rotation = d.rotation
+      }
+      this.updateSnapGuide(snapped ? snapBoxOfInfra(snapped.target) : null)
       return
     }
 
     const snap = snapToGrid(p, SNAP)
     if (Math.abs(snap.x) > GRID_HALF || Math.abs(snap.z) > GRID_HALF) return
-    d.x = snap.x
-    d.z = snap.z
-    const baseY = isFurnitureKind(d.spec.kind) ? this.furnitureBaseYAt(snap.x, snap.z) : 0
-    d.group.position.set(snap.x, baseY, snap.z)
+    const boxes = d.items.map((item) => snapBoxOfInfra(item.spec))
+    const moving =
+      boxes.length > 1
+        ? {
+            minX: Math.min(...boxes.map((box) => box.minX)),
+            maxX: Math.max(...boxes.map((box) => box.maxX)),
+            minZ: Math.min(...boxes.map((box) => box.minZ)),
+            maxZ: Math.max(...boxes.map((box) => box.maxZ)),
+          }
+        : snapBoxOfInfra(d.spec)
+    const ids = new Set(d.items.map((item) => item.id))
+    const snapped = snapEdgeDelta(
+      moving,
+      snap.x - d.spec.x,
+      snap.z - d.spec.z,
+      this.infraSnapTargets(ids),
+      EDGE_SNAP,
+    )
+    for (const item of d.items) {
+      item.x = item.spec.x + snapped.dx
+      item.z = item.spec.z + snapped.dz
+      const baseY = isFurnitureKind(item.spec.kind)
+        ? this.furnitureBaseYAt(item.x, item.z)
+        : 0
+      item.group.position.set(item.x, baseY, item.z)
+    }
+    d.x = d.spec.x + snapped.dx
+    d.z = d.spec.z + snapped.dz
+    this.updateSnapGuide(snapped.target)
   }
 
   private updateDrag(e: PointerEvent) {
@@ -2773,10 +3416,28 @@ export class Stage {
     if (!p) return
 
     if (d.kind === 'move') {
-      d.dx = Math.round((p.x - d.origin.x) / SNAP) * SNAP
-      d.dz = Math.round((p.z - d.origin.z) / SNAP) * SNAP
+      let dx = Math.round((p.x - d.origin.x) / SNAP) * SNAP
+      let dz = Math.round((p.z - d.origin.z) / SNAP) * SNAP
+      const booth = this.boothSpecs.get(d.id)
+      if (booth) {
+        const snapped = snapEdgeDelta(
+          snapBoxOfPoints(booth.points),
+          dx,
+          dz,
+          this.boothSnapTargets(d.id),
+          EDGE_SNAP,
+        )
+        dx = snapped.dx
+        dz = snapped.dz
+        this.updateSnapGuide(snapped.target)
+      } else {
+        this.updateSnapGuide(null)
+      }
+      d.dx = dx
+      d.dz = dz
       for (const t of d.targets) t.position.set(d.dx, 0, d.dz)
     } else {
+      this.updateSnapGuide(null)
       const a0 = Math.atan2(d.origin.z - d.center.z, d.origin.x - d.center.x)
       const a1 = Math.atan2(p.z - d.center.z, p.x - d.center.x)
       let delta = a1 - a0
@@ -2833,6 +3494,11 @@ export class Stage {
       return
     }
     if (this.mode !== 'draw') return
+    if (this.pasteGhost) {
+      const raw = this.groundPoint(e.clientX, e.clientY)
+      if (raw) this.updateBoothPaste(raw)
+      return
+    }
     if (this.infraKind) {
       const raw = this.groundPoint(e.clientX, e.clientY)
       this.updateInfraGhost(raw)
@@ -2869,6 +3535,7 @@ export class Stage {
     if (this.walkState !== 'off') return
     this.snapRing.visible = false
     this.rubber.visible = false
+    this.updateSnapGuide(null)
     this.opts.onHover?.(null)
   }
 
@@ -2946,6 +3613,7 @@ export class Stage {
     if (this.walkBody) this.walkBody.visible = false
     this.controls.enabled = false
     this.host.style.cursor = 'crosshair'
+    this.applyVenueXray()
     // 进入选点统一先切到俯视并框住场馆，再点击地面降落
     this.viewTop()
     this.opts.onWalkState?.('pick')
@@ -2962,6 +3630,7 @@ export class Stage {
     this.walkState = 'off'
     this.controls.enabled = true
     this.host.style.cursor = 'default'
+    this.applyVenueXray()
     this.opts.onWalkState?.('off')
   }
 
@@ -3218,6 +3887,7 @@ export class Stage {
       toQuat,
     }
     this.walkState = 'enter'
+    this.applyVenueXray()
     this.updateWalkBody(0, false)
     this.controls.enabled = false
     this.host.style.cursor = 'default'
@@ -3267,6 +3937,7 @@ export class Stage {
     this.walkReturn = null
     this.walkAltReleased = false
     this.walkUiPaused = false
+    this.applyVenueXray()
     this.opts.onMinimapHold?.(false)
     this.walkKeys.clear()
     this.walkMove = { x: 0, z: 0 }
@@ -3834,7 +4505,10 @@ export class Stage {
   startPresentation() {
     if (this.presentation) return
     this.presentation = true
-    this.labelsBeforePresentation = this.labelsVisible
+    this.labelsBeforePresentation = {
+      booth: this.boothLabelsVisible,
+      infra: this.infraLabelsVisible,
+    }
     // 展示时只保留展台名称，基础设施名称隐藏
     this.setBoothLabelsVisible(true)
     this.setInfraLabelsVisible(false)
@@ -3852,12 +4526,44 @@ export class Stage {
     this.presentation = false
     this.controls.autoRotate = false
     this.setPresentationLabels(false)
-    this.setLabelsVisible(this.labelsBeforePresentation)
+    this.setBoothLabelsVisible(this.labelsBeforePresentation.booth)
+    this.setInfraLabelsVisible(this.labelsBeforePresentation.infra)
+  }
+
+  /** 预加载汇报图所需的展台 Logo，避免导出时只画出空白底板 */
+  private async loadReportLogos(): Promise<Map<string, HTMLImageElement>> {
+    const entries = [...this.boothSpecs.values()].filter(
+      (booth) => !!booth.logo && booth.points.length >= 3,
+    )
+    const images = new Map<string, HTMLImageElement>()
+    await Promise.all(
+      entries.map(async (booth) => {
+        const img = new Image()
+        img.decoding = 'async'
+        let timer = 0
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            window.clearTimeout(timer)
+            resolve()
+          }
+          img.onload = done
+          img.onerror = done
+          // 损坏或超大的图片不能阻塞整张汇报图
+          timer = window.setTimeout(done, 2000)
+          img.src = boothLogoDataUrl(booth.logo!)
+        })
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          images.set(booth.id, img)
+        }
+      }),
+    )
+    return images
   }
 
   /** 生成一张高质量俯视汇报图，返回 data URL */
-  captureReportImage(options: ReportImageOptions): string | null {
+  async captureReportImage(options: ReportImageOptions): Promise<string | null> {
     if (!this.venue) return null
+    const reportLogos = await this.loadReportLogos()
     const width = Math.max(1600, Math.min(3200, options.width ?? 2400))
     const height = Math.max(1000, Math.min(2200, options.height ?? 1500))
     const content = this.contentPoints()
@@ -3934,7 +4640,7 @@ export class Stage {
       const ctx = canvas.getContext('2d')
       if (!ctx) return null
       ctx.drawImage(renderer.domElement, 0, 0, width, height)
-      this.drawReportOverlay(ctx, camera, width, height, options)
+      this.drawReportOverlay(ctx, camera, width, height, options, reportLogos)
       return canvas.toDataURL('image/png')
     } catch (err) {
       console.warn('汇报图生成失败', err)
@@ -3964,6 +4670,7 @@ export class Stage {
     width: number,
     height: number,
     options: ReportImageOptions,
+    logos: Map<string, HTMLImageElement>,
   ) {
     const v = new THREE.Vector3()
     const scale = width / 2400
@@ -4049,7 +4756,7 @@ export class Stage {
       ctx.restore()
     }
 
-    if (this.labelsVisible) {
+    if (this.boothLabelsVisible) {
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
       ctx.font = `600 ${Math.round(20 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
@@ -4059,12 +4766,17 @@ export class Stage {
         if (v.z < -1 || v.z > 1) continue
         const x = (v.x * 0.5 + 0.5) * width
         const y = (-v.y * 0.5 + 0.5) * height
-        const text = label.obj.element.textContent || ''
-        if (!text) continue
-        const textWidth = ctx.measureText(text).width
+        const el = label.obj.element
+        const name = el.dataset.boothName || el.textContent || ''
+        const exhibitor = el.dataset.exhibitor || ''
+        if (!name && !exhibitor) continue
+        ctx.font = `600 ${Math.round(20 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+        const nameWidth = ctx.measureText(name).width
+        ctx.font = `500 ${Math.round(13 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+        const exhibitorWidth = exhibitor ? ctx.measureText(exhibitor).width : 0
         const padX = 8 * scale
-        const boxW = textWidth + padX * 2
-        const boxH = 28 * scale
+        const boxW = Math.max(nameWidth, exhibitorWidth) + padX * 2
+        const boxH = (exhibitor ? 46 : 28) * scale
         ctx.fillStyle = 'rgba(255, 255, 255, 0.94)'
         this.roundRect(ctx, x - boxW / 2, y - boxH / 2, boxW, boxH, 5 * scale)
         ctx.fill()
@@ -4073,7 +4785,13 @@ export class Stage {
         this.roundRect(ctx, x - boxW / 2, y - boxH / 2, boxW, boxH, 5 * scale)
         ctx.stroke()
         ctx.fillStyle = '#20252d'
-        ctx.fillText(text, x - textWidth / 2, y)
+        ctx.font = `600 ${Math.round(20 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+        ctx.fillText(name, x - nameWidth / 2, y - (exhibitor ? 9 * scale : 0))
+        if (exhibitor) {
+          ctx.fillStyle = '#6e7784'
+          ctx.font = `500 ${Math.round(13 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+          ctx.fillText(exhibitor, x - exhibitorWidth / 2, y + 11 * scale)
+        }
         reserve(x, y, boxW, boxH)
       }
     }
@@ -4102,6 +4820,66 @@ export class Stage {
         ctx.fillText(text, x - textWidth / 2, y)
         reserve(x, y, boxW, boxH)
       }
+    }
+
+    // 展台 Logo：绘制在俯视包围盒左下角，使用白底卡片保证可读
+    for (const booth of this.boothSpecs.values()) {
+      const img = logos.get(booth.id)
+      if (!img || booth.points.length < 3) continue
+      const projected = booth.points.map((p) => project(p.x, p.z))
+      const minX = Math.min(...projected.map((p) => p.x))
+      const maxX = Math.max(...projected.map((p) => p.x))
+      const minY = Math.min(...projected.map((p) => p.y))
+      const maxY = Math.max(...projected.map((p) => p.y))
+      const bw = maxX - minX
+      const bh = maxY - minY
+      if (bw < 24 * scale || bh < 18 * scale) continue
+
+      const inset = Math.max(3 * scale, Math.min(bw, bh) * 0.035)
+      const pad = Math.max(3 * scale, 2.5 * scale)
+      const maxCardW = Math.min(bw - inset * 2, 210 * scale)
+      const maxCardH = Math.min(bh - inset * 2, 76 * scale)
+      if (maxCardW < 30 * scale || maxCardH < 20 * scale) continue
+
+      const innerMaxW = maxCardW - pad * 2
+      const innerMaxH = maxCardH - pad * 2
+      const ratio = img.naturalWidth / Math.max(1, img.naturalHeight)
+      let logoH = innerMaxH
+      let logoW = logoH * ratio
+      if (logoW > innerMaxW) {
+        logoW = innerMaxW
+        logoH = logoW / ratio
+      }
+      if (logoW < 18 * scale || logoH < 10 * scale) continue
+
+      const cardW = logoW + pad * 2
+      const cardH = logoH + pad * 2
+      const x = minX + inset
+      const y = maxY - inset - cardH
+
+      ctx.save()
+      ctx.shadowColor = 'rgba(20, 28, 38, 0.22)'
+      ctx.shadowBlur = 6 * scale
+      ctx.shadowOffsetY = 2 * scale
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.97)'
+      this.roundRect(ctx, x, y, cardW, cardH, 4 * scale)
+      ctx.fill()
+      ctx.shadowColor = 'transparent'
+      ctx.strokeStyle = 'rgba(35, 42, 52, 0.24)'
+      ctx.lineWidth = Math.max(1, scale)
+      this.roundRect(ctx, x, y, cardW, cardH, 4 * scale)
+      ctx.stroke()
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(
+        img,
+        x + (cardW - logoW) / 2,
+        y + (cardH - logoH) / 2,
+        logoW,
+        logoH,
+      )
+      ctx.restore()
+      reserve(x + cardW / 2, y + cardH / 2, cardW, cardH)
     }
 
     // 刻度标签：只绘制不重叠的数字，避免汇报图上数字互相遮挡

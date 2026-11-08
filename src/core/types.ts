@@ -22,6 +22,8 @@ export type BoothKind = 'massing' | 'scaffold' | 'openfloor'
 export interface Booth {
   id: string
   name: string
+  /** 展商名称：可选，随场景保存并显示在模型标签与汇报图中 */
+  exhibitor?: string
   points: Pt[]
   height: number
   /** 模型类型，缺省为标准白膜 */
@@ -42,11 +44,12 @@ export interface Booth {
   marked?: boolean
 }
 
-/** 基础设施类型：半截楼梯 / 洗手间 / 展馆出入口 / 电梯间 / 墙面 / 家具 */
+/** 基础设施类型：半截楼梯 / 洗手间 / 展馆出入口 / 窗户 / 电梯间 / 墙面 / 家具 */
 export type InfraKind =
   | 'stairs'
   | 'restroom'
   | 'gate'
+  | 'window'
   | 'elevator'
   | 'wall'
   | 'chair'
@@ -70,6 +73,8 @@ export interface Infra {
   depth: number
   /** 高度（米） */
   height: number
+  /** 离地高度（仅 window），默认 1 m */
+  sill?: number
   /** 电梯数量（仅 elevator） */
   count?: number
   /** 是否打开（仅 gate） */
@@ -82,9 +87,11 @@ export type EditorMode =
   | 'height-venue'
   | 'draw-booth'
   | 'height-booth'
+  | 'paste-booths'
   | 'place-stairs'
   | 'place-restroom'
   | 'place-gate'
+  | 'place-window'
   | 'place-elevator'
   | 'place-wall'
   | 'place-chair'

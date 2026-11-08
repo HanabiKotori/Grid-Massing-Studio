@@ -1,0 +1,1238 @@
+{
+  "version": 1,
+  "venueName": "W1",
+  "weather": "light-rain",
+  "weatherOn": true,
+  "sunProgress": 0.4881944606479236,
+  "venue": {
+    "points": [
+      {
+        "x": -65,
+        "z": -35
+      },
+      {
+        "x": 65,
+        "z": -35
+      },
+      {
+        "x": 65,
+        "z": 35
+      },
+      {
+        "x": -65,
+        "z": 35
+      }
+    ],
+    "height": 7,
+    "ceiling": false
+  },
+  "booths": [
+    {
+      "id": "sample-1",
+      "name": "W1E01",
+      "points": [
+        {
+          "x": -49,
+          "z": -31
+        },
+        {
+          "x": -30,
+          "z": -31
+        },
+        {
+          "x": -30,
+          "z": -21
+        },
+        {
+          "x": -49,
+          "z": -21
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-2",
+      "name": "W1E02",
+      "points": [
+        {
+          "x": -24,
+          "z": -31
+        },
+        {
+          "x": -5,
+          "z": -31
+        },
+        {
+          "x": -5,
+          "z": -21
+        },
+        {
+          "x": -24,
+          "z": -21
+        }
+      ],
+      "height": 3,
+      "mark": "red"
+    },
+    {
+      "id": "sample-3",
+      "name": "W1E03",
+      "points": [
+        {
+          "x": 1,
+          "z": -31
+        },
+        {
+          "x": 15,
+          "z": -31
+        },
+        {
+          "x": 15,
+          "z": -21
+        },
+        {
+          "x": 1,
+          "z": -21
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-4",
+      "name": "W1E05",
+      "points": [
+        {
+          "x": 19,
+          "z": -31
+        },
+        {
+          "x": 32,
+          "z": -31
+        },
+        {
+          "x": 32,
+          "z": -21
+        },
+        {
+          "x": 19,
+          "z": -21
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-5",
+      "name": "W1E06",
+      "points": [
+        {
+          "x": 38,
+          "z": -31
+        },
+        {
+          "x": 50,
+          "z": -31
+        },
+        {
+          "x": 50,
+          "z": -21
+        },
+        {
+          "x": 38,
+          "z": -21
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-6",
+      "name": "W1C01",
+      "points": [
+        {
+          "x": -49,
+          "z": -18
+        },
+        {
+          "x": -23,
+          "z": -18
+        },
+        {
+          "x": -23,
+          "z": 18
+        },
+        {
+          "x": -49,
+          "z": 18
+        }
+      ],
+      "height": 3,
+      "kind": "scaffold",
+      "canopy": false,
+      "mark": "yellow"
+    },
+    {
+      "id": "sample-7",
+      "name": "W1C02",
+      "points": [
+        {
+          "x": -20,
+          "z": -18
+        },
+        {
+          "x": -8,
+          "z": -18
+        },
+        {
+          "x": -8,
+          "z": -2
+        },
+        {
+          "x": -20,
+          "z": -2
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-8",
+      "name": "W1C03",
+      "points": [
+        {
+          "x": -2,
+          "z": -18
+        },
+        {
+          "x": 17,
+          "z": -18
+        },
+        {
+          "x": 17,
+          "z": -2
+        },
+        {
+          "x": -2,
+          "z": -2
+        }
+      ],
+      "height": 3,
+      "noTop": true
+    },
+    {
+      "id": "sample-9",
+      "name": "W1C05",
+      "points": [
+        {
+          "x": 20,
+          "z": -18
+        },
+        {
+          "x": 29,
+          "z": -18
+        },
+        {
+          "x": 29,
+          "z": -2
+        },
+        {
+          "x": 20,
+          "z": -2
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-10",
+      "name": "W1C06",
+      "points": [
+        {
+          "x": 32,
+          "z": -14
+        },
+        {
+          "x": 50,
+          "z": -14
+        },
+        {
+          "x": 50,
+          "z": -2
+        },
+        {
+          "x": 32,
+          "z": -2
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-11",
+      "name": "W1B02",
+      "points": [
+        {
+          "x": -20,
+          "z": 1
+        },
+        {
+          "x": -8,
+          "z": 1
+        },
+        {
+          "x": -8,
+          "z": 18
+        },
+        {
+          "x": -20,
+          "z": 18
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-12",
+      "name": "W1B03",
+      "points": [
+        {
+          "x": -2,
+          "z": 1
+        },
+        {
+          "x": 29,
+          "z": 1
+        },
+        {
+          "x": 29,
+          "z": 18
+        },
+        {
+          "x": -2,
+          "z": 18
+        }
+      ],
+      "height": 3,
+      "mark": "gray"
+    },
+    {
+      "id": "sample-13",
+      "name": "W1B06",
+      "points": [
+        {
+          "x": 35,
+          "z": 6
+        },
+        {
+          "x": 50,
+          "z": 6
+        },
+        {
+          "x": 50,
+          "z": 18
+        },
+        {
+          "x": 35,
+          "z": 18
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-14",
+      "name": "W1A01",
+      "points": [
+        {
+          "x": -49,
+          "z": 21
+        },
+        {
+          "x": -26,
+          "z": 21
+        },
+        {
+          "x": -26,
+          "z": 31
+        },
+        {
+          "x": -49,
+          "z": 31
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-15",
+      "name": "W1A02",
+      "points": [
+        {
+          "x": -23,
+          "z": 21
+        },
+        {
+          "x": -3,
+          "z": 21
+        },
+        {
+          "x": -3,
+          "z": 31
+        },
+        {
+          "x": -23,
+          "z": 31
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-16",
+      "name": "W1A03",
+      "points": [
+        {
+          "x": 0,
+          "z": 21
+        },
+        {
+          "x": 12,
+          "z": 21
+        },
+        {
+          "x": 12,
+          "z": 31
+        },
+        {
+          "x": 0,
+          "z": 31
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-17",
+      "name": "W1A05",
+      "points": [
+        {
+          "x": 15,
+          "z": 21
+        },
+        {
+          "x": 25,
+          "z": 21
+        },
+        {
+          "x": 25,
+          "z": 31
+        },
+        {
+          "x": 15,
+          "z": 31
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-18",
+      "name": "W1A06",
+      "points": [
+        {
+          "x": 28,
+          "z": 21
+        },
+        {
+          "x": 38,
+          "z": 21
+        },
+        {
+          "x": 38,
+          "z": 31
+        },
+        {
+          "x": 28,
+          "z": 31
+        }
+      ],
+      "height": 3
+    },
+    {
+      "id": "sample-19",
+      "name": "咖啡洽谈区",
+      "points": [
+        {
+          "x": 41,
+          "z": 21
+        },
+        {
+          "x": 47,
+          "z": 21
+        },
+        {
+          "x": 47,
+          "z": 31
+        },
+        {
+          "x": 41,
+          "z": 31
+        }
+      ],
+      "height": 0.15,
+      "kind": "openfloor"
+    }
+  ],
+  "infras": [
+    {
+      "id": "sample-inf-1",
+      "kind": "restroom",
+      "name": "洗手间 01",
+      "x": -60,
+      "z": -30,
+      "rotation": 0,
+      "width": 2,
+      "depth": 2,
+      "height": 3
+    },
+    {
+      "id": "sample-inf-2",
+      "kind": "stairs",
+      "name": "楼梯 01",
+      "x": -60,
+      "z": -26,
+      "rotation": 0,
+      "width": 2,
+      "depth": 4,
+      "height": 3
+    },
+    {
+      "id": "sample-inf-3",
+      "kind": "restroom",
+      "name": "洗手间 02",
+      "x": 60,
+      "z": -30,
+      "rotation": 0,
+      "width": 2,
+      "depth": 2,
+      "height": 3
+    },
+    {
+      "id": "sample-inf-4",
+      "kind": "stairs",
+      "name": "楼梯 02",
+      "x": 60,
+      "z": -26,
+      "rotation": 0,
+      "width": 2,
+      "depth": 4,
+      "height": 3
+    },
+    {
+      "id": "sample-inf-5",
+      "kind": "restroom",
+      "name": "洗手间 03",
+      "x": -60,
+      "z": 0,
+      "rotation": 0,
+      "width": 2,
+      "depth": 2,
+      "height": 3
+    },
+    {
+      "id": "sample-inf-6",
+      "kind": "stairs",
+      "name": "楼梯 03",
+      "x": -60,
+      "z": 26,
+      "rotation": 0,
+      "width": 2,
+      "depth": 4,
+      "height": 3
+    },
+    {
+      "id": "sample-inf-7",
+      "kind": "restroom",
+      "name": "洗手间 04",
+      "x": 60,
+      "z": 30,
+      "rotation": 0,
+      "width": 2,
+      "depth": 2,
+      "height": 3
+    },
+    {
+      "id": "sample-inf-8",
+      "kind": "stairs",
+      "name": "楼梯 04",
+      "x": 60,
+      "z": 26,
+      "rotation": 0,
+      "width": 2,
+      "depth": 4,
+      "height": 3
+    },
+    {
+      "id": "sample-inf-9",
+      "kind": "gate",
+      "name": "出入口 01",
+      "x": -37,
+      "z": 35,
+      "rotation": 0,
+      "width": 5,
+      "depth": 0.5,
+      "height": 4,
+      "open": false
+    },
+    {
+      "id": "sample-inf-10",
+      "kind": "gate",
+      "name": "出入口 02",
+      "x": -13,
+      "z": 35,
+      "rotation": 0,
+      "width": 5,
+      "depth": 0.5,
+      "height": 4,
+      "open": false
+    },
+    {
+      "id": "sample-inf-11",
+      "kind": "gate",
+      "name": "出入口 03",
+      "x": 20,
+      "z": 35,
+      "rotation": 0,
+      "width": 5,
+      "depth": 0.5,
+      "height": 4,
+      "open": false
+    },
+    {
+      "id": "sample-inf-12",
+      "kind": "gate",
+      "name": "出入口 04",
+      "x": 65,
+      "z": 6.234271655748678,
+      "rotation": -1.5707963267948966,
+      "width": 5,
+      "depth": 0.5,
+      "height": 4,
+      "open": false
+    },
+    {
+      "id": "sample-inf-13",
+      "kind": "gate",
+      "name": "出入口 05",
+      "x": 65,
+      "z": -18.546875775613643,
+      "rotation": -1.5707963267948966,
+      "width": 5,
+      "depth": 0.5,
+      "height": 4,
+      "open": false
+    },
+    {
+      "id": "sample-inf-14",
+      "kind": "gate",
+      "name": "出入口 06",
+      "x": 44,
+      "z": -35,
+      "rotation": 0,
+      "width": 5,
+      "depth": 0.5,
+      "height": 4,
+      "open": false
+    },
+    {
+      "id": "sample-inf-15",
+      "kind": "gate",
+      "name": "出入口 07",
+      "x": 17,
+      "z": -35,
+      "rotation": 0,
+      "width": 5,
+      "depth": 0.5,
+      "height": 4,
+      "open": false
+    },
+    {
+      "id": "sample-inf-16",
+      "kind": "gate",
+      "name": "出入口 08",
+      "x": -39,
+      "z": -35,
+      "rotation": 0,
+      "width": 5,
+      "depth": 0.5,
+      "height": 4,
+      "open": false
+    },
+    {
+      "id": "sample-inf-17",
+      "kind": "gate",
+      "name": "出入口 09",
+      "x": -65,
+      "z": -18.165178501264208,
+      "rotation": 1.5707963267948966,
+      "width": 5,
+      "depth": 0.5,
+      "height": 4,
+      "open": false
+    },
+    {
+      "id": "sample-inf-18",
+      "kind": "gate",
+      "name": "出入口 10",
+      "x": -65,
+      "z": 18.32029566512199,
+      "rotation": 1.5707963267948966,
+      "width": 5,
+      "depth": 0.5,
+      "height": 4,
+      "open": false
+    },
+    {
+      "id": "sample-inf-19",
+      "kind": "wall",
+      "name": "展馆内墙 01",
+      "x": -55,
+      "z": -31,
+      "rotation": 1.5707963267948966,
+      "width": 8,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-20",
+      "kind": "wall",
+      "name": "展馆内墙 02",
+      "x": -55,
+      "z": -23,
+      "rotation": 1.5707963267948966,
+      "width": 4,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-21",
+      "kind": "wall",
+      "name": "展馆内墙 03",
+      "x": -60,
+      "z": -21,
+      "rotation": 0,
+      "width": 10,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-22",
+      "kind": "wall",
+      "name": "展馆内墙 04",
+      "x": 55,
+      "z": -31,
+      "rotation": 1.5707963267948966,
+      "width": 8,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-23",
+      "kind": "wall",
+      "name": "展馆内墙 05",
+      "x": 55,
+      "z": -23,
+      "rotation": 1.5707963267948966,
+      "width": 4,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-24",
+      "kind": "wall",
+      "name": "展馆内墙 06",
+      "x": 60,
+      "z": -21,
+      "rotation": 0,
+      "width": 10,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-25",
+      "kind": "wall",
+      "name": "展馆内墙 07",
+      "x": -55,
+      "z": -3,
+      "rotation": 1.5707963267948966,
+      "width": 4,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-26",
+      "kind": "wall",
+      "name": "展馆内墙 08",
+      "x": -55,
+      "z": 3,
+      "rotation": 1.5707963267948966,
+      "width": 4,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-27",
+      "kind": "wall",
+      "name": "展馆内墙 09",
+      "x": -60,
+      "z": -5,
+      "rotation": 0,
+      "width": 10,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-28",
+      "kind": "wall",
+      "name": "展馆内墙 10",
+      "x": -60,
+      "z": 5,
+      "rotation": 0,
+      "width": 10,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-29",
+      "kind": "wall",
+      "name": "展馆内墙 11",
+      "x": -55,
+      "z": 24,
+      "rotation": 1.5707963267948966,
+      "width": 6,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-30",
+      "kind": "wall",
+      "name": "展馆内墙 12",
+      "x": -55,
+      "z": 32,
+      "rotation": 1.5707963267948966,
+      "width": 6,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-31",
+      "kind": "wall",
+      "name": "展馆内墙 13",
+      "x": -60,
+      "z": 21,
+      "rotation": 0,
+      "width": 10,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-32",
+      "kind": "wall",
+      "name": "展馆内墙 14",
+      "x": 55,
+      "z": 24,
+      "rotation": 1.5707963267948966,
+      "width": 6,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-33",
+      "kind": "wall",
+      "name": "展馆内墙 15",
+      "x": 55,
+      "z": 32,
+      "rotation": 1.5707963267948966,
+      "width": 6,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-34",
+      "kind": "wall",
+      "name": "展馆内墙 16",
+      "x": 60,
+      "z": 21,
+      "rotation": 0,
+      "width": 10,
+      "depth": 0.2,
+      "height": 4
+    },
+    {
+      "id": "sample-inf-35",
+      "kind": "sofa",
+      "name": "沙发 01",
+      "x": 44,
+      "z": 22.8,
+      "rotation": 0,
+      "width": 3,
+      "depth": 1,
+      "height": 1.2
+    },
+    {
+      "id": "sample-inf-36",
+      "kind": "sofa",
+      "name": "沙发 02",
+      "x": 44,
+      "z": 29.2,
+      "rotation": 3.141592653589793,
+      "width": 3,
+      "depth": 1,
+      "height": 1.2
+    },
+    {
+      "id": "sample-inf-37",
+      "kind": "armchair",
+      "name": "扶手椅 01",
+      "x": 42.2,
+      "z": 26,
+      "rotation": 1.5707963267948966,
+      "width": 1,
+      "depth": 1,
+      "height": 1
+    },
+    {
+      "id": "sample-inf-38",
+      "kind": "armchair",
+      "name": "扶手椅 02",
+      "x": 45.8,
+      "z": 26,
+      "rotation": -1.5707963267948966,
+      "width": 1,
+      "depth": 1,
+      "height": 1
+    },
+    {
+      "id": "sample-inf-39",
+      "kind": "table-square",
+      "name": "方茶几 01",
+      "x": 44,
+      "z": 26,
+      "rotation": 0,
+      "width": 2,
+      "depth": 1,
+      "height": 0.5
+    },
+    {
+      "id": "sample-inf-40",
+      "kind": "table-round",
+      "name": "圆茶几 01",
+      "x": 41.8,
+      "z": 23.6,
+      "rotation": 0,
+      "width": 1,
+      "depth": 1,
+      "height": 1
+    },
+    {
+      "id": "sample-inf-41",
+      "kind": "chair",
+      "name": "圆座椅 01",
+      "x": 41.8,
+      "z": 24.8,
+      "rotation": 0,
+      "width": 0.6,
+      "depth": 0.6,
+      "height": 0.5
+    },
+    {
+      "id": "infmw7y48w8-42",
+      "kind": "window",
+      "name": "窗户 01",
+      "x": 65,
+      "z": 15.5,
+      "rotation": -1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y50i5-43",
+      "kind": "window",
+      "name": "窗户 02",
+      "x": 65,
+      "z": 11.5,
+      "rotation": -1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y69iz-47",
+      "kind": "window",
+      "name": "窗户 06",
+      "x": 65,
+      "z": 24.5,
+      "rotation": -1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y6npk-48",
+      "kind": "window",
+      "name": "窗户 04",
+      "x": 65,
+      "z": 29.081996122555495,
+      "rotation": -1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y6syx-49",
+      "kind": "window",
+      "name": "窗户 05",
+      "x": 24.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y6ul9-50",
+      "kind": "window",
+      "name": "窗户 06",
+      "x": 28.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y6w94-51",
+      "kind": "window",
+      "name": "窗户 07",
+      "x": 32.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y6x82-52",
+      "kind": "window",
+      "name": "窗户 08",
+      "x": 36.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y70u1-53",
+      "kind": "window",
+      "name": "窗户 09",
+      "x": 15.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y73u4-54",
+      "kind": "window",
+      "name": "窗户 10",
+      "x": 11.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y751x-55",
+      "kind": "window",
+      "name": "窗户 11",
+      "x": 7.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y7655-56",
+      "kind": "window",
+      "name": "窗户 12",
+      "x": 3.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y79e8-57",
+      "kind": "window",
+      "name": "窗户 13",
+      "x": -17.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y7cap-58",
+      "kind": "window",
+      "name": "窗户 14",
+      "x": -21.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y7d9a-59",
+      "kind": "window",
+      "name": "窗户 15",
+      "x": -25.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y7eqf-60",
+      "kind": "window",
+      "name": "窗户 16",
+      "x": -41.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y7ibx-61",
+      "kind": "window",
+      "name": "窗户 17",
+      "x": -45.5,
+      "z": 35,
+      "rotation": -3.141592653589793,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y7njn-62",
+      "kind": "window",
+      "name": "窗户 18",
+      "x": -65,
+      "z": 13.82029566512199,
+      "rotation": 1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y7po0-63",
+      "kind": "window",
+      "name": "窗户 19",
+      "x": -65,
+      "z": 9.82029566512199,
+      "rotation": 1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y85vg-64",
+      "kind": "window",
+      "name": "窗户 20",
+      "x": -65,
+      "z": -0.08618546313073239,
+      "rotation": 1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y887h-65",
+      "kind": "window",
+      "name": "窗户 21",
+      "x": -65,
+      "z": -7.43217764110895,
+      "rotation": 1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y89pl-66",
+      "kind": "window",
+      "name": "窗户 22",
+      "x": -65,
+      "z": -11.43217764110895,
+      "rotation": 1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y8bxt-67",
+      "kind": "window",
+      "name": "窗户 23",
+      "x": -65,
+      "z": 27.3512413950435,
+      "rotation": 1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y8dsg-68",
+      "kind": "window",
+      "name": "窗户 24",
+      "x": -65,
+      "z": -28.237919390011058,
+      "rotation": 1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    },
+    {
+      "id": "infmw7y8kc7-69",
+      "kind": "window",
+      "name": "窗户 25",
+      "x": 65,
+      "z": -28.064642072245633,
+      "rotation": -1.5707963267948966,
+      "width": 4,
+      "depth": 0.24,
+      "height": 2,
+      "sill": 4.8
+    }
+  ]
+}

@@ -2,7 +2,12 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { BOOTH_KIND_LABELS, boothKindOf } from '../core/booth'
 import { groupCss } from '../core/groupColor'
-import { ELEVATOR_DEFAULT_COUNT, INFRA_LIMITS, isFurnitureKind } from '../core/infra'
+import {
+  ELEVATOR_DEFAULT_COUNT,
+  INFRA_LIMITS,
+  WINDOW_SILL,
+  isFurnitureKind,
+} from '../core/infra'
 import { boundsOf, perimeter, polygonArea } from '../core/polygon'
 import type {
   Booth,
@@ -56,10 +61,15 @@ const emit = defineEmits<{
   (e: 'toggle-xray'): void
   (e: 'toggle-top'): void
   (e: 'rename', id: string, name: string): void
+  (e: 'exhibitor', id: string, value: string): void
   (e: 'add-infra', kind: InfraKind): void
   (e: 'select-infra', id: string): void
   (e: 'delete-infra', id: string): void
-  (e: 'infra-size', id: string, patch: { width?: number; depth?: number; height?: number }): void
+  (
+    e: 'infra-size',
+    id: string,
+    patch: { width?: number; depth?: number; height?: number; sill?: number },
+  ): void
   (e: 'rotate-infra', id: string, dir: 1 | -1): void
   (e: 'toggle-gate', id: string): void
   (e: 'infra-count', id: string, delta: number): void
@@ -132,6 +142,10 @@ function boothSize(b: Booth): { width: number; depth: number } {
     width: Math.max(1, Math.round(bnd.maxX - bnd.minX)),
     depth: Math.max(1, Math.round(bnd.maxZ - bnd.minZ)),
   }
+}
+
+function onExhibitorChange(id: string, e: Event) {
+  emit('exhibitor', id, (e.target as HTMLInputElement).value)
 }
 
 function onBoothSize(id: string, key: 'width' | 'depth', e: Event) {
@@ -259,6 +273,7 @@ const kindShort: Record<InfraKind, string> = {
   stairs: '梯',
   restroom: '卫',
   gate: '门',
+  window: '窗',
   elevator: '电',
   wall: '墙',
   chair: '椅',
@@ -272,18 +287,26 @@ const kindLabel = (b: Booth) => BOOTH_KIND_LABELS[boothKindOf(b)]
 const heightText = (b: Booth) => (b.height < 1 ? b.height.toFixed(2) : b.height.toFixed(1))
 
 interface SizeField {
-  key: 'width' | 'depth' | 'height'
+  key: 'width' | 'depth' | 'height' | 'sill'
   label: string
   min: number
   max: number
   value: number
+  step?: number
 }
 
 function fieldsOf(it: Infra): SizeField[] {
   const lim = INFRA_LIMITS[it.kind]
+  const currentSill = it.kind === 'window' ? (it.sill ?? WINDOW_SILL) : 0
   const maxH =
-    it.kind === 'gate' && props.venue
-      ? Math.min(lim.height[1], Math.max(lim.height[0], Math.floor(props.venue.height - 0.15)))
+    (it.kind === 'gate' || it.kind === 'window') && props.venue
+      ? Math.min(
+          lim.height[1],
+          Math.max(
+            lim.height[0],
+            Math.floor(props.venue.height - currentSill - 0.15),
+          ),
+        )
       : lim.height[1]
 
   if (isFurnitureKind(it.kind)) {
@@ -299,6 +322,25 @@ function fieldsOf(it: Infra): SizeField[] {
     return [
       { key: 'width', label: '宽度', min: lim.width[0], max: lim.width[1], value: it.width },
       { key: 'height', label: '高度', min: lim.height[0], max: maxH, value: it.height },
+    ]
+  }
+
+  if (it.kind === 'window') {
+    const maxSill = Math.max(
+      0.2,
+      Math.floor(((props.venue?.height ?? 6) - it.height - 0.15) * 10) / 10,
+    )
+    return [
+      { key: 'width', label: '宽度', min: lim.width[0], max: lim.width[1], value: it.width },
+      { key: 'height', label: '高度', min: lim.height[0], max: maxH, value: it.height },
+      {
+        key: 'sill',
+        label: '离地',
+        min: 0.2,
+        max: maxSill,
+        value: currentSill,
+        step: 0.1,
+      },
     ]
   }
 
@@ -328,6 +370,9 @@ function dimsText(it: Infra): string {
   if (it.kind === 'gate') {
     return `宽 ${it.width.toFixed(1)} · 高 ${it.height.toFixed(1)} m · ${it.open ? '已打开' : '已关闭'}`
   }
+  if (it.kind === 'window') {
+    return `宽 ${it.width.toFixed(1)} · 高 ${it.height.toFixed(1)} m · 离地 ${(it.sill ?? WINDOW_SILL).toFixed(1)} m`
+  }
   if (it.kind === 'wall') {
     return `长 ${it.width.toFixed(1)} · 高 ${it.height.toFixed(1)} m`
   }
@@ -336,11 +381,11 @@ function dimsText(it: Infra): string {
   return text
 }
 
-function onSizeChange(id: string, key: 'width' | 'depth' | 'height', e: Event) {
+function onSizeChange(id: string, key: SizeField['key'], e: Event) {
   const v = parseFloat((e.target as HTMLInputElement).value)
   if (!Number.isFinite(v)) return
-  const patch: { width?: number; depth?: number; height?: number } = {}
-  patch[key] = Math.round(v)
+  const patch: { width?: number; depth?: number; height?: number; sill?: number } = {}
+  patch[key] = key === 'sill' ? Math.round(v * 10) / 10 : Math.round(v)
   emit('infra-size', id, patch)
 }
 
@@ -591,6 +636,7 @@ function onLogoChange(id: string, e: Event) {
                   </button>
                 </template>
               </div>
+              <span v-if="b.exhibitor" class="exhibitor-line">{{ b.exhibitor }}</span>
               <span>
                 {{ fmt(areaOf(b)) }} m² · 高 {{ heightText(b) }} m
                 <em v-if="boothKindOf(b) !== 'massing'" class="kind-tag">{{ kindLabel(b) }}</em>
@@ -603,6 +649,17 @@ function onLogoChange(id: string, e: Event) {
 
           <template v-if="b.id === activeId && venue && canEdit">
             <div class="row-size">
+              <label class="infra-field exhibitor-field">
+                <span>展商</span>
+                <input
+                  type="text"
+                  maxlength="60"
+                  placeholder="可选，输入展商名称"
+                  :value="b.exhibitor ?? ''"
+                  @click.stop
+                  @change="onExhibitorChange(b.id, $event)"
+                />
+              </label>
               <label class="infra-field">
                 <span>长</span>
                 <input
@@ -781,6 +838,13 @@ function onLogoChange(id: string, e: Event) {
         >
           + 出入口
         </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !venue"
+          @click="emit('add-infra', 'window')"
+        >
+          + 窗户
+        </button>
         <button class="btn sm" :disabled="mode !== 'idle'" @click="emit('add-infra', 'wall')">
           + 墙面
         </button>
@@ -878,15 +942,15 @@ function onLogoChange(id: string, e: Event) {
                 type="number"
                 :min="f.min"
                 :max="f.max"
-                step="1"
-                :value="Math.round(f.value)"
+                :step="f.step ?? 1"
+                :value="f.step && f.step < 1 ? f.value.toFixed(1) : Math.round(f.value)"
                 @change="onSizeChange(it.id, f.key, $event)"
               />
               <i>m</i>
             </label>
 
             <div class="infra-tools">
-              <template v-if="it.kind !== 'gate'">
+              <template v-if="it.kind !== 'gate' && it.kind !== 'window'">
                 <button class="mini" title="逆时针旋转 90°" @click.stop="emit('rotate-infra', it.id, -1)">
                   ↺ 90°
                 </button>
@@ -896,13 +960,14 @@ function onLogoChange(id: string, e: Event) {
               </template>
 
               <button
-                v-else
+                v-else-if="it.kind === 'gate'"
                 class="mini door-toggle"
                 :class="{ on: it.open }"
                 @click.stop="emit('toggle-gate', it.id)"
               >
                 {{ it.open ? '关闭出入口' : '打开出入口' }}
               </button>
+              <span v-else class="mini-hint">窗户朝向由外墙决定</span>
 
               <template v-if="it.kind === 'elevator'">
                 <span class="infra-count-label">电梯</span>

@@ -1,15 +1,17 @@
 import * as THREE from 'three'
 import { OPEN_FLOOR_HEIGHT } from './booth'
-import { ELEVATOR_DEFAULT_COUNT } from './infra'
+import { ELEVATOR_DEFAULT_COUNT, WINDOW_DEPTH, WINDOW_SILL } from './infra'
 import { insetPolygon, pointInPolygon, signedArea } from './polygon'
 import type { Infra, Pt } from './types'
 
-/** 墙面开洞（出入口）：世界坐标、沿墙宽度与高度 */
+/** 墙面开洞：世界坐标、沿墙宽度、洞口高度与离地高度 */
 export interface MassingOpening {
   x: number
   z: number
   width: number
   height: number
+  /** 洞口底部离地高度；出入口为 0，窗户默认 1m */
+  sill?: number
 }
 
 export interface MassingOptions {
@@ -299,7 +301,7 @@ function buildWallsWithOpenings(
     const nz = ux
     const rotation = Math.atan2(-uz, ux)
 
-    const cuts: { u0: number; u1: number; h: number }[] = []
+    const cuts: { u0: number; u1: number; sill: number; top: number }[] = []
     for (const o of openings) {
       const ox = o.x - a.x
       const oz = o.z - a.z
@@ -309,15 +311,20 @@ function buildWallsWithOpenings(
       const u0 = Math.max(0, u - o.width / 2)
       const u1 = Math.min(len, u + o.width / 2)
       if (u1 - u0 < 0.2) continue
-      cuts.push({ u0, u1, h: Math.min(height - 0.05, Math.max(0.6, o.height)) })
+      const sill = Math.max(0, Math.min(height - 0.6, o.sill ?? 0))
+      const top = Math.min(height - 0.05, Math.max(sill + 0.6, sill + o.height))
+      cuts.push({ u0, u1, sill, top })
     }
     cuts.sort((p, q) => p.u0 - q.u0)
 
     let cursor = 0
     for (const cut of cuts) {
       if (cut.u0 > cursor + 0.02) addBlock(a, ux, uz, nx, nz, rotation, cursor, cut.u0, 0, height)
-      if (cut.h < height - 0.02) {
-        addBlock(a, ux, uz, nx, nz, rotation, cut.u0, cut.u1, cut.h, height)
+      if (cut.sill > 0.02) {
+        addBlock(a, ux, uz, nx, nz, rotation, cut.u0, cut.u1, 0, cut.sill)
+      }
+      if (cut.top < height - 0.02) {
+        addBlock(a, ux, uz, nx, nz, rotation, cut.u0, cut.u1, cut.top, height)
       }
       cursor = Math.max(cursor, cut.u1)
     }
@@ -388,7 +395,8 @@ export function buildMassing(points: Pt[], opts: MassingOptions): THREE.Group {
   if (opts.ceiling) {
     const capT = Math.min(0.16, height * 0.3)
     capGeo = extrudeBetween(new THREE.Shape(toShapePoints(pts)), height - capT, height)
-    const cap = new THREE.Mesh(capGeo, wall)
+    // 顶板使用独立材质，便于漫游选点时只让顶部半透明
+    const cap = new THREE.Mesh(capGeo, wall.clone())
     cap.castShadow = !transparent
     cap.receiveShadow = true
     cap.name = 'ceiling'
@@ -1510,6 +1518,75 @@ function wallGroup(
   return group
 }
 
+/** 窗户：贴墙窗框、窗台与半透明玻璃；墙体洞口由场馆开洞系统完成 */
+function windowGroup(
+  width: number,
+  height: number,
+  depth: number,
+  sill: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const w = Math.max(0.8, width)
+  const h = Math.max(0.8, height)
+  const d = Math.max(WINDOW_DEPTH, depth)
+  const baseY = Math.max(0, sill)
+  const frameMat = new THREE.MeshStandardMaterial({
+    color: ghost ? 0x2f5fe0 : 0x4f5964,
+    roughness: 0.38,
+    metalness: 0.5,
+    transparent: ghost,
+    opacity: ghost ? 0.45 : 1,
+  })
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: 0xbfe3f2,
+    roughness: 0.08,
+    metalness: 0.08,
+    transparent: true,
+    opacity: ghost ? 0.16 : 0.28,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  })
+
+  const t = Math.min(0.12, Math.max(0.06, Math.min(w, h) * 0.06))
+  const addBar = (bw: number, bh: number, bd: number, x: number, y: number) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), frameMat)
+    mesh.position.set(x, y, 0)
+    mesh.castShadow = !ghost
+    mesh.receiveShadow = true
+    group.add(mesh)
+  }
+
+  // 四周边框
+  addBar(t, h, d, -w / 2 + t / 2, baseY + h / 2)
+  addBar(t, h, d, w / 2 - t / 2, baseY + h / 2)
+  addBar(w, t, d, 0, baseY + t / 2)
+  addBar(w, t, d, 0, baseY + h - t / 2)
+  // 中竖梃与横向分格
+  addBar(Math.max(0.045, t * 0.55), h, d * 0.8, 0, baseY + h / 2)
+  addBar(w, Math.max(0.04, t * 0.5), d * 0.8, 0, baseY + h * 0.58)
+
+  const glass = new THREE.Mesh(
+    new THREE.BoxGeometry(Math.max(0.2, w - t * 2), Math.max(0.2, h - t * 2), 0.018),
+    glassMat,
+  )
+  glass.name = 'window-glass'
+  glass.position.set(0, baseY + h / 2, 0)
+  glass.castShadow = false
+  glass.receiveShadow = true
+  group.add(glass)
+
+  // 窗台压板
+  const sillMesh = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, 0.07, d + 0.1), frameMat)
+  sillMesh.name = 'window-sill'
+  sillMesh.position.set(0, Math.max(0.035, baseY - 0.035), 0)
+  sillMesh.castShadow = !ghost
+  sillMesh.receiveShadow = true
+  group.add(sillMesh)
+
+  return group
+}
+
 /** 基础设施体块：位置/朝向在外层统一应用 */
 export function buildInfra(
   infra: Infra,
@@ -1527,6 +1604,9 @@ export function buildInfra(
       break
     case 'gate':
       group = gateGroup(width, height, depth, ghost, !!infra.open)
+      break
+    case 'window':
+      group = windowGroup(width, height, depth, infra.sill ?? WINDOW_SILL, ghost)
       break
     case 'elevator':
       group = elevatorGroup(width, depth, height, infra.count ?? ELEVATOR_DEFAULT_COUNT, ghost)
