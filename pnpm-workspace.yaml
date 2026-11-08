@@ -1,0 +1,7 @@
+allowBuilds:
+  esbuild: true
+
+# 该工作区所在卷不允许遍历 junction（untrusted mount point）：
+# 使用 hoisted 布局并复制安装，避免 pnpm 创建 junction。
+nodeLinker: hoisted
+packageImportMethod: copy

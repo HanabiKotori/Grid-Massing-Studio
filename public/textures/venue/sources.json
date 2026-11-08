@@ -1,0 +1,13 @@
+{
+  "note": "1K normal map for the venue wall finish. CC0.",
+  "textures": [
+    {
+      "file": "metal-normal.jpg",
+      "name": "Metal 032 NormalGL",
+      "source": "ambientCG",
+      "url": "https://ambientcg.com/a/Metal032",
+      "license": "CC0 1.0",
+      "role": "subtle satin-metal micro normal for silver-grey venue walls"
+    }
+  ]
+}

@@ -1,0 +1,297 @@
+/* 天气镜头氛围层：只叠加屏幕效果，不增加 WebGL pass */
+
+.weather-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.weather-fx-enter-active,
+.weather-fx-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.weather-fx-enter-from,
+.weather-fx-leave-to {
+  opacity: 0;
+}
+
+.weather-atmos {
+  position: absolute;
+  inset: 0;
+  opacity: 0.92;
+  transition: opacity 0.3s ease;
+}
+
+.weather-fx.partly .weather-atmos {
+  background: radial-gradient(ellipse at 50% 34%, transparent 48%, rgba(67, 79, 92, 0.1) 100%);
+}
+
+.weather-fx.cloudy .weather-atmos {
+  background:
+    linear-gradient(180deg, rgba(49, 60, 72, 0.1), transparent 48%),
+    radial-gradient(ellipse at 50% 40%, transparent 42%, rgba(44, 55, 68, 0.14) 100%);
+}
+
+.weather-fx.overcast .weather-atmos {
+  background:
+    linear-gradient(180deg, rgba(35, 44, 55, 0.17), transparent 58%),
+    radial-gradient(ellipse at 50% 42%, transparent 30%, rgba(28, 36, 46, 0.2) 100%);
+}
+
+.weather-fx.haze .weather-atmos {
+  background:
+    linear-gradient(180deg, rgba(158, 143, 112, 0.16), transparent 48%),
+    radial-gradient(ellipse at 50% 42%, transparent 24%, rgba(133, 117, 85, 0.28) 100%);
+}
+
+.weather-fx.fog .weather-atmos {
+  background:
+    radial-gradient(ellipse at 50% 44%, rgba(236, 236, 231, 0) 22%, rgba(236, 236, 231, 0.36) 100%),
+    linear-gradient(180deg, rgba(232, 232, 226, 0.2), transparent 42%);
+}
+
+.weather-fx.light-rain .weather-atmos {
+  background:
+    linear-gradient(180deg, rgba(70, 91, 109, 0.18), transparent 55%),
+    radial-gradient(ellipse at 50% 48%, transparent 40%, rgba(48, 65, 80, 0.18) 100%);
+}
+
+.weather-fx.heavy-rain .weather-atmos {
+  background:
+    linear-gradient(180deg, rgba(39, 54, 68, 0.28), transparent 62%),
+    radial-gradient(ellipse at 50% 48%, transparent 28%, rgba(25, 37, 48, 0.3) 100%);
+}
+
+.weather-fx.thunder .weather-atmos {
+  background:
+    linear-gradient(180deg, rgba(24, 32, 43, 0.35), transparent 66%),
+    radial-gradient(ellipse at 50% 48%, transparent 22%, rgba(12, 18, 26, 0.38) 100%);
+}
+
+.weather-fx.light-snow .weather-atmos {
+  background:
+    linear-gradient(180deg, rgba(236, 241, 246, 0.2), transparent 55%),
+    radial-gradient(ellipse at 50% 46%, transparent 36%, rgba(223, 231, 239, 0.26) 100%);
+}
+
+.weather-fx.heavy-snow .weather-atmos {
+  background:
+    linear-gradient(180deg, rgba(230, 237, 244, 0.32), transparent 66%),
+    radial-gradient(ellipse at 50% 46%, transparent 24%, rgba(220, 230, 239, 0.38) 100%);
+}
+
+.weather-fx.dust .weather-atmos {
+  background:
+    linear-gradient(180deg, rgba(158, 132, 83, 0.25), transparent 58%),
+    radial-gradient(ellipse at 50% 46%, transparent 24%, rgba(116, 93, 55, 0.3) 100%);
+}
+
+.weather-fx.wind .weather-atmos {
+  background:
+    linear-gradient(105deg, transparent 45%, rgba(255, 255, 255, 0.08) 52%, transparent 60%),
+    radial-gradient(ellipse at 50% 42%, transparent 36%, rgba(55, 70, 82, 0.16) 100%);
+}
+
+.weather-lens {
+  position: absolute;
+  inset: -2%;
+  opacity: 0.72;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, transparent 31%, #000 86%);
+  mask-image: radial-gradient(ellipse at 50% 50%, transparent 31%, #000 86%);
+}
+
+.weather-lens::before,
+.weather-lens::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.weather-lens::before {
+  background-image:
+    radial-gradient(circle at 6% 18%, rgba(255, 255, 255, 0.34) 0 1px, rgba(178, 205, 223, 0.2) 2px, transparent 5px),
+    radial-gradient(circle at 13% 64%, rgba(255, 255, 255, 0.28) 0 1.5px, rgba(178, 205, 223, 0.18) 2.5px, transparent 6px),
+    radial-gradient(circle at 9% 42%, rgba(255, 255, 255, 0.24) 0 1px, rgba(178, 205, 223, 0.16) 2px, transparent 5px),
+    radial-gradient(circle at 19% 84%, rgba(255, 255, 255, 0.3) 0 1px, transparent 4px),
+    radial-gradient(circle at 87% 24%, rgba(255, 255, 255, 0.32) 0 1.5px, rgba(178, 205, 223, 0.18) 2.5px, transparent 6px),
+    radial-gradient(circle at 92% 57%, rgba(255, 255, 255, 0.26) 0 1px, transparent 5px),
+    radial-gradient(circle at 82% 82%, rgba(255, 255, 255, 0.3) 0 1.5px, rgba(178, 205, 223, 0.18) 2.5px, transparent 6px),
+    radial-gradient(circle at 25% 12%, rgba(255, 255, 255, 0.22) 0 1px, transparent 4px),
+    radial-gradient(circle at 76% 12%, rgba(255, 255, 255, 0.2) 0 1px, transparent 4px),
+    radial-gradient(circle at 96% 38%, rgba(255, 255, 255, 0.24) 0 1px, transparent 4px);
+  filter: blur(0.25px);
+  animation: weather-lens-drift 13s ease-in-out infinite alternate;
+}
+
+.weather-lens::after {
+  inset: -18%;
+  background: repeating-linear-gradient(
+    104deg,
+    transparent 0 32px,
+    rgba(203, 226, 240, 0.11) 33px 34px,
+    transparent 35px 74px
+  );
+  opacity: 0.6;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, transparent 38%, #000 88%);
+  mask-image: radial-gradient(ellipse at 50% 50%, transparent 38%, #000 88%);
+  animation: weather-lens-streak 8s linear infinite;
+}
+
+.weather-fx.heavy-rain .weather-lens,
+.weather-fx.thunder .weather-lens {
+  opacity: 0.92;
+}
+
+.weather-fx.heavy-rain .weather-lens::after,
+.weather-fx.thunder .weather-lens::after {
+  opacity: 0.9;
+  animation-duration: 4.8s;
+}
+
+.weather-fx.light-snow .weather-lens,
+.weather-fx.heavy-snow .weather-lens {
+  opacity: 0.78;
+}
+
+.weather-fx.light-snow .weather-lens::before,
+.weather-fx.heavy-snow .weather-lens::before {
+  background-image:
+    radial-gradient(circle at 8% 20%, rgba(255, 255, 255, 0.55) 0 1.5px, transparent 4px),
+    radial-gradient(circle at 17% 70%, rgba(255, 255, 255, 0.5) 0 1px, transparent 4px),
+    radial-gradient(circle at 6% 48%, rgba(255, 255, 255, 0.42) 0 1px, transparent 3px),
+    radial-gradient(circle at 88% 26%, rgba(255, 255, 255, 0.55) 0 1.5px, transparent 4px),
+    radial-gradient(circle at 94% 63%, rgba(255, 255, 255, 0.48) 0 1px, transparent 4px),
+    radial-gradient(circle at 77% 84%, rgba(255, 255, 255, 0.5) 0 1.5px, transparent 4px),
+    radial-gradient(circle at 28% 88%, rgba(255, 255, 255, 0.38) 0 1px, transparent 3px),
+    radial-gradient(circle at 72% 10%, rgba(255, 255, 255, 0.4) 0 1px, transparent 4px);
+  filter: none;
+  animation-duration: 18s;
+}
+
+.weather-fx.light-snow .weather-lens::after,
+.weather-fx.heavy-snow .weather-lens::after {
+  display: none;
+}
+
+.weather-fx.fog .weather-lens::before,
+.weather-fx.haze .weather-lens::before {
+  background: radial-gradient(ellipse at 50% 50%, transparent 34%, rgba(240, 240, 235, 0.3) 100%);
+  filter: none;
+  animation: none;
+}
+
+.weather-fx.fog .weather-lens::after,
+.weather-fx.haze .weather-lens::after {
+  display: none;
+}
+
+.weather-fx.haze .weather-lens {
+  opacity: 0.55;
+}
+
+.weather-fx.haze .weather-lens::before {
+  background: radial-gradient(ellipse at 50% 50%, transparent 28%, rgba(177, 159, 121, 0.34) 100%);
+}
+
+.weather-fx.dust .weather-lens::before {
+  background-image:
+    radial-gradient(ellipse at 10% 26%, rgba(196, 171, 124, 0.28) 0 22px, transparent 42px),
+    radial-gradient(ellipse at 88% 38%, rgba(177, 151, 104, 0.24) 0 30px, transparent 54px),
+    radial-gradient(ellipse at 18% 82%, rgba(180, 154, 108, 0.2) 0 18px, transparent 38px),
+    radial-gradient(ellipse at 78% 78%, rgba(193, 166, 118, 0.24) 0 26px, transparent 50px);
+  filter: blur(7px);
+  animation: none;
+}
+
+.weather-fx.dust .weather-lens::after {
+  display: none;
+}
+
+.weather-flash {
+  position: absolute;
+  inset: 0;
+  background: #e8f1ff;
+  opacity: 0;
+  animation: weather-lightning 9s ease-out infinite;
+}
+
+@keyframes weather-lens-drift {
+  from {
+    transform: translateY(-2px);
+  }
+  to {
+    transform: translateY(5px);
+  }
+}
+
+@keyframes weather-lens-streak {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 220px;
+  }
+}
+
+@keyframes weather-lightning {
+  0%,
+  7%,
+  11%,
+  100% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.2;
+  }
+  8.7% {
+    opacity: 0.02;
+  }
+  10% {
+    opacity: 0.14;
+  }
+}
+
+@media (max-width: 900px) {
+  .weather-lens {
+    opacity: 0.58;
+  }
+
+  .weather-fx.heavy-rain .weather-lens,
+  .weather-fx.thunder .weather-lens {
+    opacity: 0.8;
+  }
+
+  .weather-flash {
+    animation-name: weather-lightning-mobile;
+  }
+}
+
+@keyframes weather-lightning-mobile {
+  0%,
+  8%,
+  100% {
+    opacity: 0;
+  }
+  8.5% {
+    opacity: 0.12;
+  }
+  9.2% {
+    opacity: 0.02;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weather-lens::before,
+  .weather-lens::after,
+  .weather-flash {
+    animation: none;
+  }
+
+  .weather-flash {
+    opacity: 0;
+  }
+}

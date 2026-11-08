@@ -1,0 +1,37 @@
+{
+  "note": "1K color maps for furniture. All assets are CC0; normal/roughness maps are available from the source pages if needed.",
+  "textures": [
+    {
+      "file": "fabric-mid-grey.jpg",
+      "name": "Fabric 030",
+      "source": "ambientCG",
+      "url": "https://ambientcg.com/a/Fabric030",
+      "license": "CC0 1.0",
+      "role": "mid-grey woven upholstery"
+    },
+    {
+      "file": "fabric-light-grey.jpg",
+      "name": "Fabric 082 A",
+      "source": "ambientCG",
+      "url": "https://ambientcg.com/a/Fabric082A",
+      "license": "CC0 1.0",
+      "role": "light cool-grey fine woven upholstery"
+    },
+    {
+      "file": "fabric-graphite.jpg",
+      "name": "Fabric 004",
+      "source": "ambientCG",
+      "url": "https://ambientcg.com/a/Fabric004",
+      "license": "CC0 1.0",
+      "role": "dark graphite technical weave, accent"
+    },
+    {
+      "file": "metal-satin-grey.jpg",
+      "name": "Metal 032",
+      "source": "ambientCG",
+      "url": "https://ambientcg.com/a/Metal032",
+      "license": "CC0 1.0",
+      "role": "neutral satin grey metal, frames and table tops"
+    }
+  ]
+}
