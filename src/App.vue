@@ -185,6 +185,7 @@ const walkState = ref<WalkState>('off')
 const walkView = ref<WalkView>('first')
 const presentationOn = ref(false)
 const walkPose = ref<{ x: number; z: number; yaw: number } | null>(null)
+const minimapExpanded = ref(false)
 let walkPoseTimer = 0
 const weatherLensOn = computed(
   () =>
@@ -2550,6 +2551,7 @@ watch(walkState, (state) => {
     walkPoseTimer = window.setInterval(tick, 100)
   } else {
     walkPose.value = null
+    minimapExpanded.value = false
   }
 })
 watch(selectedInfraId, (id) => stage?.setSelectedInfra(id))
@@ -2778,6 +2780,7 @@ onMounted(() => {
       }
     },
     onWalkInteract: (target) => (walkInteract.value = target),
+    onMinimapHold: (on) => (minimapExpanded.value = on),
     onToggleGate: (id) => toggleGate(id),
     onPlaceInfra: (kind, spot) => handlePlaceInfra(kind, spot),
     onMoveInfra: (id, x, z, rotation) => moveInfra(id, x, z, rotation),
@@ -2863,6 +2866,8 @@ onBeforeUnmount(() => {
     :booths="booths"
     :infras="infras"
     :pose="walkPose"
+    :mobile="isMobile"
+    :expanded="minimapExpanded"
   />
 
   <button
@@ -3474,6 +3479,7 @@ onBeforeUnmount(() => {
       <span><kbd>空格</kbd> 跳跃</span>
       <span><kbd>Alt</kbd> 释放鼠标</span>
       <span><kbd>R</kbd> 回到起点</span>
+      <span><kbd>M</kbd> 按住放大地图</span>
       <span><kbd>V</kbd> 切换视角</span>
       <span><kbd>Alt</kbd>+<kbd>W</kbd> 天气</span>
       <span><kbd>Esc</kbd> 退出</span>

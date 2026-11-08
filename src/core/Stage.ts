@@ -349,7 +349,7 @@ export class Stage {
   private venueSpotLights: THREE.SpotLight[] = []
   private venueBulbGeo = new THREE.SphereGeometry(0.12, 8, 6)
   private venueBulbMat = new THREE.MeshBasicMaterial({
-    color: 0xffe2b8,
+    color: 0xffdca8,
     transparent: true,
     opacity: 0,
   })
@@ -1131,7 +1131,7 @@ export class Stage {
     if (ultra) {
       // 聚光灯与灯泡共用同一组馆内灯位；angle = 90° 表示只照下半球
       for (const p of positions) {
-        const light = new THREE.SpotLight(0xffe2b8, 0, 20, Math.PI / 2, 0.3, 1.6)
+        const light = new THREE.SpotLight(0xffdca8, 0, 20, Math.PI / 2, 0.3, 1.6)
         light.position.set(p.x, y, p.z)
         light.target.position.set(0, -y, 0)
         light.add(light.target)
@@ -1160,9 +1160,9 @@ export class Stage {
       const cx = (p.x - b.minX) * sx
       const cy = (p.z - b.minZ) * sy
       const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius)
-      gradient.addColorStop(0, 'rgba(255, 228, 186, 0.95)')
-      gradient.addColorStop(0.35, 'rgba(255, 214, 160, 0.42)')
-      gradient.addColorStop(1, 'rgba(255, 200, 140, 0)')
+      gradient.addColorStop(0, 'rgba(255, 220, 168, 0.95)')
+      gradient.addColorStop(0.35, 'rgba(255, 205, 142, 0.42)')
+      gradient.addColorStop(1, 'rgba(255, 188, 112, 0)')
       ctx.fillStyle = gradient
       ctx.beginPath()
       ctx.arc(cx, cy, radius, 0, Math.PI * 2)
@@ -2536,6 +2536,7 @@ export class Stage {
 
   private onWindowBlur = () => {
     this.walkAltReleased = false
+    this.opts.onMinimapHold?.(false)
     if (!this.spaceNav) return
     this.spaceNav = false
     this.restoreRightMouse()

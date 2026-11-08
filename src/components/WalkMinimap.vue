@@ -96,15 +96,51 @@ function draw() {
 
   for (const item of props.infras) {
     if (isFurnitureKind(item.kind)) continue
-    const x = mapX(item.x)
-    const y = mapY(item.z)
+    const ux = Math.cos(item.rotation)
+    const uz = -Math.sin(item.rotation)
+    const vx = Math.sin(item.rotation)
+    const vz = Math.cos(item.rotation)
+    const hw = item.width / 2
+    const hd = item.depth / 2
+
+    if (item.kind === 'wall' || item.kind === 'gate') {
+      const x1 = mapX(item.x - ux * hw)
+      const y1 = mapY(item.z - uz * hw)
+      const x2 = mapX(item.x + ux * hw)
+      const y2 = mapY(item.z + uz * hw)
+      ctx.beginPath()
+      ctx.moveTo(x1, y1)
+      ctx.lineTo(x2, y2)
+      ctx.strokeStyle =
+        item.kind === 'gate'
+          ? 'rgba(110, 210, 160, 0.95)'
+          : 'rgba(160, 180, 200, 0.9)'
+      ctx.lineWidth = Math.max(1.4, item.depth * scale)
+      ctx.lineCap = 'round'
+      ctx.stroke()
+      continue
+    }
+
+    // 其他设施画成带朝向的足迹，避免只显示一个无法判断范围的点
+    const corners = [
+      { x: item.x + ux * hw + vx * hd, z: item.z + uz * hw + vz * hd },
+      { x: item.x + ux * hw - vx * hd, z: item.z + uz * hw - vz * hd },
+      { x: item.x - ux * hw - vx * hd, z: item.z - uz * hw - vz * hd },
+      { x: item.x - ux * hw + vx * hd, z: item.z - uz * hw + vz * hd },
+    ]
     ctx.beginPath()
-    ctx.arc(x, y, 1.8, 0, Math.PI * 2)
-    ctx.fillStyle =
-      item.kind === 'gate'
-        ? 'rgba(110, 210, 160, 0.95)'
-        : 'rgba(160, 180, 200, 0.7)'
+    corners.forEach((p, index) => {
+      const x = mapX(p.x)
+      const y = mapY(p.z)
+      if (index === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    })
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(160, 180, 200, 0.55)'
     ctx.fill()
+    ctx.strokeStyle = 'rgba(180, 198, 216, 0.8)'
+    ctx.lineWidth = 1
+    ctx.stroke()
   }
 
   const px = mapX(pose.x)
@@ -125,14 +161,6 @@ function draw() {
   ctx.lineWidth = uiScale
   ctx.stroke()
   ctx.restore()
-
-  ctx.font = `600 ${Math.round(9 * uiScale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
-  ctx.textBaseline = 'top'
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'
-  ctx.fillText('N', 7 * uiScale, 6 * uiScale)
-  ctx.fillStyle = 'rgba(240, 197, 106, 0.86)'
-  ctx.textAlign = 'right'
-  ctx.fillText('漫游', w - 7 * uiScale, 6 * uiScale)
 }
 
 watch(() => props.pose, draw, { deep: true })
@@ -161,22 +189,30 @@ onBeforeUnmount(() => observer?.disconnect())
 <style scoped>
 .walk-minimap {
   position: absolute;
-  right: 18px;
-  bottom: 18px;
+  top: calc(100% - 166px);
+  left: calc(100% - 226px);
   z-index: 32;
   width: 208px;
   height: 148px;
+  transform: translate(0, 0);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 14px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.26);
   pointer-events: none;
   overflow: hidden;
+  transition:
+    top 0.28s cubic-bezier(0.2, 0.8, 0.3, 1),
+    left 0.28s cubic-bezier(0.2, 0.8, 0.3, 1),
+    width 0.28s cubic-bezier(0.2, 0.8, 0.3, 1),
+    height 0.28s cubic-bezier(0.2, 0.8, 0.3, 1),
+    transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1),
+    border-radius 0.28s ease,
+    box-shadow 0.28s ease;
 }
 
 .walk-minimap.is-mobile {
   top: 72px;
-  right: 12px;
-  bottom: auto;
+  left: calc(100% - 144px);
   width: 132px;
   height: 96px;
 }
@@ -184,8 +220,7 @@ onBeforeUnmount(() => observer?.disconnect())
 @media (max-width: 1100px) {
   .walk-minimap {
     top: 72px;
-    right: 12px;
-    bottom: auto;
+    left: calc(100% - 144px);
     width: 132px;
     height: 96px;
   }
@@ -194,8 +229,6 @@ onBeforeUnmount(() => observer?.disconnect())
 .walk-minimap.expanded {
   top: 50%;
   left: 50%;
-  right: auto;
-  bottom: auto;
   z-index: 80;
   width: min(72vw, 760px);
   height: min(56vh, 520px);
