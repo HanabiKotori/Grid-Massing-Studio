@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { OPEN_FLOOR_HEIGHT } from './booth'
 import { ELEVATOR_DEFAULT_COUNT, WINDOW_DEPTH, WINDOW_SILL } from './infra'
 import { insetPolygon, pointInPolygon, signedArea } from './polygon'
-import type { Infra, Pt } from './types'
+import type { GateOpenMode, Infra, Pt } from './types'
 
 /** 墙面开洞：世界坐标、沿墙宽度、洞口高度与离地高度 */
 export interface MassingOpening {
@@ -1308,13 +1308,31 @@ function restroomGroup(width: number, depth: number, height: number, ghost: bool
   return group
 }
 
-/** 展馆出入口：嵌在墙上的门框 + 可开合的双开门扇 */
+interface GateLeafPose {
+  object: THREE.Object3D
+  openAngle: number
+}
+
+/** 设置出入口 0–1 开合姿态，供开关过渡逐帧调用 */
+export function setGateOpenAmount(group: THREE.Group, amount: number) {
+  const t = Math.max(0, Math.min(1, amount))
+  const leaves = group.userData.gateLeaves as GateLeafPose[] | undefined
+  if (leaves) {
+    for (const leaf of leaves) leaf.object.rotation.y = leaf.openAngle * t
+  }
+  const shutter = group.userData.gateShutter as THREE.Object3D | undefined
+  if (shutter) shutter.scale.y = 1 + (0.16 - 1) * t
+  group.userData.gateOpenAmount = t
+}
+
+/** 展馆出入口：嵌在墙上的门框 + 侧开 / 对开 / 上卷门扇 */
 function gateGroup(
   width: number,
   height: number,
   depth: number,
   ghost: boolean,
   open: boolean,
+  mode: GateOpenMode,
 ): THREE.Group {
   const group = new THREE.Group()
   const w = Math.max(0.8, width)
@@ -1352,7 +1370,6 @@ function gateGroup(
 
   const openingW = Math.max(0.1, w - postT * 2)
   const openingH = Math.max(0.1, h - beamT)
-  const leafW = openingW / 2
   const leafT = Math.min(0.08, Math.max(0.04, d * 0.12))
   const leafMat = new THREE.MeshStandardMaterial({
     color: ghost ? 0x2f5fe0 : 0x7d8794,
@@ -1363,16 +1380,74 @@ function gateGroup(
     side: THREE.DoubleSide,
   })
 
-  // 双开门：关闭时闭合，打开时绕两侧铰链向 +Z 展开
+  if (mode === 'up') {
+    // 上卷门：关闭时铺满洞口；打开时整扇向上收进门楣，只留下卷起的门板
+    const shutter = new THREE.Group()
+    shutter.name = 'gate-shutter'
+    shutter.position.set(0, openingH, 0)
+
+    const panel = new THREE.Mesh(
+      new THREE.BoxGeometry(openingW, openingH, leafT),
+      leafMat,
+    )
+    panel.name = 'gate-shutter-panel'
+    panel.position.y = -openingH / 2
+    panel.castShadow = !ghost
+    panel.receiveShadow = true
+    shutter.add(panel)
+
+    const slatPoints: THREE.Vector3[] = []
+    for (let i = 1; i < 10; i++) {
+      const y = -openingH + (openingH * i) / 10
+      slatPoints.push(
+        new THREE.Vector3(-openingW / 2 + postT * 0.2, y, leafT / 2 + 0.006),
+        new THREE.Vector3(openingW / 2 - postT * 0.2, y, leafT / 2 + 0.006),
+      )
+    }
+    const slats = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(slatPoints),
+      edge,
+    )
+    slats.name = 'gate-shutter-slats'
+    shutter.add(slats)
+    group.add(shutter)
+    group.userData.gateShutter = shutter
+    setGateOpenAmount(group, open ? 1 : 0)
+    return group
+  }
+
+  if (mode === 'side') {
+    // 侧开门：单扇门绕左侧铰链向 +Z 展开
+    const hinge = new THREE.Group()
+    hinge.name = 'gate-leaf'
+    hinge.position.set(-openingW / 2, 0, 0)
+
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(openingW, openingH, leafT),
+      leafMat,
+    )
+    mesh.name = 'gate-leaf-panel'
+    mesh.position.set(openingW / 2, openingH / 2, 0)
+    mesh.castShadow = !ghost
+    mesh.receiveShadow = true
+    hinge.add(mesh)
+    group.add(hinge)
+    group.userData.gateLeaves = [{ object: hinge, openAngle: -1.72 }]
+    setGateOpenAmount(group, open ? 1 : 0)
+    return group
+  }
+
+  // 对开门：关闭时闭合，打开时绕两侧铰链向 +Z 展开
+  const leafW = openingW / 2
   const leaves = [
-    { hingeX: -openingW / 2, dir: 1, angle: open ? -1.78 : 0 },
-    { hingeX: openingW / 2, dir: -1, angle: open ? 1.78 : 0 },
+    { hingeX: -openingW / 2, dir: 1, openAngle: -1.78 },
+    { hingeX: openingW / 2, dir: -1, openAngle: 1.78 },
   ]
+  const gateLeaves: GateLeafPose[] = []
   for (const leaf of leaves) {
     const hinge = new THREE.Group()
     hinge.name = 'gate-leaf'
     hinge.position.set(leaf.hingeX, 0, 0)
-    hinge.rotation.y = leaf.angle
 
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(leafW, openingH, leafT), leafMat)
     mesh.name = 'gate-leaf-panel'
@@ -1381,7 +1456,10 @@ function gateGroup(
     mesh.receiveShadow = true
     hinge.add(mesh)
     group.add(hinge)
+    gateLeaves.push({ object: hinge, openAngle: leaf.openAngle })
   }
+  group.userData.gateLeaves = gateLeaves
+  setGateOpenAmount(group, open ? 1 : 0)
   return group
 }
 
@@ -1603,7 +1681,14 @@ export function buildInfra(
       group = restroomGroup(width, depth, height, ghost)
       break
     case 'gate':
-      group = gateGroup(width, height, depth, ghost, !!infra.open)
+      group = gateGroup(
+        width,
+        height,
+        depth,
+        ghost,
+        !!infra.open,
+        infra.openMode ?? 'double',
+      )
       break
     case 'window':
       group = windowGroup(width, height, depth, infra.sill ?? WINDOW_SILL, ghost)
@@ -1630,7 +1715,8 @@ export function buildInfra(
       group = wallGroup(width, depth, height, openings, ghost)
   }
   group.name = `infra:${infra.id}`
-  group.userData = { infraId: infra.id, kind }
+  // 保留门扇姿态等构建期元数据，再附加基础设施标识
+  group.userData = { ...group.userData, infraId: infra.id, kind }
   group.position.set(infra.x, 0, infra.z)
   group.rotation.y = infra.rotation
   return group

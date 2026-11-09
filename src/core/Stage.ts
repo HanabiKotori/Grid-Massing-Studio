@@ -14,6 +14,7 @@ import {
   getBoothWallNormalMap,
   getScaffoldMetalNormalMap,
   getVenueWallNormalMap,
+  setGateOpenAmount,
   type InfraOpening,
   type MassingOpening,
 } from './build'
@@ -122,6 +123,8 @@ export interface StageOptions {
 
 const SNAP = 1
 const EDGE_SNAP = 0.5
+/** 出入口开合过渡时长（毫秒） */
+const GATE_ANIM_MS = 460
 const GRID_HALF = 80
 /**
  * 底图离地高度：明显高于场馆地面板（0.012 m），又低于展台 0.15 m 台板。
@@ -240,6 +243,8 @@ interface InfraDragState {
   group: THREE.Group
   sx: number
   sy: number
+  /** 按下时的地面点，用于家具自由拖动 */
+  origin: Pt
   x: number
   z: number
   rotation: number
@@ -611,6 +616,10 @@ export class Stage {
   private infraPickables: THREE.Object3D[] = []
   private selectedInfraIds: string[] = []
   private infraBoxes = new Map<string, THREE.Box3Helper>()
+  private gateAnims = new Map<
+    string,
+    { group: THREE.Group; start: number; from: number; to: number }
+  >()
   private infraKind: InfraKind | null = null
   private infraPlaceRotation = 0
   private prevRightMouse: THREE.MOUSE | null | undefined
@@ -1865,11 +1874,24 @@ export class Stage {
       }
     }
 
+    this.refreshFurnitureBaseY()
     this.buildBoothLogos()
     this.refreshPickables()
     this.setSelected(this.selectedIds)
     this.refreshDimensions()
     if (this.boothTopsXray) this.applyBoothTopsXray()
+  }
+
+  /** 展台类型 / 高度变化后，让家具重新落在对应的台面上 */
+  private refreshFurnitureBaseY() {
+    for (const it of this.infras) {
+      if (!isFurnitureKind(it.kind)) continue
+      const baseY = this.infraBaseYOf(it)
+      if (Math.abs((this.infraBaseYMap.get(it.id) ?? 0) - baseY) < 1e-4) continue
+      this.infraBaseYMap.set(it.id, baseY)
+      const group = this.infraGroups.get(it.id)
+      if (group) group.position.y = baseY
+    }
   }
 
   /** 家具摆放：顶面半透明，便于观察展台内部；其他模式恢复不透明 */
@@ -1955,7 +1977,19 @@ export class Stage {
   // ---------- 基础设施 ----------
 
   setInfras(infras: Infra[]) {
+    // 记录旧门扇当前的动画姿态，快速连续开关时也能从中间状态继续
+    const previousGateAmount = new Map<string, number>()
+    for (const it of this.infras) {
+      if (it.kind !== 'gate') continue
+      const group = this.infraGroups.get(it.id)
+      previousGateAmount.set(
+        it.id,
+        Number(group?.userData.gateOpenAmount ?? (it.open ? 1 : 0)),
+      )
+    }
+
     this.infras = infras
+    this.gateAnims.clear()
     this.clearInfraLabels()
     for (const [, g] of this.infraGroups) {
       this.modelRoot.remove(g)
@@ -1970,6 +2004,19 @@ export class Stage {
       this.infraBaseYMap.set(it.id, baseY)
       const g = buildInfra(it, false, it.kind === 'wall' ? this.wallOpenings(it) : [])
       g.position.y = baseY
+      if (it.kind === 'gate') {
+        const from = previousGateAmount.get(it.id)
+        const to = it.open ? 1 : 0
+        if (from !== undefined && Math.abs(from - to) > 0.001) {
+          setGateOpenAmount(g, from)
+          this.gateAnims.set(it.id, {
+            group: g,
+            start: performance.now(),
+            from,
+            to,
+          })
+        }
+      }
       this.addInfraLabel(g, it)
       this.infraGroups.set(it.id, g)
       this.modelRoot.add(g)
@@ -2115,7 +2162,12 @@ export class Stage {
         ...(kind === 'elevator'
           ? { count: source?.count ?? ELEVATOR_DEFAULT_COUNT }
           : {}),
-        ...(kind === 'gate' ? { open: source?.open ?? false } : {}),
+        ...(kind === 'gate'
+          ? {
+              open: source?.open ?? false,
+              openMode: source?.openMode ?? 'double',
+            }
+          : {}),
       },
       true,
     )
@@ -2227,6 +2279,13 @@ export class Stage {
           hostHeight: wall.hostHeight,
         }
         snapTarget = snapped ? snapBoxOfInfra(snapped.target) : null
+      }
+    } else if (this.infraKind && isFurnitureKind(this.infraKind)) {
+      // 家具放置不吸附网格和边缘，仍由落位校验约束在展台内部
+      spot = {
+        x: raw.x,
+        z: raw.z,
+        rotation: this.infraPlaceRotation,
       }
     } else {
       const p = snapToGrid(raw, SNAP)
@@ -3548,6 +3607,7 @@ export class Stage {
         group,
         sx: e.clientX,
         sy: e.clientY,
+        origin: this.groundPoint(e.clientX, e.clientY) ?? { x: spec.x, z: spec.z },
         x: spec.x,
         z: spec.z,
         rotation: spec.rotation,
@@ -3728,7 +3788,7 @@ export class Stage {
     }
   }
 
-  /** 基础设施拖动：网格吸附；出入口沿最近墙段滑动 */
+  /** 基础设施拖动：家具自由移动，其他设施网格吸附；出入口沿最近墙段滑动 */
   private updateInfraDrag(e: PointerEvent) {
     const d = this.infraDrag
     if (!d) return
@@ -3763,6 +3823,24 @@ export class Stage {
         item.rotation = d.rotation
       }
       this.updateSnapGuide(snapped ? snapBoxOfInfra(snapped.target) : null)
+      return
+    }
+
+    // 家具不做网格或边缘吸附，按指针位移自由移动
+    if (d.items.some((item) => isFurnitureKind(item.spec.kind))) {
+      const dx = p.x - d.origin.x
+      const dz = p.z - d.origin.z
+      for (const item of d.items) {
+        item.x = item.spec.x + dx
+        item.z = item.spec.z + dz
+        const baseY = isFurnitureKind(item.spec.kind)
+          ? this.furnitureBaseYAt(item.x, item.z)
+          : 0
+        item.group.position.set(item.x, baseY, item.z)
+      }
+      d.x = d.spec.x + dx
+      d.z = d.spec.z + dz
+      this.updateSnapGuide(null)
       return
     }
 
@@ -3914,7 +3992,8 @@ export class Stage {
     if (this.infraKind) {
       const raw = this.groundPoint(e.clientX, e.clientY)
       this.updateInfraGhost(raw)
-      this.opts.onHover?.(raw ? snapToGrid(raw, SNAP) : null)
+      const free = isFurnitureKind(this.infraKind)
+      this.opts.onHover?.(raw ? (free ? raw : snapToGrid(raw, SNAP)) : null)
       return
     }
     const p = this.pickGround(e)
@@ -5704,11 +5783,23 @@ export class Stage {
     if (this.walkState === 'pick' && this.isTouchDevice) this.viewTop()
   }
 
+  private updateGateAnimations(now: number) {
+    if (!this.gateAnims.size) return
+    for (const [id, anim] of [...this.gateAnims]) {
+      const k = Math.min(1, (now - anim.start) / GATE_ANIM_MS)
+      // 平滑起止，接近真实门扇的加减速
+      const eased = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2
+      setGateOpenAmount(anim.group, anim.from + (anim.to - anim.from) * eased)
+      if (k >= 1) this.gateAnims.delete(id)
+    }
+  }
+
   private loop = () => {
     this.raf = requestAnimationFrame(this.loop)
     const now = performance.now()
     const dt = Math.min(0.05, Math.max(0, (now - this.lastFrame) / 1000))
     this.lastFrame = now
+    this.updateGateAnimations(now)
 
     if (this.walkState === 'enter') {
       this.updateWalkEnter(now)

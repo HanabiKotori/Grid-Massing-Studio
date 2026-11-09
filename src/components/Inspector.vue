@@ -4,16 +4,21 @@ import { BOOTH_KIND_LABELS, boothKindOf } from '../core/booth'
 import { groupCss } from '../core/groupColor'
 import {
   ELEVATOR_DEFAULT_COUNT,
+  GATE_OPEN_MODE_LABELS,
+  GATE_OPEN_MODES,
+  INFRA_LABELS,
   INFRA_LIMITS,
   WINDOW_SILL,
+  gateOpenModeOf,
   isFurnitureKind,
 } from '../core/infra'
-import { boundsOf, perimeter, polygonArea } from '../core/polygon'
+import { boundsOf, perimeter, pointInPolygon, polygonArea } from '../core/polygon'
 import type {
   Booth,
   BoothKind,
   BoothMark,
   EditorMode,
+  GateOpenMode,
   Infra,
   InfraKind,
   Underlay,
@@ -38,6 +43,11 @@ const props = defineProps<{
   xray: boolean
   noTop: boolean
   mobileOpen?: boolean
+  /** 刚新增的对象不自动滚动，保持新增入口可见 */
+  skipRevealBoothId?: string | null
+  skipRevealInfraId?: string | null
+  focusAddSection?: 'booth' | 'infra' | 'furniture' | null
+  focusAddToken?: number
 }>()
 
 /** 三个结构卡片的展开状态 */
@@ -55,6 +65,7 @@ const emit = defineEmits<{
   (e: 'select', id: string | null, additive: boolean): void
   (e: 'venue-height', value: number): void
   (e: 'booth-height', id: string, value: number): void
+  (e: 'booth-kind', id: string, kind: BoothKind): void
   (e: 'booth-size', id: string, patch: { width?: number; depth?: number }): void
   (e: 'set-mark', id: string, mark: BoothMark | null): void
   (e: 'rotate', dir: 1 | -1): void
@@ -74,6 +85,8 @@ const emit = defineEmits<{
   ): void
   (e: 'rotate-infra', id: string, dir: 1 | -1): void
   (e: 'toggle-gate', id: string): void
+  (e: 'gate-open-mode', id: string, mode: GateOpenMode): void
+  (e: 'clear-infra-selection'): void
   (e: 'infra-count', id: string, delta: number): void
   (e: 'rename-infra', id: string, name: string): void
   (e: 'logo', id: string, dataUrl: string): void
@@ -265,10 +278,30 @@ function revealInfra(id: string) {
   revealItem(infraOpen, `[data-infra-id="${CSS.escape(id)}"]`)
 }
 
+/** 新增后把对应新增按钮滚回可见区域，确保可以连续添加 */
+function scrollAddIntoView(section: 'booth' | 'infra' | 'furniture') {
+  const panel = panelEl.value
+  const el = panel?.querySelector<HTMLElement>(`[data-add-section="${section}"]`)
+  if (!panel || !el) return
+  const panelRect = panel.getBoundingClientRect()
+  const rect = el.getBoundingClientRect()
+  const margin = 8
+  if (rect.top < panelRect.top + margin) {
+    panel.scrollTop += rect.top - panelRect.top - margin
+  } else if (rect.bottom > panelRect.bottom - margin) {
+    panel.scrollTop += rect.bottom - panelRect.bottom + margin
+  }
+}
+
 watch(
   () => props.selectedInfraId,
-  (id) => {
-    if (id) revealInfra(id)
+  async (id) => {
+    if (!id) return
+    const target = props.infras.find((it) => it.id === id)
+    if (target) ensureInfraGroupsOpen(target)
+    if (id === props.skipRevealInfraId) return
+    await nextTick()
+    revealInfra(id)
   },
 )
 
@@ -276,7 +309,22 @@ watch(
   () => props.selectedIds,
   (ids) => {
     const id = ids[ids.length - 1]
-    if (id) revealBooth(id)
+    if (id && id !== props.skipRevealBoothId) revealBooth(id)
+  },
+)
+
+watch(
+  () => props.focusAddToken,
+  () => {
+    const section = props.focusAddSection
+    if (!section) return
+    const wasOpen = section === 'booth' ? boothOpen.value : infraOpen.value
+    if (section === 'booth') boothOpen.value = true
+    else infraOpen.value = true
+    nextTick(() => {
+      requestAnimationFrame(() => scrollAddIntoView(section))
+      if (!wasOpen) window.setTimeout(() => scrollAddIntoView(section), 340)
+    })
   },
 )
 
@@ -287,11 +335,15 @@ watch(
     if (!open) return
     const infraId = props.selectedInfraId
     if (infraId) {
-      revealInfra(infraId)
+      const target = props.infras.find((it) => it.id === infraId)
+      if (target) ensureInfraGroupsOpen(target)
+      if (infraId !== props.skipRevealInfraId) {
+        nextTick(() => revealInfra(infraId))
+      }
       return
     }
     const id = props.selectedIds[props.selectedIds.length - 1]
-    if (id) revealBooth(id)
+    if (id && id !== props.skipRevealBoothId) revealBooth(id)
   },
 )
 
@@ -308,6 +360,156 @@ const kindShort: Record<InfraKind, string> = {
   'table-round': '圆',
   'table-square': '方',
 }
+
+const BOOTH_KINDS: BoothKind[] = ['massing', 'scaffold', 'openfloor']
+const BASIC_INFRA_ORDER: InfraKind[] = [
+  'stairs',
+  'restroom',
+  'gate',
+  'window',
+  'elevator',
+  'wall',
+]
+const FURNITURE_ORDER: InfraKind[] = [
+  'chair',
+  'armchair',
+  'sofa',
+  'table-round',
+  'table-square',
+]
+
+interface InfraRow {
+  type: 'group' | 'item'
+  key: string
+  depth: number
+  label?: string
+  badge?: string
+  count?: number
+  open?: boolean
+  item?: Infra
+}
+
+/** 默认全部展开；只记录被用户收起的分组 */
+const closedInfraGroups = ref<Set<string>>(new Set())
+
+function isInfraGroupOpen(key: string) {
+  return !closedInfraGroups.value.has(key)
+}
+
+function infraGroupKeysOf(it: Infra): string[] {
+  if (!isFurnitureKind(it.kind)) return [`kind:${it.kind}`]
+  const host = props.booths.find(
+    (booth) => booth.points.length >= 3 && pointInPolygon(it, booth.points),
+  )
+  const boothKey = `booth:${host?.id ?? '__orphan__'}`
+  return [boothKey, `${boothKey}:${it.kind}`]
+}
+
+function toggleInfraGroup(key: string) {
+  const closing = !closedInfraGroups.value.has(key)
+  if (closing) {
+    const selected = props.infras.find((it) => it.id === props.selectedInfraId)
+    if (selected && infraGroupKeysOf(selected).includes(key)) {
+      emit('clear-infra-selection')
+    }
+  }
+  const next = new Set(closedInfraGroups.value)
+  if (closing) next.add(key)
+  else next.delete(key)
+  closedInfraGroups.value = next
+}
+
+function ensureInfraGroupsOpen(it: Infra) {
+  const keys = infraGroupKeysOf(it)
+  if (!keys.some((key) => closedInfraGroups.value.has(key))) return
+  const next = new Set(closedInfraGroups.value)
+  for (const key of keys) next.delete(key)
+  closedInfraGroups.value = next
+}
+
+/** 基础设施按类型；家具先按所在展台，再按家具类型 */
+const infraRows = computed<InfraRow[]>(() => {
+  const rows: InfraRow[] = []
+  const nonFurniture = props.infras.filter((it) => !isFurnitureKind(it.kind))
+
+  for (const kind of BASIC_INFRA_ORDER) {
+    const items = nonFurniture.filter((it) => it.kind === kind)
+    if (!items.length) continue
+    const key = `kind:${kind}`
+    const open = isInfraGroupOpen(key)
+    rows.push({
+      type: 'group',
+      key,
+      depth: 0,
+      label: INFRA_LABELS[kind],
+      badge: kindShort[kind],
+      count: items.length,
+      open,
+    })
+    if (!open) continue
+    for (const item of items) {
+      rows.push({ type: 'item', key: `item:${item.id}`, depth: 1, item })
+    }
+  }
+
+  const furniture = props.infras.filter((it) => isFurnitureKind(it.kind))
+  if (!furniture.length) return rows
+
+  const byBooth = new Map<string, Infra[]>()
+  for (const it of furniture) {
+    const host = props.booths.find(
+      (booth) => booth.points.length >= 3 && pointInPolygon(it, booth.points),
+    )
+    const key = host?.id ?? '__orphan__'
+    const list = byBooth.get(key) ?? []
+    list.push(it)
+    byBooth.set(key, list)
+  }
+
+  const booths = [
+    ...props.booths,
+    ...(byBooth.has('__orphan__')
+      ? [{ id: '__orphan__', name: '未归开展台', points: [], height: 0 } as Booth]
+      : []),
+  ]
+  for (const booth of booths) {
+    const items = byBooth.get(booth.id)
+    if (!items?.length) continue
+    const boothKey = `booth:${booth.id}`
+    const boothOpen = isInfraGroupOpen(boothKey)
+    rows.push({
+      type: 'group',
+      key: boothKey,
+      depth: 0,
+      label: booth.name,
+      badge: booth.id === '__orphan__' ? '?' : '展',
+      count: items.length,
+      open: boothOpen,
+    })
+    if (!boothOpen) continue
+
+    for (const kind of FURNITURE_ORDER) {
+      const typed = items.filter((it) => it.kind === kind)
+      if (!typed.length) continue
+      const typeKey = `${boothKey}:${kind}`
+      const typeOpen = isInfraGroupOpen(typeKey)
+      rows.push({
+        type: 'group',
+        key: typeKey,
+        depth: 1,
+        label: INFRA_LABELS[kind],
+        badge: kindShort[kind],
+        count: typed.length,
+        open: typeOpen,
+      })
+      if (!typeOpen) continue
+      for (const item of typed) {
+        rows.push({ type: 'item', key: `item:${item.id}`, depth: 2, item })
+      }
+    }
+  }
+  return rows
+})
 
 const kindLabel = (b: Booth) => BOOTH_KIND_LABELS[boothKindOf(b)]
 const heightText = (b: Booth) => (b.height < 1 ? b.height.toFixed(2) : b.height.toFixed(1))
@@ -346,8 +548,22 @@ function fieldsOf(it: Infra): SizeField[] {
 
   if (it.kind === 'gate') {
     return [
-      { key: 'width', label: '宽度', min: lim.width[0], max: lim.width[1], value: it.width },
-      { key: 'height', label: '高度', min: lim.height[0], max: maxH, value: it.height },
+      {
+        key: 'width',
+        label: '宽度',
+        min: lim.width[0],
+        max: lim.width[1],
+        value: it.width,
+        step: 0.5,
+      },
+      {
+        key: 'height',
+        label: '高度',
+        min: lim.height[0],
+        max: maxH,
+        value: it.height,
+        step: 0.5,
+      },
     ]
   }
 
@@ -394,7 +610,7 @@ function fieldsOf(it: Infra): SizeField[] {
 
 function dimsText(it: Infra): string {
   if (it.kind === 'gate') {
-    return `宽 ${it.width.toFixed(1)} · 高 ${it.height.toFixed(1)} m · ${it.open ? '已打开' : '已关闭'}`
+    return `宽 ${it.width.toFixed(1)} · 高 ${it.height.toFixed(1)} m · ${GATE_OPEN_MODE_LABELS[gateOpenModeOf(it)]} · ${it.open ? '已打开' : '已关闭'}`
   }
   if (it.kind === 'window') {
     return `宽 ${it.width.toFixed(1)} · 高 ${it.height.toFixed(1)} m · 离地 ${(it.sill ?? WINDOW_SILL).toFixed(1)} m`
@@ -408,10 +624,13 @@ function dimsText(it: Infra): string {
 }
 
 function onSizeChange(id: string, key: SizeField['key'], e: Event) {
-  const v = parseFloat((e.target as HTMLInputElement).value)
+  const input = e.target as HTMLInputElement
+  const v = parseFloat(input.value)
   if (!Number.isFinite(v)) return
+  const step = Number(input.step) || 1
+  const snapped = Math.round(v / step) * step
   const patch: { width?: number; depth?: number; height?: number; sill?: number } = {}
-  patch[key] = key === 'sill' ? Math.round(v * 10) / 10 : Math.round(v)
+  patch[key] = Number(snapped.toFixed(2))
   emit('infra-size', id, patch)
 }
 
@@ -585,7 +804,7 @@ function onLogoChange(id: string, e: Event) {
             v-if="underlay"
             class="mini underlay-lock"
             :class="{ on: underlay.locked }"
-            :title="underlay.locked ? '解锁底图，恢复 Ctrl + 拖动 / 滚轮' : '锁定底图位置和缩放，避免误操作'"
+            :title="underlay.locked ? '解锁底图，恢复 Ctrl + 拖动 / 滚轮 (Alt+L)' : '锁定底图位置和缩放，避免误操作 (Alt+L)'"
             @click="emit('toggle-underlay-lock')"
           >
             {{ underlay.locked ? '已锁定' : '锁定' }}
@@ -733,6 +952,24 @@ function onLogoChange(id: string, e: Event) {
           </div>
 
           <template v-if="b.id === activeId && venue && canEdit">
+            <div class="row-kind">
+              <span>类型</span>
+              <div class="kind-switch">
+                <button
+                  v-for="k in BOOTH_KINDS"
+                  :key="k"
+                  type="button"
+                  class="mini"
+                  :class="{ on: boothKindOf(b) === k }"
+                  @click.stop="emit('booth-kind', b.id, k)"
+                >
+                  {{ BOOTH_KIND_LABELS[k] }}
+                </button>
+              </div>
+              <span v-if="boothKindOf(b) !== 'openfloor'" class="mini-hint">
+                转光地会清除高度
+              </span>
+            </div>
             <div class="row-size">
               <label class="infra-field exhibitor-field">
                 <span>展商</span>
@@ -850,7 +1087,7 @@ function onLogoChange(id: string, e: Event) {
 
       <p v-else class="empty-line">在馆内画出展台轮廓并设置高度，即可生成展台白膜。</p>
 
-      <div class="booth-add">
+      <div class="booth-add" data-add-section="booth">
         <button
           class="btn sm"
           :class="{ primary: !!venue && !booths.length }"
@@ -906,7 +1143,7 @@ function onLogoChange(id: string, e: Event) {
           :inert="!infraOpen || undefined"
           :aria-hidden="!infraOpen || undefined"
         >
-          <div class="infra-add">
+          <div class="infra-add" data-add-section="infra">
         <button class="btn sm" :disabled="mode !== 'idle'" @click="emit('add-infra', 'stairs')">
           + 楼梯
         </button>
@@ -936,7 +1173,7 @@ function onLogoChange(id: string, e: Event) {
       </div>
 
       <p class="infra-subhead">家具 · 仅限展台内部</p>
-      <div class="infra-add">
+      <div class="infra-add" data-add-section="furniture">
         <button
           class="btn sm"
           :disabled="mode !== 'idle' || !booths.length"
@@ -977,92 +1214,132 @@ function onLogoChange(id: string, e: Event) {
         先添加展台才能摆放家具
       </p>
 
-      <ul v-if="infras.length" class="list">
-        <li
-          v-for="it in infras"
-          :key="it.id"
-          :data-infra-id="it.id"
-          :class="{ active: it.id === selectedInfraId }"
-        >
-          <div class="row" @click="emit('select-infra', it.id)">
-            <span class="idx">{{ kindShort[it.kind] }}</span>
-            <div class="meta">
-              <div class="name-line">
-                <input
-                  v-if="editingInfraId === it.id"
-                  :ref="bindInfraNameInput"
-                  v-model="infraNameDraft"
-                  class="name-input"
-                  maxlength="24"
-                  @click.stop
-                  @blur="commitInfraEdit"
-                  @keydown.enter.prevent="commitInfraEdit"
-                  @keydown.esc.prevent="cancelInfraEdit"
-                />
-                <template v-else>
-                  <b class="name">{{ it.name }}</b>
-                  <button
-                    type="button"
-                    class="name-edit"
-                    title="重命名"
-                    @click.stop="startInfraEdit(it)"
-                  >
-                    ✎
-                  </button>
-                </template>
+      <ul v-if="infras.length" class="list infra-tree">
+        <template v-for="row in infraRows" :key="row.key">
+          <li
+            v-if="row.type === 'group'"
+            class="infra-group-li"
+            :class="{ 'infra-subgroup-li': row.depth === 1 }"
+          >
+            <button
+              type="button"
+              class="infra-group-head"
+              :class="{ open: row.open }"
+              :aria-expanded="row.open"
+              @click="toggleInfraGroup(row.key)"
+            >
+              <span class="infra-group-badge">{{ row.badge }}</span>
+              <span class="infra-group-label">{{ row.label }}</span>
+              <span class="infra-group-count">{{ row.count }}</span>
+              <span class="infra-caret" />
+            </button>
+          </li>
+          <li
+            v-else-if="row.item"
+            class="infra-item-li"
+            :data-infra-id="row.item.id"
+            :class="{
+              active: row.item.id === selectedInfraId,
+              'infra-item-depth-2': row.depth === 2,
+            }"
+          >
+            <template v-for="it in [row.item]" :key="row.item.id">
+              <div class="row" @click="emit('select-infra', it.id)">
+                <span class="idx">{{ kindShort[it.kind] }}</span>
+                <div class="meta">
+                  <div class="name-line">
+                    <input
+                      v-if="editingInfraId === it.id"
+                      :ref="bindInfraNameInput"
+                      v-model="infraNameDraft"
+                      class="name-input"
+                      maxlength="24"
+                      @click.stop
+                      @blur="commitInfraEdit"
+                      @keydown.enter.prevent="commitInfraEdit"
+                      @keydown.esc.prevent="cancelInfraEdit"
+                    />
+                    <template v-else>
+                      <b class="name">{{ it.name }}</b>
+                      <button
+                        type="button"
+                        class="name-edit"
+                        title="重命名"
+                        @click.stop="startInfraEdit(it)"
+                      >
+                        ✎
+                      </button>
+                    </template>
+                  </div>
+                  <span>{{ dimsText(it) }}</span>
+                </div>
+                <button class="icon-btn" title="删除" @click.stop="emit('delete-infra', it.id)">×</button>
               </div>
-              <span>{{ dimsText(it) }}</span>
-            </div>
-            <button class="icon-btn" title="删除" @click.stop="emit('delete-infra', it.id)">×</button>
-          </div>
-          <div v-if="it.id === selectedInfraId" class="infra-edit">
-            <p v-if="it.kind === 'chair' || it.kind === 'armchair'" class="infra-fixed">
-              固定尺寸 {{ it.width.toFixed(1) }} × {{ it.depth.toFixed(1) }} ×
-              {{ it.height.toFixed(1) }} m
-              <template v-if="it.kind === 'armchair'"> · 座高 0.5 m</template>
-            </p>
-            <label v-for="f in fieldsOf(it)" :key="f.key" class="infra-field">
-              <span>{{ f.label }}</span>
-              <input
-                type="number"
-                :min="f.min"
-                :max="f.max"
-                :step="f.step ?? 1"
-                :value="f.step && f.step < 1 ? f.value.toFixed(1) : Math.round(f.value)"
-                @change="onSizeChange(it.id, f.key, $event)"
-              />
-              <i>m</i>
-            </label>
+              <div v-if="it.id === selectedInfraId" class="infra-edit">
+                <div v-if="it.kind === 'gate'" class="row-kind infra-mode-row">
+                  <span>开启</span>
+                  <div class="kind-switch">
+                    <button
+                      v-for="mode in GATE_OPEN_MODES"
+                      :key="mode"
+                      type="button"
+                      class="mini"
+                      :class="{ on: gateOpenModeOf(it) === mode }"
+                      @click.stop="emit('gate-open-mode', it.id, mode)"
+                    >
+                      {{ GATE_OPEN_MODE_LABELS[mode] }}
+                    </button>
+                  </div>
+                </div>
+                <p v-if="it.kind === 'chair' || it.kind === 'armchair'" class="infra-fixed">
+                  固定尺寸 {{ it.width.toFixed(1) }} × {{ it.depth.toFixed(1) }} ×
+                  {{ it.height.toFixed(1) }} m
+                  <template v-if="it.kind === 'armchair'"> · 座高 0.5 m</template>
+                </p>
+                <label v-for="f in fieldsOf(it)" :key="f.key" class="infra-field">
+                  <span>{{ f.label }}</span>
+                  <input
+                    type="number"
+                    :min="f.min"
+                    :max="Number.isFinite(f.max) ? f.max : undefined"
+                    :step="f.step ?? 1"
+                    :value="f.step && f.step < 1 ? f.value.toFixed(1) : Math.round(f.value)"
+                    @change="onSizeChange(it.id, f.key, $event)"
+                  />
+                  <i>m</i>
+                </label>
 
-            <div class="infra-tools">
-              <template v-if="it.kind !== 'gate' && it.kind !== 'window'">
-                <button class="mini" title="逆时针旋转 90°" @click.stop="emit('rotate-infra', it.id, -1)">
-                  ↺ 90°
-                </button>
-                <button class="mini" title="顺时针旋转 90°" @click.stop="emit('rotate-infra', it.id, 1)">
-                  ↻ 90°
-                </button>
-              </template>
+                <div class="infra-tools">
+                  <template v-if="it.kind !== 'gate' && it.kind !== 'window'">
+                    <button class="mini" title="逆时针旋转 90°" @click.stop="emit('rotate-infra', it.id, -1)">
+                      ↺ 90°
+                    </button>
+                    <button class="mini" title="顺时针旋转 90°" @click.stop="emit('rotate-infra', it.id, 1)">
+                      ↻ 90°
+                    </button>
+                  </template>
 
-              <button
-                v-else-if="it.kind === 'gate'"
-                class="mini door-toggle"
-                :class="{ on: it.open }"
-                @click.stop="emit('toggle-gate', it.id)"
-              >
-                {{ it.open ? '关闭出入口' : '打开出入口' }}
-              </button>
-              <span v-else class="mini-hint">窗户朝向由外墙决定</span>
+                  <button
+                    v-else-if="it.kind === 'gate'"
+                    class="mini door-toggle"
+                    :class="{ on: it.open }"
+                    @click.stop="emit('toggle-gate', it.id)"
+                  >
+                    {{ it.open ? '关闭出入口' : '打开出入口' }}
+                  </button>
+                  <span v-else class="mini-hint">窗户朝向由外墙决定</span>
 
-              <template v-if="it.kind === 'elevator'">
-                <span class="infra-count-label">电梯</span>
-                <button class="mini" @click.stop="emit('infra-count', it.id, -1)">−</button>
-                <b class="infra-count-val">{{ it.count ?? 2 }}</b>
-                <button class="mini" @click.stop="emit('infra-count', it.id, 1)">+</button>
-              </template>
-            </div>
-          </div>
-        </li>
+                  <template v-if="it.kind === 'elevator'">
+                    <span class="infra-count-label">电梯</span>
+                    <button class="mini" @click.stop="emit('infra-count', it.id, -1)">−</button>
+                    <b class="infra-count-val">{{ it.count ?? 2 }}</b>
+                    <button class="mini" @click.stop="emit('infra-count', it.id, 1)">+</button>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </li>
+        </template>
       </ul>
 
       <p v-else class="empty-line">

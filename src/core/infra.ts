@@ -1,4 +1,4 @@
-import type { InfraKind } from './types'
+import type { GateOpenMode, Infra, InfraKind } from './types'
 
 export interface InfraDims {
   width: number
@@ -9,6 +9,19 @@ export interface InfraDims {
 /** 窗台离地高度与固定玻璃厚度（米） */
 export const WINDOW_SILL = 1
 export const WINDOW_DEPTH = 0.24
+
+export const GATE_OPEN_MODES: GateOpenMode[] = ['side', 'double', 'up']
+
+export const GATE_OPEN_MODE_LABELS: Record<GateOpenMode, string> = {
+  side: '侧开',
+  double: '对开',
+  up: '上卷',
+}
+
+/** 旧数据没有 openMode 时沿用原来的对开双扇 */
+export function gateOpenModeOf(it: Pick<Infra, 'openMode'>): GateOpenMode {
+  return it.openMode ?? 'double'
+}
 
 export const INFRA_LABELS: Record<InfraKind, string> = {
   stairs: '楼梯',
@@ -49,7 +62,7 @@ export const INFRA_LIMITS: Record<
   gate: { width: [1, 12], depth: [0.3, 0.8], height: [1, 8] },
   window: { width: [1, 8], depth: [WINDOW_DEPTH, WINDOW_DEPTH], height: [1, 5] },
   elevator: { width: [2, 12], depth: [2, 8], height: [2, 8] },
-  wall: { width: [1, 24], depth: [0.1, 0.5], height: [1, 8] },
+  wall: { width: [1, Number.POSITIVE_INFINITY], depth: [0.1, 0.5], height: [1, 8] },
   chair: { width: [0.6, 0.6], depth: [0.6, 0.6], height: [0.5, 0.5] },
   armchair: { width: [1, 1], depth: [1, 1], height: [1, 1] },
   sofa: { width: [1, 6], depth: [0.6, 2], height: [1.2, 1.2] },

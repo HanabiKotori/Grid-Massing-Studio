@@ -64,6 +64,9 @@ export interface Booth {
   marked?: boolean
 }
 
+/** 出入口开启方式：侧开 / 对开 / 上卷（底部向上收进门楣） */
+export type GateOpenMode = 'side' | 'double' | 'up'
+
 /** 基础设施类型：半截楼梯 / 洗手间 / 展馆出入口 / 窗户 / 电梯间 / 墙面 / 家具 */
 export type InfraKind =
   | 'stairs'
@@ -99,6 +102,8 @@ export interface Infra {
   count?: number
   /** 是否打开（仅 gate） */
   open?: boolean
+  /** 开启方式（仅 gate），默认对开 */
+  openMode?: GateOpenMode
 }
 
 export type EditorMode =
