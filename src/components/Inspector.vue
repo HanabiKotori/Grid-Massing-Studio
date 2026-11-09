@@ -16,6 +16,7 @@ import type {
   EditorMode,
   Infra,
   InfraKind,
+  Underlay,
   Venue,
 } from '../core/types'
 
@@ -23,6 +24,7 @@ const props = defineProps<{
   venue: Venue | null
   booths: Booth[]
   infras: Infra[]
+  underlay: Underlay | null
   selectedInfraId: string | null
   mode: EditorMode
   /** 按住空格时的纯视角浏览状态 */
@@ -77,6 +79,11 @@ const emit = defineEmits<{
   (e: 'logo', id: string, dataUrl: string): void
   (e: 'remove-logo', id: string): void
   (e: 'logo-error', message: string): void
+  (e: 'underlay-file', file: File): void
+  (e: 'center-underlay'): void
+  (e: 'toggle-underlay-lock'): void
+  (e: 'remove-underlay'): void
+  (e: 'underlay-opacity', value: number): void
 }>()
 
 const fmt = (n: number) => n.toFixed(1)
@@ -115,6 +122,25 @@ function markColor(b: Booth): BoothMark | null {
 function fillStyle(v: number, min: number, max: number): any {
   const pct = Math.max(0, Math.min(100, ((v - min) / (max - min)) * 100))
   return { '--fill': `${pct}%` }
+}
+
+const underlayInput = ref<HTMLInputElement | null>(null)
+const underlayOpacity = computed(() => Math.round((props.underlay?.opacity ?? 0.7) * 100))
+const underlayVisible = computed(() => !!props.underlay?.visible)
+
+function pickUnderlay() {
+  underlayInput.value?.click()
+}
+
+function onUnderlayFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file) emit('underlay-file', file)
+}
+
+function onUnderlayOpacity(e: Event) {
+  emit('underlay-opacity', Number((e.target as HTMLInputElement).value))
 }
 
 function onVenueHeight(e: Event) {
@@ -549,6 +575,65 @@ function onLogoChange(id: string, e: Event) {
       <div v-else class="empty">
         <p>还未绘制场地面积</p>
         <button class="btn primary w-full" @click="emit('draw-venue')">绘制场地面积</button>
+      </div>
+
+      <div class="underlay-block">
+        <div class="underlay-head">
+          <span class="underlay-title">底图</span>
+          <span class="underlay-name">{{ underlay?.name || '未上传' }}</span>
+          <button
+            v-if="underlay"
+            class="mini underlay-lock"
+            :class="{ on: underlay.locked }"
+            :title="underlay.locked ? '解锁底图，恢复 Ctrl + 拖动 / 滚轮' : '锁定底图位置和缩放，避免误操作'"
+            @click="emit('toggle-underlay-lock')"
+          >
+            {{ underlay.locked ? '已锁定' : '锁定' }}
+          </button>
+        </div>
+        <div class="underlay-actions">
+          <button class="mini" @click="pickUnderlay">
+            {{ underlay ? '更换图片' : '上传图片' }}
+          </button>
+          <button
+            v-if="underlay"
+            class="mini"
+            title="将底图移回网格中心，尺寸保持不变"
+            @click="emit('center-underlay')"
+          >
+            居中
+          </button>
+          <button v-if="underlay" class="mini" @click="emit('remove-underlay')">
+            移除
+          </button>
+        </div>
+        <input
+          ref="underlayInput"
+          type="file"
+          accept="image/jpeg,image/jpg,image/png"
+          hidden
+          @change="onUnderlayFileChange"
+        />
+        <label class="field underlay-opacity" :class="{ disabled: !underlayVisible }">
+          <div class="field-label">
+            <span>底图不透明度</span>
+            <b>{{ underlayOpacity }}%</b>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            :value="underlayOpacity"
+            :style="fillStyle(underlayOpacity, 0, 100)"
+            :disabled="!underlayVisible"
+            @input="onUnderlayOpacity"
+          />
+        </label>
+        <p class="underlay-tip">
+          Ctrl + 滚轮逐格缩放（每次 1 m）· Ctrl + 左键逐格拖动<br />
+          底图尺寸和位置都不受网格限制，可以放大并拖出网格；拖丢后点「居中」找回。锁定后 Ctrl 拖动 / 滚轮对底图无效。
+        </p>
       </div>
         </div>
       </div>

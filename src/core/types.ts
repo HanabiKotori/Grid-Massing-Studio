@@ -12,6 +12,26 @@ export interface Venue {
   ceiling?: boolean
 }
 
+/** 底图：铺在场馆地面上的参考图片，随场景保存 */
+export interface Underlay {
+  /** 图片 data URL（jpg / png） */
+  image: string
+  /** 原始文件名，仅用于界面显示 */
+  name: string
+  /** 中心点（米） */
+  x: number
+  z: number
+  /** 世界尺寸（米），宽高比与图片一致；不限制最大尺寸，位置也不受网格限制 */
+  width: number
+  height: number
+  /** 不透明度 0–1 */
+  opacity: number
+  /** 是否显示 */
+  visible: boolean
+  /** 锁定后禁用 Ctrl + 拖动 / Ctrl + 滚轮，避免误操作 */
+  locked?: boolean
+}
+
 /** 展台标记分组颜色 */
 export type BoothMark = 'red' | 'yellow' | 'gray'
 

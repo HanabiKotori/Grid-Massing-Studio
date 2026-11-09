@@ -26,6 +26,7 @@ import {
   isFurnitureKind,
 } from './infra'
 import { CloudShadow } from './CloudShadow'
+import { UNDERLAY_MIN_SIZE, clampUnderlaySpec } from './underlay'
 import { WeatherSystem } from './WeatherSystem'
 import {
   WEATHER_PRESETS,
@@ -41,7 +42,7 @@ import {
   signedArea,
   snapToGrid,
 } from './polygon'
-import type { Booth, BoothKind, BoothMark, Infra, InfraKind, Pt, Venue } from './types'
+import type { Booth, BoothKind, BoothMark, Infra, InfraKind, Pt, Underlay, Venue } from './types'
 
 export type StageMode = 'idle' | 'draw' | 'confirm'
 
@@ -115,11 +116,20 @@ export interface StageOptions {
   onWeatherShortcut?: () => void
   /** 手动天气变化 */
   onWeatherChange?: (kind: WeatherKind) => void
+  /** 底图被 Ctrl + 拖动 / 滚轮缩放后回传新的位置与尺寸 */
+  onUnderlayChange?: (spec: Underlay) => void
 }
 
 const SNAP = 1
 const EDGE_SNAP = 0.5
 const GRID_HALF = 80
+/**
+ * 底图离地高度：明显高于场馆地面板（0.012 m），又低于展台 0.15 m 台板。
+ * 留出足够深度差，远距离 / 低角度下也不会被地面板遮挡。
+ */
+const UNDERLAY_Y = 0.09
+/** Ctrl + 滚轮：一格滚轮 / 累计约 80px 缩放 1 m */
+const UNDERLAY_WHEEL_NOTCH = 80
 const ACCENT = 0x2f5fe0
 /** 标记分组配色 */
 const MARK_PALETTE: Record<BoothMark, { wall: number; floor: number }> = {
@@ -519,6 +529,20 @@ export class Stage {
   private draftRoot = new THREE.Group()
   private draftContent = new THREE.Group()
 
+  // 底图（参考图）：铺在地面上，支持 Ctrl + 拖动 / 滚轮缩放
+  private underlayGroup = new THREE.Group()
+  private underlayMesh: THREE.Mesh | null = null
+  private underlayTexture: THREE.Texture | null = null
+  private underlaySpec: Underlay | null = null
+  private underlayImage = ''
+  private underlayToken = 0
+  private underlayWheelAcc = 0
+  private underlayDrag: {
+    startX: number
+    startZ: number
+    origin: Pt
+  } | null = null
+
   private venue: Venue | null = null
   private venueGroup: THREE.Group | null = null
   private venueOpenings: MassingOpening[] = []
@@ -840,7 +864,7 @@ export class Stage {
     this.scene.add(ground)
 
     this.buildGrid()
-    this.scene.add(this.gridGroup, this.modelRoot, this.previewRoot, this.draftRoot)
+    this.scene.add(this.underlayGroup, this.gridGroup, this.modelRoot, this.previewRoot, this.draftRoot)
     this.modelRoot.add(this.boothLogoRoot)
     this.scene.add(this.dimensionRoot)
     this.draftRoot.add(this.draftContent)
@@ -2656,6 +2680,13 @@ export class Stage {
     if (this.rectPreview) this.rectPreview.group.visible = false
   }
 
+  private cancelUnderlayDrag() {
+    if (!this.underlayDrag) return
+    this.underlayDrag = null
+    this.controls.enabled = true
+    this.host.style.cursor = this.mode === 'draw' ? 'crosshair' : 'default'
+  }
+
   private ensureRectPreview() {
     if (this.rectPreview) return this.rectPreview
 
@@ -2966,6 +2997,7 @@ export class Stage {
     this.host.style.cursor = mode === 'draw' ? 'crosshair' : 'default'
     if (mode !== 'draw') {
       this.cancelRectDrag()
+      this.cancelUnderlayDrag()
       this.snapRing.visible = false
       this.rubber.visible = false
       if (this.infraKind) this.stopInfraPlace()
@@ -2982,6 +3014,174 @@ export class Stage {
   setReadOnly(on: boolean) {
     this.readOnly = on
     this.host.style.cursor = 'default'
+  }
+
+  // ---------- 底图 ----------
+
+  /** 同步底图：图片不变时只更新位置、尺寸与透明度，避免重复解码 */
+  setUnderlay(spec: Underlay | null) {
+    if (!spec) {
+      this.underlaySpec = null
+      this.clearUnderlay()
+      return
+    }
+    const next = clampUnderlaySpec(spec)
+    this.underlaySpec = next
+    // 外部状态需要收敛时回传处理后的值，保证 App 与渲染一致
+    if (
+      next.width !== spec.width ||
+      next.height !== spec.height ||
+      next.x !== spec.x ||
+      next.z !== spec.z ||
+      next.opacity !== spec.opacity
+    ) {
+      this.opts.onUnderlayChange?.(next)
+    }
+    this.underlayGroup.visible = next.visible !== false
+    if (next.image !== this.underlayImage) {
+      this.underlayImage = next.image
+      this.loadUnderlayTexture(next.image)
+      return
+    }
+    this.applyUnderlay()
+  }
+
+  private applyUnderlay() {
+    const spec = this.underlaySpec
+    this.underlayGroup.visible = !!spec && spec.visible !== false
+    if (!spec || !this.underlayMesh) return
+    const mat = this.underlayMesh.material as THREE.MeshBasicMaterial
+    mat.opacity = Math.min(1, Math.max(0, spec.opacity))
+    this.underlayMesh.scale.set(
+      Math.max(0.01, spec.width),
+      1,
+      Math.max(0.01, spec.height),
+    )
+    this.underlayMesh.position.set(spec.x, UNDERLAY_Y, spec.z)
+  }
+
+  private loadUnderlayTexture(src: string) {
+    const token = ++this.underlayToken
+    const loader = new THREE.TextureLoader()
+    loader.load(
+      src,
+      (texture) => {
+        if (token !== this.underlayToken) {
+          texture.dispose()
+          return
+        }
+        texture.colorSpace = THREE.SRGBColorSpace
+        texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy())
+        this.replaceUnderlayTexture(texture)
+        this.applyUnderlay()
+      },
+      undefined,
+      () => {
+        if (token === this.underlayToken) console.warn('[底图] 图片加载失败')
+      },
+    )
+  }
+
+  private replaceUnderlayTexture(texture: THREE.Texture) {
+    if (this.underlayMesh) {
+      this.underlayGroup.remove(this.underlayMesh)
+      disposeDeep(this.underlayMesh)
+      this.underlayMesh = null
+    }
+    this.underlayTexture?.dispose()
+    this.underlayTexture = texture
+
+    const geo = new THREE.PlaneGeometry(1, 1)
+    geo.rotateX(-Math.PI / 2)
+    const mat = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    })
+    const mesh = new THREE.Mesh(geo, mat)
+    mesh.name = 'underlay'
+    this.underlayGroup.add(mesh)
+    this.underlayMesh = mesh
+  }
+
+  private clearUnderlay() {
+    this.underlayToken += 1
+    this.underlayImage = ''
+    this.underlayGroup.visible = false
+    this.cancelUnderlayDrag()
+    if (this.underlayMesh) {
+      this.underlayGroup.remove(this.underlayMesh)
+      disposeDeep(this.underlayMesh)
+      this.underlayMesh = null
+    }
+    this.underlayTexture?.dispose()
+    this.underlayTexture = null
+  }
+
+  /** 尺寸 / 位置统一收敛（最小尺寸、1 m 取整）并回传给上层状态 */
+  private emitUnderlay(next: Underlay) {
+    const spec = clampUnderlaySpec(next)
+    this.underlaySpec = spec
+    this.applyUnderlay()
+    this.opts.onUnderlayChange?.(spec)
+  }
+
+  /** Ctrl + 滚轮：每格缩放 1 m，以底图中心为基准 */
+  private onUnderlayWheel = (e: WheelEvent) => {
+    if (!e.ctrlKey || e.target !== this.renderer.domElement) return
+    if (this.walkState !== 'off' || this.readOnly) return
+    const spec = this.underlaySpec
+    if (!spec || spec.visible === false) return
+    e.preventDefault()
+    e.stopPropagation()
+    // 已锁定：拦截 Ctrl + 滚轮，避免误缩放底图（也不触发相机缩放）
+    if (spec.locked === true) return
+
+    // 一次鼠标滚轮事件固定 1 m；触控板的细碎滚动先累计再步进
+    const unit =
+      e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? this.host.clientHeight || 800 : 1
+    const delta = e.deltaY * unit
+    if (!delta) return
+    let steps = 0
+    if (Math.abs(delta) >= UNDERLAY_WHEEL_NOTCH) {
+      steps = delta < 0 ? 1 : -1
+      this.underlayWheelAcc = 0
+    } else {
+      this.underlayWheelAcc += delta
+      while (this.underlayWheelAcc <= -UNDERLAY_WHEEL_NOTCH) {
+        this.underlayWheelAcc += UNDERLAY_WHEEL_NOTCH
+        steps += 1
+      }
+      while (this.underlayWheelAcc >= UNDERLAY_WHEEL_NOTCH) {
+        this.underlayWheelAcc -= UNDERLAY_WHEEL_NOTCH
+        steps -= 1
+      }
+    }
+    if (!steps) return
+
+    const size = Math.max(spec.width, spec.height)
+    const current = Math.round(size)
+    const nextSize = Math.max(UNDERLAY_MIN_SIZE, current + steps)
+    if (nextSize === current) return
+    const k = nextSize / size
+    this.emitUnderlay({ ...spec, width: spec.width * k, height: spec.height * k })
+  }
+
+  private updateUnderlayDrag(e: PointerEvent) {
+    const d = this.underlayDrag
+    const spec = this.underlaySpec
+    if (!d || !spec || spec.visible === false) return
+    const p = this.groundPoint(e.clientX, e.clientY)
+    if (!p) return
+    // 位移按 1 m 网格取整，底图逐格移动，可拖出网格
+    this.emitUnderlay({
+      ...spec,
+      x: d.startX + Math.round(p.x - d.origin.x),
+      z: d.startZ + Math.round(p.z - d.origin.z),
+    })
   }
 
   // ---------- 视角 ----------
@@ -3149,6 +3349,8 @@ export class Stage {
     window.addEventListener('keydown', this.onNavKeyDown)
     window.addEventListener('keyup', this.onNavKeyUp)
     window.addEventListener('blur', this.onWindowBlur)
+    // 捕获阶段优先于 OrbitControls 的滚轮缩放，Ctrl + 滚轮用于缩放底图
+    window.addEventListener('wheel', this.onUnderlayWheel, { capture: true, passive: false })
   }
 
   /** 空格：临时切换为纯视角导航（输入框内不拦截） */
@@ -3198,6 +3400,7 @@ export class Stage {
   private onWindowBlur = () => {
     this.walkAltReleased = false
     this.opts.onMinimapHold?.(false)
+    this.cancelUnderlayDrag()
     if (!this.spaceNav) return
     this.spaceNav = false
     this.restoreRightMouse()
@@ -3220,6 +3423,35 @@ export class Stage {
       return
     }
     if (this.readOnly) return
+
+    // 底图：Ctrl + 左键拖动；落在展台 / 设施上时仍保留 Ctrl 多选等原有交互
+    if (
+      e.button === 0 &&
+      e.ctrlKey &&
+      e.isPrimary &&
+      this.underlaySpec &&
+      this.underlaySpec.visible !== false &&
+      !this.pickBoothAt(e.clientX, e.clientY) &&
+      !this.pickInfraAt(e.clientX, e.clientY)
+    ) {
+      // 已锁定：吞掉 Ctrl + 左键，避免误移动底图或误触发绘制
+      if (this.underlaySpec.locked === true) {
+        this.down = null
+        return
+      }
+      const p = this.groundPoint(e.clientX, e.clientY)
+      if (p) {
+        this.underlayDrag = {
+          startX: this.underlaySpec.x,
+          startZ: this.underlaySpec.z,
+          origin: p,
+        }
+        this.controls.enabled = false
+        this.host.style.cursor = 'grabbing'
+        this.down = null
+        return
+      }
+    }
 
     // 绘制场馆 / 展台：左键按下记录矩形起点，拖动超过阈值后切换为拉框
     if (this.rectEnabled && this.mode === 'draw' && e.button === 0) {
@@ -3389,6 +3621,13 @@ export class Stage {
       return
     }
     if (this.readOnly) return
+
+    if (this.underlayDrag) {
+      this.underlayDrag = null
+      this.controls.enabled = true
+      this.host.style.cursor = this.mode === 'draw' ? 'crosshair' : 'default'
+      return
+    }
 
     // 拉框结束：交给上层生成矩形轮廓；未拖动则继续按普通点击放点
     const rectDrag = this.rectDrag
@@ -3626,6 +3865,11 @@ export class Stage {
       this.host.style.cursor = 'default'
       return
     }
+    if (this.underlayDrag) {
+      this.host.style.cursor = 'grabbing'
+      this.updateUnderlayDrag(e)
+      return
+    }
     if (this.infraDrag) {
       this.updateInfraDrag(e)
       return
@@ -3710,6 +3954,7 @@ export class Stage {
   private onPointerCancel = () => {
     this.down = null
     this.cancelRectDrag()
+    this.cancelUnderlayDrag()
     this.snapRing.visible = false
     this.rubber.visible = false
     this.opts.onHover?.(null)
@@ -5547,6 +5792,8 @@ export class Stage {
     window.removeEventListener('keydown', this.onNavKeyDown)
     window.removeEventListener('keyup', this.onNavKeyUp)
     window.removeEventListener('blur', this.onWindowBlur)
+    window.removeEventListener('wheel', this.onUnderlayWheel, true)
+    this.clearUnderlay()
     this.walkState = 'off'
     if (document.pointerLockElement === el) document.exitPointerLock()
     this.controls.dispose()

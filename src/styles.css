@@ -1626,6 +1626,80 @@ input[type='range']::-moz-range-thumb {
   background: var(--accent);
 }
 
+/* 场馆底图 */
+.underlay-block {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.underlay-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.underlay-title {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.underlay-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  text-align: right;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.underlay-lock {
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+}
+
+.underlay-lock.on {
+  background: var(--accent-soft);
+  border-color: #d5dfff;
+  color: var(--accent-ink);
+}
+
+.underlay-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.underlay-actions .mini {
+  flex: 1;
+}
+
+.underlay-opacity {
+  margin-top: 8px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.underlay-opacity.disabled {
+  opacity: 0.55;
+}
+
+.underlay-opacity input:disabled {
+  cursor: not-allowed;
+}
+
+.underlay-tip {
+  margin: 7px 0 0;
+  font-size: 10px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+
 /* 紧凑开关：顶板 / 顶棚等布尔项 */
 .switch-row {
   display: flex;

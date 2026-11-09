@@ -38,6 +38,11 @@ import {
   type LiveWeather,
 } from './core/amapWeather'
 import { Stage, type QualityLevel, type WalkState, type WalkView } from './core/Stage'
+import {
+  UNDERLAY_DEFAULT_OPACITY,
+  UNDERLAY_INITIAL_SIZE,
+  clampUnderlaySpec,
+} from './core/underlay'
 import { loadStoredProject, saveStoredProject } from './core/projectStore'
 import sampleSceneJson from './data/sample-scene.json'
 import {
@@ -54,6 +59,7 @@ import type {
   Infra,
   InfraKind,
   Pt,
+  Underlay,
   Venue,
 } from './core/types'
 
@@ -81,6 +87,7 @@ let pasteClipboard: BoothPasteClipboard | null = null
 let pendingInfraCopy: Infra | null = null
 const gridOn = ref(true)
 const dimOn = ref(false)
+const underlay = ref<Underlay | null>(null)
 const northDeg = ref(0)
 /** 当前本地时间在一天中的比例 */
 function currentSunProgress(): number {
@@ -252,6 +259,7 @@ interface SceneJson {
   venue: Venue | null
   booths: Booth[]
   infras: Infra[]
+  underlay?: Underlay | null
 }
 
 let stage: Stage | null = null
@@ -1493,9 +1501,9 @@ watch(
   { deep: true },
 )
 
-// IndexedDB 自动保存：名称、场景、天气和太阳时间一起保留
+// IndexedDB 自动保存：名称、场景、底图、天气和太阳时间一起保留
 watch(
-  [venue, booths, infras, venueName, weather, weatherOn, sunProgress],
+  [venue, booths, infras, underlay, venueName, weather, weatherOn, sunProgress],
   () => scheduleAutosave(),
   { deep: true },
 )
@@ -1711,6 +1719,7 @@ function buildSceneJson(): SceneJson {
       : null,
     booths: exportBoothList(),
     infras: infras.value.map((it) => ({ ...it })),
+    underlay: underlay.value ? { ...underlay.value } : null,
   }
 }
 
@@ -1800,6 +1809,7 @@ function applySceneJson(input: unknown): boolean {
 
   const obj = input as Partial<SceneJson>
   if (!restoringProject) importedDuringRestore = true
+  const nextUnderlay = normalizeUnderlay(obj.underlay)
 
   const nextName =
     typeof obj.venueName === 'string' && obj.venueName.trim()
@@ -1869,6 +1879,7 @@ function applySceneJson(input: unknown): boolean {
   venueNoTop.value = nextVenue ? !nextVenue.ceiling : venueNoTop.value
   booths.value = nextBooths
   infras.value = validInfras
+  underlay.value = nextUnderlay
   selectedIds.value = []
   clearInfraSelection()
   mode.value = 'idle'
@@ -1923,6 +1934,160 @@ const gridMassingApi = {
   importScene: (input: string | SceneJson) =>
     typeof input === 'string' ? importSceneJson(input) : applySceneJson(input),
   setRenderMode: (on: boolean) => setRenderOnly(on),
+}
+
+// ---------- 底图 ----------
+
+function readFileDataUrl(file: File): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null)
+    reader.onerror = () => resolve(null)
+    reader.readAsDataURL(file)
+  })
+}
+
+function readImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('图片读取失败'))
+    img.src = src
+  })
+}
+
+/** 上传底图：限制格式 / 大小，长边超过 2048 时压缩，初始铺满网格并保持比例 */
+async function addUnderlay(file: File) {
+  if (renderOnly.value) return
+  if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
+    toast('仅支持 JPG / PNG 图片')
+    return
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    toast('底图不能超过 20MB')
+    return
+  }
+
+  const dataUrl = await readFileDataUrl(file)
+  if (!dataUrl) {
+    toast('图片读取失败')
+    return
+  }
+
+  let img: HTMLImageElement
+  try {
+    img = await readImage(dataUrl)
+  } catch {
+    toast('图片读取失败')
+    return
+  }
+  const srcW = img.naturalWidth
+  const srcH = img.naturalHeight
+  if (!srcW || !srcH) {
+    toast('图片尺寸无效')
+    return
+  }
+
+  let image = dataUrl
+  if (Math.max(srcW, srcH) > 2048) {
+    const k = 2048 / Math.max(srcW, srcH)
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(srcW * k))
+    canvas.height = Math.max(1, Math.round(srcH * k))
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      image = canvas.toDataURL(
+        file.type === 'image/png' ? 'image/png' : 'image/jpeg',
+        0.92,
+      )
+    }
+  }
+
+  const aspect = srcW / srcH
+  const width = aspect >= 1 ? UNDERLAY_INITIAL_SIZE : UNDERLAY_INITIAL_SIZE * aspect
+  const height = aspect >= 1 ? UNDERLAY_INITIAL_SIZE / aspect : UNDERLAY_INITIAL_SIZE
+  underlay.value = clampUnderlaySpec({
+    image,
+    name: (file.name || '底图').slice(0, 60),
+    x: 0,
+    z: 0,
+    width,
+    height,
+    opacity: underlay.value?.opacity ?? UNDERLAY_DEFAULT_OPACITY,
+    visible: true,
+    locked: false,
+  })
+  toast('底图已添加 · Ctrl + 滚轮逐格缩放，Ctrl + 左键逐格拖动')
+}
+
+/** 导入 JSON 时收敛底图数据，超出网格的按比例缩放并居中约束 */
+function normalizeUnderlay(raw: unknown): Underlay | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  const image = typeof o.image === 'string' ? o.image : ''
+  if (!/^data:image\/(png|jpe?g);base64,/i.test(image)) return null
+
+  const number = (v: unknown, fallback: number) => {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : fallback
+  }
+  let width = number(o.width, 0)
+  let height = number(o.height, 0)
+  if (width <= 0 || height <= 0) return null
+
+  const maxSide = Math.max(width, height)
+  if (maxSide <= 0) return null
+
+  return clampUnderlaySpec({
+    image,
+    name:
+      typeof o.name === 'string' && o.name.trim() ? o.name.slice(0, 60) : '底图',
+    x: number(o.x, 0),
+    z: number(o.z, 0),
+    width,
+    height,
+    opacity: number(o.opacity, UNDERLAY_DEFAULT_OPACITY),
+    visible: o.visible !== false,
+    locked: o.locked === true,
+  })
+}
+
+function toggleUnderlay() {
+  if (renderOnly.value || !underlay.value) return
+  underlay.value = { ...underlay.value, visible: !underlay.value.visible }
+}
+
+function toggleUnderlayLock() {
+  if (renderOnly.value || !underlay.value) return
+  const locked = underlay.value.locked !== true
+  underlay.value = clampUnderlaySpec({ ...underlay.value, locked })
+  toast(locked ? '底图已锁定位置和缩放' : '底图已解锁')
+}
+
+function setUnderlayOpacity(value: number) {
+  if (renderOnly.value || !underlay.value) return
+  underlay.value = {
+    ...underlay.value,
+    opacity: Math.min(100, Math.max(0, Math.round(value))) / 100,
+  }
+}
+
+/** 把底图移回网格中心，尺寸保持不变 */
+function centerUnderlay() {
+  if (renderOnly.value || !underlay.value) return
+  underlay.value = clampUnderlaySpec({ ...underlay.value, x: 0, z: 0 })
+  toast('底图已居中')
+}
+
+function removeUnderlay() {
+  if (renderOnly.value || !underlay.value) return
+  underlay.value = null
+  toast('已移除底图')
+}
+
+function applyUnderlayChange(spec: Underlay) {
+  underlay.value = clampUnderlaySpec(spec)
 }
 
 // ---------- 场景操作 ----------
@@ -2966,6 +3131,7 @@ watch(draftPoints, (v) => stage?.setDraft(v), { deep: true })
 watch(selectedIds, (ids) => stage?.setSelected(ids), { deep: true })
 watch(mode, syncMode)
 watch(draftHeight, syncPreview)
+watch(underlay, (u) => stage?.setUnderlay(u), { deep: true })
 watch(venueXray, () => applyVenueXray())
 watch(gridWanted, (on) => {
   gridOn.value = on
@@ -3179,6 +3345,7 @@ onMounted(() => {
   stage = new Stage(hostEl.value, {
     onPlace: handlePlace,
     onDrawRect: handleDrawRect,
+    onUnderlayChange: applyUnderlayChange,
     onCloseDraft: closeDraft,
     onPick: handlePick,
     onHover: (p) => (hover.value = p),
@@ -3227,6 +3394,7 @@ onMounted(() => {
   stage.setParticleDensities(particleDensities.value)
   stage.setWeatherVisibility(weatherVisibility.value / 100)
   stage.setGridVisible(gridOn.value)
+  stage.setUnderlay(underlay.value)
   stage.setBoothLabelsVisible(boothLabelsOn.value)
   stage.setInfraLabelsVisible(infraLabelsOn.value)
   stage.setBoothAreasVisible(areaOn.value)
@@ -3593,6 +3761,17 @@ onBeforeUnmount(() => {
             >
               网格
             </button>
+            <button
+              class="tool-btn"
+              :class="{ on: !!underlay?.visible }"
+              role="menuitemcheckbox"
+              :aria-checked="!!underlay?.visible"
+              :disabled="!underlay"
+              :title="underlay ? 'Ctrl + 滚轮逐格缩放，Ctrl + 左键逐格拖动' : '请先在场馆面板中上传底图'"
+              @click="runTool(toggleUnderlay)"
+            >
+              底图
+            </button>
           </div>
         </div>
 
@@ -3754,6 +3933,17 @@ onBeforeUnmount(() => {
             @click="runTool(toggleGrid)"
           >
             网格
+          </button>
+          <button
+            class="tool-btn"
+            :class="{ on: !!underlay?.visible }"
+            role="menuitemcheckbox"
+            :aria-checked="!!underlay?.visible"
+            :disabled="!underlay"
+            :title="underlay ? 'Ctrl + 滚轮逐格缩放，Ctrl + 左键逐格拖动' : '请先在场馆面板中上传底图'"
+            @click="runTool(toggleUnderlay)"
+          >
+            底图
           </button>
         </template>
         <template v-else-if="toolMenu === 'quality'">
@@ -3992,6 +4182,7 @@ onBeforeUnmount(() => {
       :mobile-open="mobilePanelOpen"
       :venue="venue"
       :booths="booths"
+      :underlay="underlay"
       :mode="mode"
       :space-nav="spaceNavActive"
       :selected-ids="selectedIds"
@@ -4000,6 +4191,11 @@ onBeforeUnmount(() => {
       :coverage="coverage"
       @draw-venue="startVenueDraw"
       @draw-booth="startBoothDraw"
+      @underlay-file="addUnderlay"
+      @center-underlay="centerUnderlay"
+      @toggle-underlay-lock="toggleUnderlayLock"
+      @remove-underlay="removeUnderlay"
+      @underlay-opacity="setUnderlayOpacity"
       @booth-canopy="setBoothCanopy"
       @booth-top="setBoothNoTop"
       @delete-venue="deleteVenue"
