@@ -430,6 +430,27 @@ function handlePlace(p: Pt) {
   draftPoints.value = [...pts, p]
 }
 
+/** 拖拽拉出的矩形：两个对角点已吸附到网格，直接生成四顶点轮廓并闭合 */
+function handleDrawRect(a: Pt, b: Pt) {
+  const m = mode.value
+  if (m !== 'draw-venue' && m !== 'draw-booth') return
+  const minX = Math.min(a.x, b.x)
+  const maxX = Math.max(a.x, b.x)
+  const minZ = Math.min(a.z, b.z)
+  const maxZ = Math.max(a.z, b.z)
+  if (maxX - minX < 1 || maxZ - minZ < 1) {
+    toast('矩形至少需要 1 × 1 m')
+    return
+  }
+  draftPoints.value = [
+    { x: minX, z: minZ },
+    { x: maxX, z: minZ },
+    { x: maxX, z: maxZ },
+    { x: minX, z: maxZ },
+  ]
+  closeDraft()
+}
+
 function undoPoint() {
   draftPoints.value = draftPoints.value.slice(0, -1)
 }
@@ -2896,6 +2917,8 @@ function syncMode() {
   } else if (m === 'draw-venue' || m === 'draw-booth') stage.setMode('draw')
   else if (m === 'height-venue' || m === 'height-booth') stage.setMode('confirm')
   else stage.setMode('idle')
+  // 绘制场馆 / 展台时左键拖拽直接拉矩形；其他模式恢复左键旋转视角
+  stage.setRectDrawEnabled(m === 'draw-venue' || m === 'draw-booth')
   // 绘制展台时自动半透明；浏览时由用户开关决定
   applyVenueXray()
   syncPreview()
@@ -3155,6 +3178,7 @@ onMounted(() => {
   if (!hostEl.value) return
   stage = new Stage(hostEl.value, {
     onPlace: handlePlace,
+    onDrawRect: handleDrawRect,
     onCloseDraft: closeDraft,
     onPick: handlePick,
     onHover: (p) => (hover.value = p),
@@ -4076,7 +4100,7 @@ onBeforeUnmount(() => {
       :class="{ 'dock-open': mobileDocked && dockExpanded }"
     >
       <h2>用面积图生成场馆白膜</h2>
-      <p>在地面网格上依次点击顶点，画出场地平面，输入高度即可生成白膜体量。</p>
+      <p>在地面网格上依次点击顶点，或按住左键拖拽拉出矩形，输入高度即可生成白膜体量。</p>
       <ol class="steps">
         <li><i>1</i>绘制场馆轮廓（网格 1 格 = 1 米）</li>
         <li><i>2</i>输入净高，生成场馆白膜</li>

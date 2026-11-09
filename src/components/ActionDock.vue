@@ -54,7 +54,7 @@ function onNumber(e: Event) {
       </div>
       <p class="dock-hint">
         <span v-if="!isVenue" class="hint-flag">场馆已半透明</span>
-        在网格交点上单击放点，点击起点或双击 / 按 Enter 闭合轮廓；按住左键拖拽可旋转视角。
+        在网格交点上单击放点，或按住左键拖拽直接拉出矩形；点击起点或双击 / 按 Enter 闭合轮廓；绘制时用中键拖拽旋转视角。
       </p>
       <div class="dock-actions">
         <button class="btn ghost" :disabled="!points.length" @click="emit('undo')">撤销上一点</button>

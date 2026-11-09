@@ -7,3 +7,7 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 *.log
+
+# 本地临时产物
+docs/.edge-*/
+docs/.texture-temp/

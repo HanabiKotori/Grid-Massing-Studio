@@ -1935,6 +1935,21 @@ input[type='range']::-moz-range-thumb {
   box-shadow: 0 2px 6px -4px rgba(20, 22, 28, 0.5);
 }
 
+/* 拖拽拉矩形的实时尺寸 */
+.rect-size {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #d5dfff;
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px -4px rgba(20, 22, 28, 0.45);
+}
+
 /* 指北罗盘：视图工具下方 */
 .compass {
   position: absolute;

@@ -77,6 +77,8 @@ export interface ReportImageOptions {
 export interface StageOptions {
   onPlace?: (p: Pt) => void
   onCloseDraft?: () => void
+  /** 拖拽拉出矩形：参数为两个对角点（已吸附到 1 m 网格） */
+  onDrawRect?: (a: Pt, b: Pt) => void
   onPick?: (id: string | null, additive: boolean, kind?: 'booth' | 'infra') => void
   onHover?: (p: Pt | null) => void
   onMoveBooth?: (id: string, dx: number, dz: number) => void
@@ -682,6 +684,21 @@ export class Stage {
     t: number
     infraId?: string
     boothId?: string
+  } | null = null
+  /** 绘制场馆 / 展台时启用左键拖拽拉矩形 */
+  private rectEnabled = false
+  private rectDrag: {
+    start: Pt
+    current: Pt
+    sx: number
+    sy: number
+    active: boolean
+  } | null = null
+  private rectPreview: {
+    group: THREE.Group
+    fill: THREE.Mesh
+    border: THREE.LineLoop
+    label: CSS2DObject
   } | null = null
   private tween: {
     p0: THREE.Vector3
@@ -2615,6 +2632,100 @@ export class Stage {
     return { x: (bnd.minX + bnd.maxX) / 2, z: (bnd.minZ + bnd.maxZ) / 2 }
   }
 
+  /**
+   * 绘制场馆 / 展台时启用“拖拽拉矩形”。
+   * 左键（触屏单指）留给拉框，相机旋转改用中键拖动，避免与拉框手势冲突。
+   */
+  setRectDrawEnabled(on: boolean) {
+    if (this.rectEnabled === on) return
+    this.rectEnabled = on
+    if (on) {
+      this.controls.mouseButtons.LEFT = null
+      this.controls.mouseButtons.MIDDLE = THREE.MOUSE.ROTATE
+      this.controls.touches.ONE = null
+    } else {
+      this.controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE
+      this.controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY
+      this.controls.touches.ONE = THREE.TOUCH.ROTATE
+      this.cancelRectDrag()
+    }
+  }
+
+  private cancelRectDrag() {
+    this.rectDrag = null
+    if (this.rectPreview) this.rectPreview.group.visible = false
+  }
+
+  private ensureRectPreview() {
+    if (this.rectPreview) return this.rectPreview
+
+    const group = new THREE.Group()
+    group.visible = false
+
+    const geo = new THREE.PlaneGeometry(1, 1)
+    geo.rotateX(-Math.PI / 2)
+    const fill = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({
+        color: ACCENT,
+        transparent: true,
+        opacity: 0.14,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    )
+    fill.renderOrder = 2
+    group.add(fill)
+
+    const border = new THREE.LineLoop(
+      new THREE.BufferGeometry(),
+      new THREE.LineDashedMaterial({
+        color: ACCENT,
+        dashSize: 0.5,
+        gapSize: 0.3,
+        transparent: true,
+        opacity: 0.9,
+        depthTest: false,
+      }),
+    )
+    border.renderOrder = 7
+    group.add(border)
+
+    const el = document.createElement('div')
+    el.className = 'rect-size'
+    const label = new CSS2DObject(el)
+    label.center.set(0.5, 0.5)
+    group.add(label)
+
+    this.draftRoot.add(group)
+    this.rectPreview = { group, fill, border, label }
+    return this.rectPreview
+  }
+
+  private updateRectPreview(a: Pt, b: Pt) {
+    const preview = this.ensureRectPreview()
+    const minX = Math.min(a.x, b.x)
+    const maxX = Math.max(a.x, b.x)
+    const minZ = Math.min(a.z, b.z)
+    const maxZ = Math.max(a.z, b.z)
+    const w = Math.max(0.01, maxX - minX)
+    const d = Math.max(0.01, maxZ - minZ)
+
+    preview.group.position.set((minX + maxX) / 2, 0.05, (minZ + maxZ) / 2)
+    preview.fill.scale.set(w, 1, d)
+    preview.border.geometry.dispose()
+    preview.border.geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-w / 2, 0.004, -d / 2),
+      new THREE.Vector3(w / 2, 0.004, -d / 2),
+      new THREE.Vector3(w / 2, 0.004, d / 2),
+      new THREE.Vector3(-w / 2, 0.004, d / 2),
+    ])
+    preview.border.computeLineDistances()
+    preview.label.position.set(0, 0.02, 0)
+    preview.label.element.textContent = `${Math.round(w)} × ${Math.round(d)} m · ${Math.round(w * d)} m²`
+    preview.group.visible = true
+  }
+
   setDraft(points: Pt[]) {
     this.draftPoints = points
     clearGroup(this.draftContent)
@@ -2854,6 +2965,7 @@ export class Stage {
     this.mode = mode
     this.host.style.cursor = mode === 'draw' ? 'crosshair' : 'default'
     if (mode !== 'draw') {
+      this.cancelRectDrag()
       this.snapRing.visible = false
       this.rubber.visible = false
       if (this.infraKind) this.stopInfraPlace()
@@ -2917,12 +3029,16 @@ export class Stage {
 
   private contentPoints(): { points: Pt[]; height: number } {
     if (this.venue) return { points: this.venue.points, height: this.venue.height }
+    // 空白场景（开始绘制场馆）的默认取景：按视口短边给出足够大的绘制范围，
+    // 同时把 1m 网格控制在约 7px 左右，避免开场时视野被放大到只能看到一小块场地
+    const shortPx = Math.min(this.host.clientWidth || 1200, this.host.clientHeight || 800)
+    const half = Math.min(60, Math.max(20, shortPx / 20))
     return {
       points: [
-        { x: -14, z: -14 },
-        { x: 14, z: -14 },
-        { x: 14, z: 14 },
-        { x: -14, z: 14 },
+        { x: -half, z: -half },
+        { x: half, z: -half },
+        { x: half, z: half },
+        { x: -half, z: half },
       ],
       height: 6,
     }
@@ -3021,6 +3137,7 @@ export class Stage {
     el.addEventListener('pointerup', this.onPointerUp)
     el.addEventListener('pointermove', this.onPointerMove)
     el.addEventListener('pointerleave', this.onPointerLeave)
+    el.addEventListener('pointercancel', this.onPointerCancel)
     el.addEventListener('dblclick', this.onDblClick)
     el.addEventListener('contextmenu', this.onContextMenu)
     document.addEventListener('mousemove', this.onWalkMouseMove)
@@ -3103,6 +3220,28 @@ export class Stage {
       return
     }
     if (this.readOnly) return
+
+    // 绘制场馆 / 展台：左键按下记录矩形起点，拖动超过阈值后切换为拉框
+    if (this.rectEnabled && this.mode === 'draw' && e.button === 0) {
+      if (!e.isPrimary) {
+        // 第二根手指按下：放弃拉框，交给双指缩放 / 平移
+        this.cancelRectDrag()
+        this.down = null
+        return
+      }
+      if (!this.infraKind && !this.pasteGhost) {
+        const p = this.pickGround(e)
+        if (p) {
+          this.rectDrag = {
+            start: p,
+            current: p,
+            sx: e.clientX,
+            sy: e.clientY,
+            active: false,
+          }
+        }
+      }
+    }
 
     // 放置基础设施时，右键旋转 90°
     if (this.mode === 'draw' && this.infraKind && e.button === 2) {
@@ -3250,6 +3389,18 @@ export class Stage {
       return
     }
     if (this.readOnly) return
+
+    // 拉框结束：交给上层生成矩形轮廓；未拖动则继续按普通点击放点
+    const rectDrag = this.rectDrag
+    if (rectDrag) {
+      this.rectDrag = null
+      if (this.rectPreview) this.rectPreview.group.visible = false
+      if (rectDrag.active) {
+        this.opts.onDrawRect?.(rectDrag.start, rectDrag.current)
+        this.host.style.cursor = 'crosshair'
+        return
+      }
+    }
 
     const infraDrag = this.infraDrag
     if (infraDrag) {
@@ -3483,6 +3634,23 @@ export class Stage {
       this.updateDrag(e)
       return
     }
+    if (this.rectDrag && this.mode === 'draw') {
+      const rd = this.rectDrag
+      if (!rd.active && Math.hypot(e.clientX - rd.sx, e.clientY - rd.sy) > 6) {
+        rd.active = true
+      }
+      if (rd.active) {
+        const p = this.pickGround(e)
+        if (p) {
+          rd.current = p
+          this.updateRectPreview(rd.start, p)
+          this.opts.onHover?.(p)
+        }
+        this.snapRing.visible = false
+        this.rubber.visible = false
+        return
+      }
+    }
     if (this.mode === 'idle') {
       if (this.pickInfraAt(e.clientX, e.clientY)) {
         this.host.style.cursor = 'pointer'
@@ -3536,6 +3704,14 @@ export class Stage {
     this.snapRing.visible = false
     this.rubber.visible = false
     this.updateSnapGuide(null)
+    this.opts.onHover?.(null)
+  }
+
+  private onPointerCancel = () => {
+    this.down = null
+    this.cancelRectDrag()
+    this.snapRing.visible = false
+    this.rubber.visible = false
     this.opts.onHover?.(null)
   }
 
