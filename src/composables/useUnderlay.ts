@@ -34,7 +34,7 @@ function readImage(src: string): Promise<HTMLImageElement> {
 export function useUnderlay(options: UnderlayOptions) {
   /** 上传底图：限制格式 / 大小，长边超过 2048 时压缩，初始铺满网格并保持比例 */
   async function addUnderlay(file: File) {
-    if (options.renderOnly.value) return
+    if (options.renderOnly.value || options.underlay.value?.locked === true) return
     if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
       options.toast('仅支持 JPG / PNG 图片')
       return
@@ -128,7 +128,13 @@ export function useUnderlay(options: UnderlayOptions) {
 
   /** 把底图移回网格中心，尺寸保持不变 */
   function centerUnderlay() {
-    if (options.renderOnly.value || !options.underlay.value) return
+    if (
+      options.renderOnly.value ||
+      !options.underlay.value ||
+      options.underlay.value.locked === true
+    ) {
+      return
+    }
     options.underlay.value = clampUnderlaySpec({
       ...options.underlay.value,
       x: 0,
@@ -138,7 +144,13 @@ export function useUnderlay(options: UnderlayOptions) {
   }
 
   function removeUnderlay() {
-    if (options.renderOnly.value || !options.underlay.value) return
+    if (
+      options.renderOnly.value ||
+      !options.underlay.value ||
+      options.underlay.value.locked === true
+    ) {
+      return
+    }
     options.underlay.value = null
     options.toast('已移除底图')
   }

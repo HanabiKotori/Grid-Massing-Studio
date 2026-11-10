@@ -986,6 +986,16 @@ input {
   color: var(--ink);
 }
 
+.mini:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mini:disabled:hover {
+  border-color: var(--line);
+  color: var(--ink-2);
+}
+
 .mini-hint {
   margin-left: auto;
   font-size: 10px;
@@ -2635,6 +2645,339 @@ input[type='range']::-moz-range-thumb {
   color: var(--ink-2);
 }
 
+/* 自动巡游状态 / 移动端控制：固定在顶部，避免与底部摇杆 / 按钮挤在一起 */
+.walk-auto {
+  position: absolute;
+  left: 50%;
+  bottom: 74px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(14px) saturate(150%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.walk-auto.active {
+  border-color: #cfdaff;
+  background: rgba(240, 245, 255, 0.92);
+}
+
+.walk-auto b {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.walk-auto span {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.walk-auto kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  margin-right: 2px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+}
+
+.walk-mini {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(25, 27, 31, 0.82);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+.walk-loop {
+  width: auto;
+  min-width: 48px;
+  margin-left: 3px;
+  padding: 0 9px;
+}
+
+.walk-takeover {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #cfdaff;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.walk-speed {
+  min-width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 当前参观展台 / 下一站预告 */
+.walk-tour-info {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 13;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 274px;
+  pointer-events: none;
+}
+
+.walk-tour-card {
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(14px) saturate(150%);
+}
+
+.walk-tour-card.current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--line);
+}
+
+.walk-tour-logo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 5px;
+  border-radius: 9px;
+  background: #fff;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.walk-tour-logo img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.walk-tour-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.walk-tour-kicker {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--accent-ink);
+}
+
+.walk-tour-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.walk-tour-title b {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.walk-tour-title em {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 9.5px;
+  font-style: normal;
+}
+
+.walk-tour-exhibitor {
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.walk-tour-area {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.walk-tour-card.next {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 11px;
+  background: rgba(25, 27, 31, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.walk-tour-card.next .walk-tour-kicker {
+  flex: none;
+  color: #b9d4ff;
+}
+
+.walk-tour-next-main {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.walk-tour-next-main b {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.walk-tour-next-main span {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.walk-tour-card.next.empty {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 10.5px;
+}
+
+.is-mobile .walk-auto {
+  left: 50%;
+  top: 8px;
+  bottom: auto;
+  gap: 9px;
+  padding: 6px 10px;
+  pointer-events: auto;
+}
+
+.is-mobile .walk-auto .walk-action {
+  height: 32px;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
+.is-mobile .walk-tour-info {
+  top: auto;
+  right: 12px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: auto;
+  width: min(240px, 62vw);
+  transform: none;
+  gap: 5px;
+}
+
+.is-mobile .walk-tour-card.current {
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+
+.is-mobile .walk-tour-logo {
+  width: 40px;
+  height: 40px;
+  padding: 4px;
+  border-radius: 7px;
+}
+
+.is-mobile .walk-tour-body {
+  gap: 1px;
+}
+
+.is-mobile .walk-tour-kicker {
+  font-size: 9px;
+}
+
+.is-mobile .walk-tour-title {
+  gap: 4px;
+}
+
+.is-mobile .walk-tour-title b {
+  font-size: 12px;
+}
+
+.is-mobile .walk-tour-title em {
+  padding: 0 4px;
+  font-size: 8.5px;
+}
+
+.is-mobile .walk-tour-exhibitor {
+  font-size: 10px;
+}
+
+.is-mobile .walk-tour-area {
+  font-size: 9.5px;
+}
+
+.is-mobile .walk-tour-card.next {
+  padding: 5px 8px;
+  border-radius: 9px;
+}
+
+.is-mobile .walk-tour-next-main {
+  gap: 5px;
+}
+
+.is-mobile .walk-tour-next-main b {
+  font-size: 11px;
+}
+
+.is-mobile .walk-tour-next-main span {
+  font-size: 9.5px;
+}
+
+/* 窄横屏时卡片与按钮横向会相交，卡片上移让开按钮 */
+@media (max-width: 780px) {
+  .is-mobile .walk-tour-info {
+    bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+}
+
+/* 较窄窗口 / 横屏时把信息卡下移，避开顶部时间与左侧工具栏 */
+@media (max-width: 1200px) {
+  .walk-tour-info {
+    top: 96px;
+    right: 150px;
+  }
+}
+
 .walk-hud kbd {
   display: inline-flex;
   align-items: center;
@@ -2814,7 +3157,7 @@ input[type='range']::-moz-range-thumb {
 .walk-mobile-actions {
   position: absolute;
   left: 50%;
-  bottom: 30px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 30;
   display: flex;

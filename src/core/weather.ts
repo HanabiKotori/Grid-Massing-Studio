@@ -76,7 +76,7 @@ export const WEATHER_LABELS: Record<WeatherKind, string> = WEATHER_OPTIONS.reduc
 
 export const WEATHER_PRESETS: Record<WeatherKind, WeatherPreset> = {
   clear: {
-    skyDay: 0xf1f0ec,
+    skyDay: 0x6fbcee,
     skyNight: 0x172136,
     fogNear: 220,
     fogFar: 620,
@@ -90,7 +90,7 @@ export const WEATHER_PRESETS: Record<WeatherKind, WeatherPreset> = {
     wind: 0.08,
   },
   partly: {
-    skyDay: 0xe9ecec,
+    skyDay: 0x82c1e6,
     skyNight: 0x1b2740,
     fogNear: 200,
     fogFar: 600,
@@ -104,7 +104,7 @@ export const WEATHER_PRESETS: Record<WeatherKind, WeatherPreset> = {
     wind: 0.15,
   },
   cloudy: {
-    skyDay: 0xd8dde0,
+    skyDay: 0x9abdd6,
     skyNight: 0x242d3b,
     fogNear: 180,
     fogFar: 540,

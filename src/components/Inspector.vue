@@ -811,18 +811,30 @@ function onLogoChange(id: string, e: Event) {
           </button>
         </div>
         <div class="underlay-actions">
-          <button class="mini" @click="pickUnderlay">
+          <button
+            class="mini"
+            :disabled="underlay?.locked"
+            :title="underlay?.locked ? '底图已锁定，请先解锁' : ''"
+            @click="pickUnderlay"
+          >
             {{ underlay ? '更换图片' : '上传图片' }}
           </button>
           <button
             v-if="underlay"
             class="mini"
-            title="将底图移回网格中心，尺寸保持不变"
+            :disabled="underlay.locked"
+            :title="underlay.locked ? '底图已锁定，请先解锁' : '将底图移回网格中心，尺寸保持不变'"
             @click="emit('center-underlay')"
           >
             居中
           </button>
-          <button v-if="underlay" class="mini" @click="emit('remove-underlay')">
+          <button
+            v-if="underlay"
+            class="mini"
+            :disabled="underlay.locked"
+            :title="underlay.locked ? '底图已锁定，请先解锁' : ''"
+            @click="emit('remove-underlay')"
+          >
             移除
           </button>
         </div>
@@ -851,7 +863,7 @@ function onLogoChange(id: string, e: Event) {
         </label>
         <p class="underlay-tip">
           Ctrl + 滚轮逐格缩放（每次 1 m）· Ctrl + 左键逐格拖动<br />
-          底图尺寸和位置都不受网格限制，可以放大并拖出网格；拖丢后点「居中」找回。锁定后 Ctrl 拖动 / 滚轮对底图无效。
+          底图尺寸和位置都不受网格限制，可以放大并拖出网格；拖丢后点「居中」找回。锁定后 Ctrl 拖动 / 滚轮、更换 / 居中 / 移除均禁用。
         </p>
       </div>
         </div>

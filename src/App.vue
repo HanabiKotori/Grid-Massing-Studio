@@ -77,6 +77,10 @@ const {
   rotateDeg,
   walkState,
   walkView,
+  walkAuto,
+  walkAutoSpeed,
+  walkAutoLoop,
+  walkTourInfo,
   presentationOn,
   walkPose,
   minimapExpanded,
@@ -731,6 +735,15 @@ onMounted(() => {
     onRotateDrag: (deg) => (rotateDeg.value = deg),
     onSpaceNav: (on) => (spaceNavActive.value = on),
     onWalkView: (v) => (walkView.value = v),
+    onWalkAuto: (on) => {
+      walkAuto.value = on
+      if (!on) walkTourInfo.value = null
+    },
+    onWalkAutoFail: () =>
+      toast('自动巡游：未找到可通行路线，请先在场馆内留出通道'),
+    onWalkTourInfo: (info) => (walkTourInfo.value = info),
+    onWalkAutoSpeed: (v) => (walkAutoSpeed.value = Math.round(v * 10) / 10),
+    onWalkAutoLoop: (v) => (walkAutoLoop.value = v),
     onWeatherShortcut: () => openWeather(),
     onHelp: () => openHelp(),
     onWalkState: (s) => {
@@ -740,6 +753,8 @@ onMounted(() => {
         toolMenu.value = null
       }
       if (s === 'off') {
+        walkAuto.value = false
+        walkTourInfo.value = null
         toolsCollapsed.value = false
         if (isMobile.value) void exitWalkFullscreen()
       }
@@ -765,6 +780,8 @@ onMounted(() => {
     },
   })
   stage.setMode('idle')
+  stage.setWalkAutoSpeed(walkAutoSpeed.value)
+  stage.setWalkAutoLoop(walkAutoLoop.value)
   stage.setSunProgress(sunProgress.value)
   stage.setWeather(weather.value)
   stage.setParticleDensities(particleDensities.value)
@@ -799,6 +816,21 @@ onMounted(() => {
     }
   }
 })
+
+function toggleWalkAuto() {
+  stage?.toggleWalkAuto()
+}
+
+function changeWalkAutoSpeed(value: number) {
+  const v = Math.min(2, Math.max(0.5, Math.round(value * 10) / 10))
+  walkAutoSpeed.value = v
+  stage?.setWalkAutoSpeed(v)
+}
+
+function changeWalkAutoLoop(value: boolean) {
+  walkAutoLoop.value = value
+  stage?.setWalkAutoLoop(value)
+}
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
@@ -942,7 +974,14 @@ onBeforeUnmount(() => {
       :is-mobile="isMobile"
       :space-nav-active="spaceNavActive"
       :show-rotate-hint="showRotateHint"
+      :walk-auto="walkAuto"
+      :walk-auto-speed="walkAutoSpeed"
+      :walk-auto-loop="walkAutoLoop"
+      :walk-tour-info="walkTourInfo"
       :get-stage="() => stage"
+      @toggle-auto="toggleWalkAuto"
+      @update:speed="changeWalkAutoSpeed"
+      @update:loop="changeWalkAutoLoop"
       @cancel-rotate="cancelRotateHint"
     />
 

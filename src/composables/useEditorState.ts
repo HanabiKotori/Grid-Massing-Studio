@@ -1,5 +1,6 @@
 import { computed, ref, shallowRef } from 'vue'
 import type { QualityLevel, WalkState, WalkView } from '../core/Stage'
+import type { WalkTourInfo } from '../core/walkTour'
 import { polygonArea } from '../core/polygon'
 import type {
   Booth,
@@ -67,6 +68,10 @@ export function useEditorState() {
   const rotateDeg = ref<number | null>(null)
   const walkState = ref<WalkState>('off')
   const walkView = ref<WalkView>('first')
+  const walkAuto = ref(false)
+  const walkAutoSpeed = ref(0.8)
+  const walkAutoLoop = ref(true)
+  const walkTourInfo = ref<WalkTourInfo | null>(null)
   const presentationOn = ref(false)
   const walkPose = ref<{ x: number; z: number; yaw: number } | null>(null)
   const minimapExpanded = ref(false)
@@ -239,6 +244,10 @@ export function useEditorState() {
     rotateDeg,
     walkState,
     walkView,
+    walkAuto,
+    walkAutoSpeed,
+    walkAutoLoop,
+    walkTourInfo,
     presentationOn,
     walkPose,
     minimapExpanded,

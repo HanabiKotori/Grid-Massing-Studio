@@ -27,8 +27,16 @@ import {
   isFurnitureKind,
 } from './infra'
 import { CloudShadow } from './CloudShadow'
+import { SkyClouds } from './SkyClouds'
 import { UNDERLAY_MIN_SIZE, clampUnderlaySpec } from './underlay'
 import { WeatherSystem } from './WeatherSystem'
+import {
+  buildWalkTour,
+  walkTourStopInfo,
+  type WalkTourInfo,
+  type WalkTourStop,
+  type WalkTourPoint,
+} from './walkTour'
 import {
   WEATHER_PRESETS,
   type ParticleDensities,
@@ -91,6 +99,15 @@ export interface StageOptions {
   onSpaceNav?: (on: boolean) => void
   onWalkState?: (state: WalkState) => void
   onWalkView?: (view: WalkView) => void
+  /** 自动巡游开关变化 */
+  onWalkAuto?: (on: boolean) => void
+  /** 无法生成巡游路线 */
+  onWalkAutoFail?: () => void
+  /** 自动巡游当前 / 下一站信息 */
+  onWalkTourInfo?: (info: WalkTourInfo) => void
+  /** 键盘调整巡游速度 / 循环时同步到界面 */
+  onWalkAutoSpeed?: (speed: number) => void
+  onWalkAutoLoop?: (loop: boolean) => void
   /** 漫游中按住 M 临时放大缩略地图 */
   onMinimapHold?: (expanded: boolean) => void
   onHelp?: () => void
@@ -212,6 +229,8 @@ const JUMP_SPEED = 5.6
 /** 与场馆墙体保持的安全距离（墙体厚 0.24m） */
 const WALL_PAD = 0.5
 const MOUSE_SENS = 0.0021
+/** 自动巡游每个展台停留时长：留足看名称 / 展商 / 面积的时间 */
+const WALK_TOUR_DWELL = 6000
 
 interface DragState {
   id: string
@@ -494,6 +513,7 @@ export class Stage {
   private weatherVisibility = 1
   private weatherSystem!: WeatherSystem
   private cloudShadow!: CloudShadow
+  private skyClouds!: SkyClouds
   private sunBaseIntensity = 0
   private sunDayFactor = 0
   /** 回到当前时间时的光照过渡 */
@@ -649,6 +669,18 @@ export class Stage {
   private walkMove = { x: 0, z: 0 }
   private walkMoveBoost = 0
   private walkView: WalkView = 'first'
+  // 自动巡游
+  private walkAuto = false
+  private walkAutoSpeed = 0.8
+  private walkAutoLoop = true
+  private walkTourInfoKey = ''
+  private walkTour: {
+    points: WalkTourPoint[]
+    index: number
+    waiting: boolean
+    waitUntil: number
+    lastStopIndex: number
+  } | null = null
   private walkBody: THREE.Group | null = null
   private walkHead: THREE.Object3D | null = null
   private walkArmL: THREE.Object3D | null = null
@@ -860,6 +892,10 @@ export class Stage {
     this.cloudShadow = new CloudShadow()
     this.scene.add(this.cloudShadow.group)
     this.cloudShadow.setWeather(this.weather)
+
+    this.skyClouds = new SkyClouds()
+    this.scene.add(this.skyClouds.group)
+    this.skyClouds.setWeather(this.weather)
 
     // 地面
     const groundGeo = new THREE.PlaneGeometry(3000, 3000)
@@ -4119,6 +4155,113 @@ export class Stage {
     this.opts.onWalkState?.('pick')
   }
 
+  /** 自动巡游速度倍率：0.5–2 */
+  setWalkAutoSpeed(speed: number) {
+    this.walkAutoSpeed = Math.max(0.5, Math.min(2, speed))
+    this.opts.onWalkAutoSpeed?.(this.walkAutoSpeed)
+  }
+
+  setWalkAutoLoop(loop: boolean) {
+    this.walkAutoLoop = loop
+    this.opts.onWalkAutoLoop?.(loop)
+  }
+
+  isWalkAuto() {
+    return this.walkAuto
+  }
+
+  private currentWalkTourStop(): WalkTourStop | null {
+    const tour = this.walkTour
+    if (!tour || !tour.waiting) return null
+    return tour.points[tour.index]?.stop ?? null
+  }
+
+  private nextWalkTourStop(): WalkTourStop | null {
+    const tour = this.walkTour
+    if (!tour) return null
+    const from = tour.waiting ? tour.index + 1 : tour.index
+    for (let i = from; i < tour.points.length; i++) {
+      const stop = tour.points[i].stop
+      if (stop) return stop
+    }
+    if (!this.walkAutoLoop) return null
+    // 循环时下一站回到本轮的第一站
+    for (let i = 0; i < tour.points.length; i++) {
+      const stop = tour.points[i].stop
+      if (stop) return stop
+    }
+    return null
+  }
+
+  private emitWalkTourInfo(force = false) {
+    if (!this.walkAuto || !this.walkTour) {
+      if (force || this.walkTourInfoKey) {
+        this.walkTourInfoKey = ''
+        this.opts.onWalkTourInfo?.({ current: null, next: null })
+      }
+      return
+    }
+    const current = this.currentWalkTourStop()
+    const next = this.nextWalkTourStop()
+    const key = `${current?.boothId ?? ''}|${next?.boothId ?? ''}|${current ? 1 : 0}`
+    if (!force && key === this.walkTourInfoKey) return
+    this.walkTourInfoKey = key
+    this.opts.onWalkTourInfo?.({
+      current: current ? walkTourStopInfo(current) : null,
+      next: next ? walkTourStopInfo(next) : null,
+    })
+  }
+
+  /** 开启 / 停止自动巡游；开启失败时返回 false */
+  toggleWalkAuto(): boolean {
+    if (this.walkState !== 'walk') return false
+    if (this.walkAuto) {
+      this.stopWalkAuto()
+      return true
+    }
+    const venue = this.venue
+    const inner = this.walkInnerPts
+    if (!venue || !inner) {
+      this.opts.onWalkAutoFail?.()
+      return false
+    }
+    const route = buildWalkTour({
+      venue,
+      inner,
+      booths: [...this.boothSpecs.values()],
+      infras: this.infras,
+      start: { x: this.walkPos.x, z: this.walkPos.z },
+      gridHalf: GRID_HALF,
+    })
+    if (!route || route.points.length < 2) {
+      this.opts.onWalkAutoFail?.()
+      return false
+    }
+    this.walkTour = {
+      points: route.points,
+      index: 1,
+      waiting: false,
+      waitUntil: 0,
+      lastStopIndex: route.lastStopIndex,
+    }
+    this.walkAuto = true
+    this.walkKeys.clear()
+    this.walkMove = { x: 0, z: 0 }
+    this.walkMoveBoost = 0
+    this.opts.onWalkAuto?.(true)
+    this.emitWalkTourInfo(true)
+    return true
+  }
+
+  stopWalkAuto() {
+    if (!this.walkAuto) return
+    this.walkAuto = false
+    this.walkTour = null
+    this.walkKeys.clear()
+    this.opts.onWalkAuto?.(false)
+    this.emitWalkTourInfo(true)
+  }
+
   /** 退出漫游，或取消选点 */
   stopWalk() {
     if (this.walkState === 'walk' || this.walkState === 'enter') this.exitWalk()
@@ -4431,6 +4574,7 @@ export class Stage {
 
   private exitWalk(restore = true) {
     if (this.walkState === 'off') return
+    this.stopWalkAuto()
     this.walkState = 'off'
     this.walkEnter = null
     this.walkViewTransition = null
@@ -4469,7 +4613,7 @@ export class Stage {
   }
 
   private onWalkMouseMove = (e: MouseEvent) => {
-    if (this.walkState !== 'walk') return
+    if (this.walkState !== 'walk' || this.walkAuto) return
     if (document.pointerLockElement !== this.renderer.domElement) return
     this.walkYaw -= e.movementX * MOUSE_SENS
     this.walkPitch -= e.movementY * MOUSE_SENS
@@ -4508,6 +4652,33 @@ export class Stage {
     // 拦截页面级快捷键（删除、网格开关等）
     e.stopPropagation()
     const key = e.key.toLowerCase()
+
+    // E 切换自动巡游；[ / ] 调整速度；L 切换循环
+    if (key === 'e' && !e.repeat) {
+      e.preventDefault()
+      this.toggleWalkAuto()
+      return
+    }
+    if (key === '[' || key === ']') {
+      e.preventDefault()
+      this.setWalkAutoSpeed(this.walkAutoSpeed + (key === ']' ? 0.1 : -0.1))
+      return
+    }
+    if (key === 'l' && !e.repeat) {
+      e.preventDefault()
+      this.setWalkAutoLoop(!this.walkAutoLoop)
+      return
+    }
+
+    // 手动移动键立即接管自动巡游
+    if (
+      this.walkAuto &&
+      ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(
+        key,
+      )
+    ) {
+      this.stopWalkAuto()
+    }
 
     // 按住 M 放大并居中缩略地图
     if (key === 'm' && !e.repeat) {
@@ -4879,11 +5050,12 @@ export class Stage {
     this.walkMove.x = clamp(x)
     this.walkMove.z = clamp(z)
     this.walkMoveBoost = clamp(boost)
+    if (this.walkAuto && Math.hypot(x, z) > 0.12) this.stopWalkAuto()
   }
 
   /** 移动端右摇杆：传入屏幕像素增量 */
   lookWalk(dx: number, dy: number) {
-    if (this.walkState !== 'walk') return
+    if (this.walkState !== 'walk' || this.walkAuto) return
     const sens = 0.0045
     this.walkYaw -= dx * sens
     this.walkPitch -= dy * sens
@@ -4894,6 +5066,7 @@ export class Stage {
   /** 移动端跳跃按钮 */
   jumpWalk() {
     if (this.walkState !== 'walk' || !this.walkOnGround) return
+    this.stopWalkAuto()
     this.walkOnGround = false
     this.walkVelY = JUMP_SPEED
   }
@@ -4905,6 +5078,7 @@ export class Stage {
 
   private returnWalkHome() {
     if (this.walkState !== 'walk' || this.walkReturn) return
+    this.stopWalkAuto()
     this.walkKeys.clear()
     this.walkMove = { x: 0, z: 0 }
     this.walkMoveBoost = 0
@@ -4926,6 +5100,11 @@ export class Stage {
     if (this.walkUiPaused) {
       this.updateWalkBody(0, false)
       this.applyWalkCamera()
+      return
+    }
+
+    if (this.walkAuto && this.walkTour) {
+      this.updateWalkAuto(dt)
       return
     }
 
@@ -4998,6 +5177,135 @@ export class Stage {
 
     this.updateWalkBody(dt, !!(f || s))
     this.applyWalkCamera()
+  }
+
+  private approach(current: number, target: number, maxStep: number) {
+    const d = target - current
+    return current + Math.max(-maxStep, Math.min(maxStep, d))
+  }
+
+  private approachAngle(current: number, target: number, maxStep: number) {
+    let d = target - current
+    d = ((d + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI
+    return current + Math.max(-maxStep, Math.min(maxStep, d))
+  }
+
+  private updateWalkAuto(dt: number) {
+    const tour = this.walkTour
+    if (!tour) {
+      this.stopWalkAuto()
+      return
+    }
+    const now = performance.now()
+    this.emitWalkTourInfo()
+
+    // 单次巡游在最后一个展台停留结束后，或中途关闭循环时，不再走回程
+    if (!this.walkAutoLoop && tour.index > tour.lastStopIndex) {
+      this.stopWalkAuto()
+      this.updateWalkBody(0, false)
+      this.applyWalkCamera()
+      return
+    }
+
+    if (tour.waiting) {
+      const stop = tour.points[tour.index]?.stop
+      if (stop) {
+        const dx = stop.lookAt.x - this.walkPos.x
+        const dz = stop.lookAt.z - this.walkPos.z
+        const dist = Math.hypot(dx, dz)
+        if (dist > 0.2) {
+          const targetYaw = Math.atan2(-dx, -dz)
+          this.walkYaw = this.approachAngle(this.walkYaw, targetYaw, dt * 3.2)
+        }
+        const eyeY = this.walkPos.y
+        const targetPitch = Math.atan2(1.2 - eyeY, Math.max(0.6, dist))
+        this.walkPitch = this.approach(this.walkPitch, targetPitch, dt * 2.4)
+      }
+      if (now >= tour.waitUntil) {
+        tour.waiting = false
+        if (!this.walkAutoLoop && tour.index >= tour.lastStopIndex) {
+          this.stopWalkAuto()
+          this.updateWalkBody(0, false)
+          this.applyWalkCamera()
+          return
+        }
+        tour.index++
+        if (tour.index >= tour.points.length) {
+          this.finishWalkTour()
+          this.updateWalkBody(0, false)
+          this.applyWalkCamera()
+          return
+        }
+        this.emitWalkTourInfo()
+      }
+      this.updateWalkBody(0, false)
+      this.applyWalkCamera()
+      return
+    }
+
+    if (tour.index >= tour.points.length) {
+      this.finishWalkTour()
+      this.updateWalkBody(0, false)
+      this.applyWalkCamera()
+      return
+    }
+
+    const target = tour.points[tour.index]
+    const dx = target.x - this.walkPos.x
+    const dz = target.z - this.walkPos.z
+    const dist = Math.hypot(dx, dz)
+
+    if (dist < 0.12) {
+      if (target.stop) {
+        tour.waiting = true
+        tour.waitUntil = now + WALK_TOUR_DWELL
+        this.walkKeys.clear()
+        this.emitWalkTourInfo(true)
+      } else {
+        tour.index++
+      }
+      this.updateWalkBody(0, false)
+      this.applyWalkCamera()
+      return
+    }
+
+    const speed = WALK_SPEED * 0.72 * this.walkAutoSpeed
+    const step = Math.min(dist, speed * dt)
+    const nx = this.walkPos.x + (dx / dist) * step
+    const nz = this.walkPos.z + (dz / dist) * step
+    const feet = this.walkPos.y - EYE_HEIGHT
+    if (this.walkBlocked(nx, nz, feet)) {
+      this.stopWalkAuto()
+      this.updateWalkBody(0, false)
+      this.applyWalkCamera()
+      return
+    }
+
+    this.walkPos.x = nx
+    this.walkPos.z = nz
+    const support = this.walkSupport(nx, nz, feet)
+    this.walkPos.y +=
+      (support + EYE_HEIGHT - this.walkPos.y) * Math.min(1, dt * 10)
+    this.walkVelY = 0
+    this.walkOnGround = true
+
+    const targetYaw = Math.atan2(-dx, -dz)
+    this.walkYaw = this.approachAngle(this.walkYaw, targetYaw, dt * 4.2)
+    this.walkPitch = this.approach(this.walkPitch, 0, dt * 2)
+
+    this.updateWalkBody(dt, true)
+    this.applyWalkCamera()
+  }
+
+  private finishWalkTour() {
+    const tour = this.walkTour
+    if (!tour) return
+    if (this.walkAutoLoop && tour.points.length > 2) {
+      tour.index = 1
+      tour.waiting = false
+      return
+    }
+    this.stopWalkAuto()
   }
 
   // ---------- 展示模式 ----------
@@ -5103,6 +5411,7 @@ export class Stage {
     const moonIntensityWas = this.moonLight.intensity
     const weatherVisibleWas = this.weatherSystem.group.visible
     const cloudVisibleWas = this.cloudShadow.group.visible
+    const skyCloudVisibleWas = this.skyClouds.group.visible
     this.gridGroup.visible = false
     // 刻度线在汇报图中改用更清晰的 2D 描边，避免 WebGL 细线过淡
     this.dimensionRoot.visible = false
@@ -5110,6 +5419,7 @@ export class Stage {
     this.scene.fog = null
     this.weatherSystem.group.visible = false
     this.cloudShadow.group.visible = false
+    this.skyClouds.group.visible = false
     this.keyLight.position.set(cx + 90, 180, cz + 120)
     this.keyLight.target.position.set(cx, 0, cz)
     this.keyLight.target.updateMatrixWorld()
@@ -5152,6 +5462,7 @@ export class Stage {
       this.scene.fog = fogWas
       this.weatherSystem.group.visible = weatherVisibleWas
       this.cloudShadow.group.visible = cloudVisibleWas
+      this.skyClouds.group.visible = skyCloudVisibleWas
       this.keyLight.position.copy(keyPosWas)
       this.keyLight.target.position.copy(keyTargetWas)
       this.keyLight.target.updateMatrixWorld()
@@ -5499,6 +5810,7 @@ export class Stage {
     this.weather = kind
     this.weatherSystem.setWeather(kind)
     this.cloudShadow.setWeather(kind)
+    this.skyClouds.setWeather(kind)
     this.updateSun()
     this.opts.onWeatherChange?.(kind)
   }
@@ -5821,6 +6133,7 @@ export class Stage {
     this.advanceSun(dt)
     const indoor = this.isUnderClosedVenue()
     this.cloudShadow.update(dt, this.sunDayFactor, indoor)
+    this.skyClouds.update(dt, this.sunDayFactor, this.camera.position.y)
     // 云层漂移与主光摆动使用同一层相位，避免云影和明暗变化不同步
     this.keyLight.intensity = this.sunBaseIntensity * this.cloudShadow.lightFactor
 
@@ -5895,6 +6208,7 @@ export class Stage {
     this.labelRenderer.domElement.remove()
     this.weatherSystem.dispose()
     this.cloudShadow.dispose()
+    this.skyClouds.dispose()
     disposeDeep(this.scene)
     this.renderer.dispose()
     if (el.parentElement) el.parentElement.removeChild(el)
