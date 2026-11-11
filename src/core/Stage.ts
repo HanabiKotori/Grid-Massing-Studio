@@ -70,6 +70,37 @@ function detectGpuQuality(gpu: string): QualityLevel {
 export type WalkState = 'off' | 'pick' | 'enter' | 'walk'
 export type WalkView = 'first' | 'third'
 
+/** 多人漫游同步的本地状态，y 为脚底高度 */
+export interface WalkNetState {
+  x: number
+  z: number
+  y: number
+  yaw: number
+  pitch: number
+  view: WalkView
+  auto: boolean
+}
+
+export interface RemoteWalkPlayer {
+  id: string
+  nickname: string
+  state: WalkNetState
+}
+
+interface RemoteAvatar {
+  group: THREE.Group
+  body: THREE.Mesh
+  visor: THREE.Mesh
+  labelEl: HTMLDivElement
+  target: THREE.Vector3
+  yaw: number
+  yawTarget: number
+  pitch: number
+  pitchTarget: number
+  nickname: string
+  color: THREE.Color
+}
+
 export interface BoothPastePayload {
   booths: Booth[]
   infras: Infra[]
@@ -105,6 +136,10 @@ export interface StageOptions {
   onWalkAutoFail?: () => void
   /** 自动巡游当前 / 下一站信息 */
   onWalkTourInfo?: (info: WalkTourInfo) => void
+  /** 自动巡游时按 U 隐藏 / 恢复除巡游栏外的界面 */
+  onWalkUiHidden?: (hidden: boolean) => void
+  /** 是否允许自动巡游时按 U 清屏；多人房间关闭 */
+  allowWalkUiHidden?: boolean
   /** 键盘调整巡游速度 / 循环时同步到界面 */
   onWalkAutoSpeed?: (speed: number) => void
   onWalkAutoLoop?: (loop: boolean) => void
@@ -132,6 +167,8 @@ export interface StageOptions {
   onToggleGate?: (id: string) => void
   /** 漫游中 Alt+W 请求打开天气面板 */
   onWeatherShortcut?: () => void
+  /** 漫游中按 Y 打开消息输入 */
+  onMessageShortcut?: () => void
   /** 手动天气变化 */
   onWeatherChange?: (kind: WeatherKind) => void
   /** 底图被 Ctrl + 拖动 / 滚轮缩放后回传新的位置与尺寸 */
@@ -673,6 +710,8 @@ export class Stage {
   private walkAuto = false
   private walkAutoSpeed = 0.8
   private walkAutoLoop = true
+  private walkUiHidden = false
+  private remotePlayers = new Map<string, RemoteAvatar>()
   private walkTourInfoKey = ''
   private walkTour: {
     points: WalkTourPoint[]
@@ -4170,6 +4209,14 @@ export class Stage {
     return this.walkAuto
   }
 
+  /** 自动巡游时隐藏 / 恢复除巡游栏外的界面 */
+  setWalkUiHidden(hidden: boolean) {
+    if (hidden && !this.walkAuto) return
+    if (this.walkUiHidden === hidden) return
+    this.walkUiHidden = hidden
+    this.opts.onWalkUiHidden?.(hidden)
+  }
+
   private currentWalkTourStop(): WalkTourStop | null {
     const tour = this.walkTour
     if (!tour || !tour.waiting) return null
@@ -4245,6 +4292,7 @@ export class Stage {
       lastStopIndex: route.lastStopIndex,
     }
     this.walkAuto = true
+    this.setWalkUiHidden(false)
     this.walkKeys.clear()
     this.walkMove = { x: 0, z: 0 }
     this.walkMoveBoost = 0
@@ -4256,6 +4304,7 @@ export class Stage {
   stopWalkAuto() {
     if (!this.walkAuto) return
     this.walkAuto = false
+    this.setWalkUiHidden(false)
     this.walkTour = null
     this.walkKeys.clear()
     this.opts.onWalkAuto?.(false)
@@ -4575,6 +4624,7 @@ export class Stage {
   private exitWalk(restore = true) {
     if (this.walkState === 'off') return
     this.stopWalkAuto()
+    this.setWalkUiHidden(false)
     this.walkState = 'off'
     this.walkEnter = null
     this.walkViewTransition = null
@@ -4622,6 +4672,19 @@ export class Stage {
   }
 
   private onWalkKeyDown = (e: KeyboardEvent) => {
+    // 隐藏界面时，任意按键只负责恢复界面，不触发其他操作
+    if (
+      this.walkState === 'walk' &&
+      this.walkAuto &&
+      this.walkUiHidden &&
+      this.opts.allowWalkUiHidden !== false
+    ) {
+      e.preventDefault()
+      e.stopPropagation()
+      this.setWalkUiHidden(false)
+      return
+    }
+
     // 漫游中 F1 先退出漫游，再把帮助面板交给 App 打开
     if (e.key === 'F1') {
       if (this.walkState === 'off') return
@@ -4652,6 +4715,25 @@ export class Stage {
     // 拦截页面级快捷键（删除、网格开关等）
     e.stopPropagation()
     const key = e.key.toLowerCase()
+
+    // 自动巡游时按 U 隐藏界面
+    if (
+      this.walkAuto &&
+      key === 'u' &&
+      !e.repeat &&
+      this.opts.allowWalkUiHidden !== false
+    ) {
+      e.preventDefault()
+      this.setWalkUiHidden(true)
+      return
+    }
+
+    // Y 打开消息输入
+    if (key === 'y' && !e.repeat) {
+      e.preventDefault()
+      this.opts.onMessageShortcut?.()
+      return
+    }
 
     // E 切换自动巡游；[ / ] 调整速度；L 切换循环
     if (key === 'e' && !e.repeat) {
@@ -5798,6 +5880,170 @@ export class Stage {
     return { x: this.walkPos.x, z: this.walkPos.z, yaw: this.walkYaw }
   }
 
+  /** 多人联机：从指定位置直接进入漫游 */
+  enterWalkAt(p: Pt) {
+    if (this.walkState !== 'off') return
+    this.enterWalk(p)
+  }
+
+  /** 多人联机：在场馆内寻找一个可站立的出生点 */
+  findWalkSpawn(seed = 0): Pt {
+    const center = this.venue ? centroid(this.venue.points) : { x: 0, z: 0 }
+    if (!this.walkBlocked(center.x, center.z, 0)) return center
+    const start = ((Math.abs(seed) % 32) / 32) * Math.PI * 2
+    for (let radius = 1.5; radius <= 40; radius += 1.5) {
+      for (let i = 0; i < 32; i++) {
+        const angle = start + (i / 32) * Math.PI * 2
+        const p = {
+          x: center.x + Math.cos(angle) * radius,
+          z: center.z + Math.sin(angle) * radius,
+        }
+        if (!this.walkBlocked(p.x, p.z, 0)) return p
+      }
+    }
+    return center
+  }
+
+  /** 多人联机：当前本地玩家状态 */
+  getWalkNetState(): WalkNetState | null {
+    if (this.walkState !== 'walk') return null
+    return {
+      x: this.walkPos.x,
+      z: this.walkPos.z,
+      y: Math.max(0, this.walkPos.y - EYE_HEIGHT),
+      yaw: this.walkYaw,
+      pitch: this.walkPitch,
+      view: this.walkView,
+      auto: this.walkAuto,
+    }
+  }
+
+  /** 多人联机：同步远端玩家（由网络层按 10Hz 调用） */
+  setRemotePlayers(players: RemoteWalkPlayer[]) {
+    const seen = new Set<string>()
+    for (const player of players) {
+      seen.add(player.id)
+      let avatar = this.remotePlayers.get(player.id)
+      if (!avatar) {
+        avatar = this.createRemoteAvatar(player.id, player.nickname)
+        this.remotePlayers.set(player.id, avatar)
+        avatar.group.position.set(
+          player.state.x,
+          Math.max(0, player.state.y),
+          player.state.z,
+        )
+        avatar.target.copy(avatar.group.position)
+        avatar.yaw = player.state.yaw
+        avatar.yawTarget = player.state.yaw
+        avatar.group.rotation.y = avatar.yaw
+      }
+      if (avatar.nickname !== player.nickname) {
+        avatar.nickname = player.nickname
+        avatar.labelEl.textContent = player.nickname
+      }
+      avatar.target.set(player.state.x, Math.max(0, player.state.y), player.state.z)
+      avatar.yawTarget = player.state.yaw
+      avatar.pitchTarget = player.state.pitch
+    }
+    for (const id of [...this.remotePlayers.keys()]) {
+      if (!seen.has(id)) this.removeRemoteAvatar(id)
+    }
+  }
+
+  clearRemotePlayers() {
+    for (const id of [...this.remotePlayers.keys()]) this.removeRemoteAvatar(id)
+  }
+
+  private createRemoteAvatar(id: string, nickname: string): RemoteAvatar {
+    let hash = 0
+    for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0
+    const color = new THREE.Color().setHSL((Math.abs(hash) % 360) / 360, 0.55, 0.58)
+
+    const group = new THREE.Group()
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.28, 0.9, 4, 8),
+      new THREE.MeshStandardMaterial({ color, roughness: 0.78, metalness: 0.04 }),
+    )
+    body.position.y = 0.73
+    body.castShadow = true
+    body.receiveShadow = true
+    group.add(body)
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.34, 0.42, 24),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.42,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    )
+    ring.rotation.x = -Math.PI / 2
+    ring.position.y = 0.035
+    group.add(ring)
+
+    // 朝向指示：远端角色的“面罩”始终在本地 -Z 前方
+    const visor = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.1, 0.06),
+      new THREE.MeshBasicMaterial({ color: 0xffffff }),
+    )
+    visor.position.set(0, 1.22, -0.27)
+    group.add(visor)
+
+    const labelEl = document.createElement('div')
+    labelEl.className = 'mp-player-label'
+    labelEl.textContent = nickname
+    const label = new CSS2DObject(labelEl)
+    label.position.set(0, 2.05, 0)
+    group.add(label)
+
+    group.userData.remotePlayerId = id
+    this.scene.add(group)
+    return {
+      group,
+      body,
+      visor,
+      labelEl,
+      target: new THREE.Vector3(),
+      yaw: 0,
+      yawTarget: 0,
+      pitch: 0,
+      pitchTarget: 0,
+      nickname,
+      color,
+    }
+  }
+
+  private removeRemoteAvatar(id: string) {
+    const avatar = this.remotePlayers.get(id)
+    if (!avatar) return
+    this.remotePlayers.delete(id)
+    this.scene.remove(avatar.group)
+    avatar.labelEl.remove()
+    avatar.group.traverse((obj) => {
+      const mesh = obj as THREE.Mesh
+      if (!mesh.isMesh) return
+      mesh.geometry.dispose()
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const material of materials) material.dispose()
+    })
+  }
+
+  private updateRemotePlayers(dt: number) {
+    if (!this.remotePlayers.size) return
+    const alpha = Math.min(1, dt * 12)
+    for (const avatar of this.remotePlayers.values()) {
+      avatar.group.position.lerp(avatar.target, alpha)
+      let delta = avatar.yawTarget - avatar.yaw
+      delta = ((delta + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI
+      avatar.yaw += delta * alpha
+      avatar.group.rotation.y = avatar.yaw
+      avatar.pitch += (avatar.pitchTarget - avatar.pitch) * alpha
+      avatar.visor.rotation.x = -avatar.pitch
+    }
+  }
+
   // ---------- 手动天气 ----------
 
   setWeather(kind: WeatherKind) {
@@ -6112,6 +6358,7 @@ export class Stage {
     const dt = Math.min(0.05, Math.max(0, (now - this.lastFrame) / 1000))
     this.lastFrame = now
     this.updateGateAnimations(now)
+    this.updateRemotePlayers(dt)
 
     if (this.walkState === 'enter') {
       this.updateWalkEnter(now)
@@ -6205,6 +6452,7 @@ export class Stage {
     this.clearInfraLabels()
     this.clearBoothLogos()
     this.clearDimensions()
+    this.clearRemotePlayers()
     this.labelRenderer.domElement.remove()
     this.weatherSystem.dispose()
     this.cloudShadow.dispose()

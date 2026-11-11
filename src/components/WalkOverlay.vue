@@ -15,6 +15,13 @@ const props = defineProps<{
   walkAutoSpeed: number
   walkAutoLoop: boolean
   walkTourInfo: WalkTourInfo | null
+  walkUiHidden: boolean
+  /** 是否显示 U 清屏快捷键；多人房间关闭 */
+  showCleanShortcut?: boolean
+  /** 访客没有天气设置权限时隐藏 Alt+W 提示 */
+  hideWeatherShortcut?: boolean
+  /** 多人漫游的消息入口 */
+  messageEnabled?: boolean
   getStage: () => Stage | null
 }>()
 
@@ -23,6 +30,7 @@ const emit = defineEmits<{
   (e: 'toggle-auto'): void
   (e: 'update:speed', value: number): void
   (e: 'update:loop', value: boolean): void
+  (e: 'open-message'): void
 }>()
 
 const speedText = computed(
@@ -31,6 +39,37 @@ const speedText = computed(
 
 const tourCurrent = computed(() => props.walkTourInfo?.current ?? null)
 const tourNext = computed(() => props.walkTourInfo?.next ?? null)
+
+type TourCardKind = 'current' | 'next' | 'end'
+
+interface TourCardItem {
+  key: string
+  kind: TourCardKind
+  info: WalkTourStopInfo | null
+}
+
+/**
+ * 当前展台和下一站共用同一个卡片列表：
+ * 到达时，下一站卡片的 key 不变，从 next 过渡成 current；
+ * 新下一站以新 key 从下方进入。
+ */
+const tourCards = computed<TourCardItem[]>(() => {
+  const cur = tourCurrent.value
+  const next = tourNext.value
+  const cards: TourCardItem[] = []
+
+  if (cur) cards.push({ key: cur.boothId, kind: 'current', info: cur })
+  if (next) {
+    // 单展台循环等极端情况下当前和下一站相同，避免 key 冲突
+    const key =
+      cur && cur.boothId === next.boothId ? `${next.boothId}__next` : next.boothId
+    cards.push({ key, kind: 'next', info: next })
+  } else if (cur) {
+    cards.push({ key: '__tour_end__', kind: 'end', info: null })
+  }
+
+  return cards
+})
 
 function logoUrl(logo?: string): string {
   if (!logo) return ''
@@ -148,6 +187,14 @@ onBeforeUnmount(dispose)
       跳跃
     </button>
     <button
+      v-if="messageEnabled"
+      type="button"
+      class="walk-action"
+      @pointerdown.stop.prevent="emit('open-message')"
+    >
+      消息
+    </button>
+    <button
       type="button"
       class="walk-action"
       @pointerdown.stop.prevent="exitMobileWalk"
@@ -190,34 +237,42 @@ onBeforeUnmount(dispose)
     v-if="walkState === 'walk' && walkAuto && (tourCurrent || tourNext)"
     class="walk-tour-info"
   >
-    <div v-if="tourCurrent" class="walk-tour-card current">
-      <div v-if="tourCurrent.logo" class="walk-tour-logo">
-        <img :src="logoUrl(tourCurrent.logo)" alt="" />
+    <TransitionGroup name="tour-card" tag="div" class="walk-tour-cards">
+      <div
+        v-for="card in tourCards"
+        :key="card.key"
+        class="walk-tour-card"
+        :class="card.kind === 'end' ? 'next empty' : card.kind"
+      >
+        <template v-if="card.info">
+          <div v-if="card.info.logo" class="walk-tour-logo">
+            <img :src="logoUrl(card.info.logo)" alt="" />
+          </div>
+          <div class="walk-tour-body">
+            <span class="walk-tour-kicker">
+              <span class="walk-tour-kicker-text current">正在参观</span>
+              <span class="walk-tour-kicker-text next">下一站</span>
+            </span>
+            <div class="walk-tour-title">
+              <b>{{ card.info.name }}</b>
+              <em>{{ card.info.kindLabel }}</em>
+            </div>
+            <span class="walk-tour-exhibitor">
+              {{
+                card.kind === 'current'
+                  ? card.info.exhibitor || '展商信息未填写'
+                  : nextSub(card.info)
+              }}
+            </span>
+            <span class="walk-tour-area">{{ areaText(card.info.area) }}</span>
+          </div>
+        </template>
+        <template v-else>
+          <span class="walk-tour-kicker">下一站</span>
+          <span class="walk-tour-end-text">巡游即将结束</span>
+        </template>
       </div>
-      <div class="walk-tour-body">
-        <span class="walk-tour-kicker">正在参观</span>
-        <div class="walk-tour-title">
-          <b>{{ tourCurrent.name }}</b>
-          <em>{{ tourCurrent.kindLabel }}</em>
-        </div>
-        <span class="walk-tour-exhibitor">
-          {{ tourCurrent.exhibitor || '展商信息未填写' }}
-        </span>
-        <span class="walk-tour-area">{{ areaText(tourCurrent.area) }}</span>
-      </div>
-    </div>
-
-    <div v-if="tourNext" class="walk-tour-card next">
-      <span class="walk-tour-kicker">下一站</span>
-      <div class="walk-tour-next-main">
-        <b>{{ tourNext.name }}</b>
-        <span>{{ nextSub(tourNext) }}</span>
-      </div>
-    </div>
-    <div v-else-if="tourCurrent" class="walk-tour-card next empty">
-      <span class="walk-tour-kicker">下一站</span>
-      <span>巡游即将结束</span>
-    </div>
+    </TransitionGroup>
   </div>
 
   <div
@@ -233,36 +288,48 @@ onBeforeUnmount(dispose)
       >
         {{ walkAuto ? '接管' : '自动巡游' }}
       </button>
-      <button
-        type="button"
-        class="walk-mini"
-        @pointerdown.stop.prevent="changeSpeed(-0.1)"
-      >
-        −
-      </button>
-      <span class="walk-speed">{{ speedText }}×</span>
-      <button
-        type="button"
-        class="walk-mini"
-        @pointerdown.stop.prevent="changeSpeed(0.1)"
-      >
-        ＋
-      </button>
-      <button
-        type="button"
-        class="walk-mini walk-loop"
-        @pointerdown.stop.prevent="toggleLoop"
-      >
-        {{ walkAutoLoop ? '循环' : '单次' }}
-      </button>
+      <span v-if="walkUiHidden" class="walk-clean-hint">
+        按任意键恢复
+      </span>
+      <template v-else>
+        <button
+          type="button"
+          class="walk-mini"
+          @pointerdown.stop.prevent="changeSpeed(-0.1)"
+        >
+          −
+        </button>
+        <span class="walk-speed">{{ speedText }}×</span>
+        <button
+          type="button"
+          class="walk-mini"
+          @pointerdown.stop.prevent="changeSpeed(0.1)"
+        >
+          ＋
+        </button>
+        <button
+          type="button"
+          class="walk-mini walk-loop"
+          @pointerdown.stop.prevent="toggleLoop"
+        >
+          {{ walkAutoLoop ? '循环' : '单次' }}
+        </button>
+      </template>
     </template>
     <template v-else>
       <b>自动巡游</b>
       <span>{{ tourCurrent ? '参观中' : '行进中' }}</span>
-      <span>速度 {{ speedText }}×</span>
-      <span><kbd>[</kbd><kbd>]</kbd> 调速</span>
-      <span><kbd>L</kbd> {{ walkAutoLoop ? '循环' : '单次' }}</span>
-      <span><kbd>E</kbd> 停止</span>
+      <span v-if="walkUiHidden" class="walk-clean-hint">
+        按任意键恢复界面
+      </span>
+      <template v-else>
+        <span>速度 {{ speedText }}×</span>
+        <span><kbd>[</kbd><kbd>]</kbd> 调速</span>
+        <span><kbd>L</kbd> {{ walkAutoLoop ? '循环' : '单次' }}</span>
+        <span><kbd>E</kbd> 停止</span>
+        <span v-if="messageEnabled"><kbd>Y</kbd> 消息</span>
+        <span v-if="showCleanShortcut !== false"><kbd>U</kbd> 隐藏界面</span>
+      </template>
       <button
         v-if="walkAuto"
         type="button"
@@ -287,7 +354,8 @@ onBeforeUnmount(dispose)
     <span><kbd>V</kbd> 切换视角</span>
     <span v-if="!walkAuto"><kbd>E</kbd> 自动巡游</span>
     <span v-else><kbd>E</kbd> 停止巡游</span>
-    <span><kbd>Alt</kbd>+<kbd>W</kbd> 天气</span>
+    <span v-if="messageEnabled"><kbd>Y</kbd> 消息</span>
+    <span v-if="!hideWeatherShortcut"><kbd>Alt</kbd>+<kbd>W</kbd> 天气</span>
     <span><kbd>Esc</kbd> 退出</span>
   </div>
 </template>

@@ -72,6 +72,7 @@ export function useEditorState() {
   const walkAutoSpeed = ref(0.8)
   const walkAutoLoop = ref(true)
   const walkTourInfo = ref<WalkTourInfo | null>(null)
+  const walkUiHidden = ref(false)
   const presentationOn = ref(false)
   const walkPose = ref<{ x: number; z: number; yaw: number } | null>(null)
   const minimapExpanded = ref(false)
@@ -248,6 +249,7 @@ export function useEditorState() {
     walkAutoSpeed,
     walkAutoLoop,
     walkTourInfo,
+    walkUiHidden,
     presentationOn,
     walkPose,
     minimapExpanded,

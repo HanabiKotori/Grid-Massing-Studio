@@ -43,6 +43,7 @@ interface EditorShortcutOptions {
   deleteSelectedBooths: () => void
   deleteInfra: (id: string) => void
   toggleGrid: () => void
+  openMultiplayer: () => void
 }
 
 export function useEditorShortcuts(options: EditorShortcutOptions) {
@@ -293,7 +294,7 @@ export function useEditorShortcuts(options: EditorShortcutOptions) {
       }
     }
 
-    if (e.key.toLowerCase() === 'g') options.toggleGrid()
+    if (e.key.toLowerCase() === 'g') options.openMultiplayer()
   }
 
   return { onKey }

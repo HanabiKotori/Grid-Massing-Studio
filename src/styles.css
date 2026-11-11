@@ -2731,6 +2731,42 @@ input[type='range']::-moz-range-thumb {
   pointer-events: auto;
 }
 
+.walk-clean-hint {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* 自动巡游时按 U：只保留巡游栏与三维画面 */
+.app.walk-ui-hidden * {
+  visibility: hidden !important;
+}
+
+.app.walk-ui-hidden .viewport,
+.app.walk-ui-hidden .viewport > canvas {
+  visibility: visible !important;
+}
+
+.app.walk-ui-hidden .viewport > *:not(canvas) {
+  visibility: hidden !important;
+}
+
+.app.walk-ui-hidden .weather-fx,
+.app.walk-ui-hidden .weather-fx *,
+.app.walk-ui-hidden .walk-auto,
+.app.walk-ui-hidden .walk-auto *,
+.app.walk-ui-hidden .walk-tour-info,
+.app.walk-ui-hidden .walk-tour-info * {
+  visibility: visible !important;
+}
+
+/* 清屏时缩略地图已隐藏，桌面端信息栏回到右上角 */
+@media (min-width: 981px) {
+  .app.walk-ui-hidden .walk-tour-info {
+    top: 12px;
+    right: 16px;
+  }
+}
+
 .walk-speed {
   min-width: 38px;
   text-align: center;
@@ -2743,26 +2779,53 @@ input[type='range']::-moz-range-thumb {
   top: 12px;
   right: 16px;
   z-index: 13;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   width: 274px;
   pointer-events: none;
 }
 
-.walk-tour-card {
-  border-radius: 12px;
-  box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(14px) saturate(150%);
+.walk-tour-cards {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
 }
 
-.walk-tour-card.current {
+.walk-tour-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(14px) saturate(150%);
+  transition:
+    width 0.34s cubic-bezier(0.2, 0.75, 0.2, 1),
+    background-color 0.34s ease,
+    border-color 0.34s ease,
+    color 0.34s ease,
+    padding 0.34s cubic-bezier(0.2, 0.75, 0.2, 1),
+    gap 0.34s ease;
+}
+
+.walk-tour-card.current {
+  width: 100%;
   padding: 10px 12px;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.walk-tour-card.next {
+  width: 84%;
+  gap: 0;
+  padding: 6px 9px;
+  background: rgba(25, 27, 31, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
 }
 
 .walk-tour-logo {
@@ -2776,6 +2839,25 @@ input[type='range']::-moz-range-thumb {
   background: #fff;
   border: 1px solid var(--line);
   overflow: hidden;
+  transition:
+    width 0.34s cubic-bezier(0.2, 0.75, 0.2, 1),
+    height 0.34s cubic-bezier(0.2, 0.75, 0.2, 1),
+    padding 0.34s ease,
+    border-radius 0.34s ease,
+    background-color 0.34s ease,
+    border-color 0.34s ease,
+    opacity 0.3s ease;
+}
+
+/* 下一站预告不显示 Logo，仅保留过渡到当前展台时的尺寸/透明度变化 */
+.walk-tour-card.next .walk-tour-logo {
+  width: 0;
+  height: 0;
+  padding: 0;
+  border-width: 0;
+  border-radius: 0;
+  opacity: 0;
+  background: transparent;
 }
 
 .walk-tour-logo img {
@@ -2789,13 +2871,79 @@ input[type='range']::-moz-range-thumb {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  transition: gap 0.34s ease;
+}
+
+/* 下一站保持单行水平布局 */
+.walk-tour-card.next .walk-tour-body {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.walk-tour-card.next .walk-tour-kicker {
+  flex: none;
+}
+
+.walk-tour-card.next .walk-tour-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 4px;
+}
+
+.walk-tour-card.next .walk-tour-exhibitor {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .walk-tour-kicker {
+  position: relative;
+  display: inline-block;
+  min-width: 4.4em;
+  height: 1.2em;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--accent-ink);
+  transition:
+    font-size 0.34s ease,
+    color 0.34s ease;
+}
+
+.walk-tour-kicker-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
+  transition:
+    opacity 0.26s ease,
+    transform 0.26s ease;
+}
+
+.walk-tour-kicker-text.current {
+  opacity: 0;
+  transform: translateY(-3px);
+}
+
+.walk-tour-kicker-text.next {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.walk-tour-card.current .walk-tour-kicker-text.current {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.walk-tour-card.current .walk-tour-kicker-text.next {
+  opacity: 0;
+  transform: translateY(3px);
+}
+
+.walk-tour-card.next .walk-tour-kicker {
+  font-size: 9px;
+  color: #b9d4ff;
 }
 
 .walk-tour-title {
@@ -2803,6 +2951,7 @@ input[type='range']::-moz-range-thumb {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  transition: gap 0.34s ease;
 }
 
 .walk-tour-title b {
@@ -2812,6 +2961,15 @@ input[type='range']::-moz-range-thumb {
   color: var(--ink);
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition:
+    font-size 0.34s ease,
+    color 0.34s ease;
+}
+
+.walk-tour-card.next .walk-tour-title b {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
 }
 
 .walk-tour-title em {
@@ -2822,6 +2980,18 @@ input[type='range']::-moz-range-thumb {
   color: var(--ink-2);
   font-size: 9.5px;
   font-style: normal;
+  transition:
+    padding 0.34s ease,
+    background-color 0.34s ease,
+    color 0.34s ease,
+    font-size 0.34s ease;
+}
+
+.walk-tour-card.next .walk-tour-title em {
+  padding: 0 4px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 8.5px;
 }
 
 .walk-tour-exhibitor {
@@ -2830,53 +3000,79 @@ input[type='range']::-moz-range-thumb {
   color: var(--ink-2);
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition:
+    font-size 0.34s ease,
+    color 0.34s ease;
+}
+
+.walk-tour-card.next .walk-tour-exhibitor {
+  font-size: 9.5px;
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .walk-tour-area {
+  max-height: 18px;
+  overflow: hidden;
   font-size: 10.5px;
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
+  opacity: 1;
+  transition:
+    max-height 0.34s ease,
+    opacity 0.28s ease,
+    font-size 0.34s ease,
+    color 0.34s ease;
 }
 
-.walk-tour-card.next {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 11px;
-  background: rgba(25, 27, 31, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #fff;
-}
-
-.walk-tour-card.next .walk-tour-kicker {
-  flex: none;
-  color: #b9d4ff;
-}
-
-.walk-tour-next-main {
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-}
-
-.walk-tour-next-main b {
-  flex: none;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.walk-tour-next-main span {
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.walk-tour-card.next .walk-tour-area {
+  display: none;
 }
 
 .walk-tour-card.next.empty {
+  gap: 9px;
+  padding: 7px 10px;
   color: rgba(255, 255, 255, 0.62);
   font-size: 10.5px;
+}
+
+.walk-tour-end-text {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* 卡片切换：下一站上移并变成正在参观，新下一站从下方进入，旧参观向上淡出 */
+.tour-card-move,
+.tour-card-enter-active,
+.tour-card-leave-active {
+  transition:
+    transform 0.36s cubic-bezier(0.2, 0.75, 0.2, 1),
+    opacity 0.3s ease,
+    width 0.34s cubic-bezier(0.2, 0.75, 0.2, 1),
+    background-color 0.34s ease,
+    border-color 0.34s ease,
+    color 0.34s ease,
+    padding 0.34s cubic-bezier(0.2, 0.75, 0.2, 1),
+    gap 0.34s ease;
+}
+
+.tour-card-enter-from {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+.tour-card-leave-to {
+  opacity: 0;
+  transform: translateY(-16px);
+}
+
+.tour-card-leave-active {
+  position: absolute;
+  right: 0;
+  width: 100%;
+}
+
+.tour-card-leave-active.next {
+  width: 84%;
 }
 
 .is-mobile .walk-auto {
@@ -2901,6 +3097,9 @@ input[type='range']::-moz-range-thumb {
   left: auto;
   width: min(240px, 62vw);
   transform: none;
+}
+
+.is-mobile .walk-tour-cards {
   gap: 5px;
 }
 
@@ -2910,11 +3109,29 @@ input[type='range']::-moz-range-thumb {
   border-radius: 10px;
 }
 
+.is-mobile .walk-tour-card.next {
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 9px;
+}
+
 .is-mobile .walk-tour-logo {
   width: 40px;
   height: 40px;
   padding: 4px;
   border-radius: 7px;
+}
+
+.is-mobile .walk-tour-card.next .walk-tour-logo {
+  width: 0;
+  height: 0;
+  padding: 0;
+  border-width: 0;
+  border-radius: 0;
+}
+
+.is-mobile .walk-tour-card.next .walk-tour-body {
+  gap: 5px;
 }
 
 .is-mobile .walk-tour-body {
@@ -2925,6 +3142,10 @@ input[type='range']::-moz-range-thumb {
   font-size: 9px;
 }
 
+.is-mobile .walk-tour-card.next .walk-tour-kicker {
+  font-size: 8.5px;
+}
+
 .is-mobile .walk-tour-title {
   gap: 4px;
 }
@@ -2933,33 +3154,42 @@ input[type='range']::-moz-range-thumb {
   font-size: 12px;
 }
 
+.is-mobile .walk-tour-card.next .walk-tour-title b {
+  font-size: 10.5px;
+}
+
 .is-mobile .walk-tour-title em {
   padding: 0 4px;
   font-size: 8.5px;
+}
+
+.is-mobile .walk-tour-card.next .walk-tour-title em {
+  padding: 0 3px;
+  font-size: 8px;
 }
 
 .is-mobile .walk-tour-exhibitor {
   font-size: 10px;
 }
 
+.is-mobile .walk-tour-card.next .walk-tour-exhibitor {
+  font-size: 9px;
+}
+
 .is-mobile .walk-tour-area {
   font-size: 9.5px;
 }
 
-.is-mobile .walk-tour-card.next {
-  padding: 5px 8px;
-  border-radius: 9px;
+.is-mobile .walk-tour-card.next .walk-tour-area {
+  font-size: 9px;
 }
 
-.is-mobile .walk-tour-next-main {
-  gap: 5px;
+.is-mobile .walk-tour-card.next.empty {
+  padding: 6px 8px;
+  font-size: 9.5px;
 }
 
-.is-mobile .walk-tour-next-main b {
-  font-size: 11px;
-}
-
-.is-mobile .walk-tour-next-main span {
+.is-mobile .walk-tour-end-text {
   font-size: 9.5px;
 }
 

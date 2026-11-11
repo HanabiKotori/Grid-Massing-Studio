@@ -1,0 +1,1362 @@
+#multiplayer {
+  height: 100%;
+}
+
+.mp-page {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 10% 10%, rgba(47, 95, 224, 0.08), transparent 26%),
+    radial-gradient(circle at 88% 4%, rgba(47, 95, 224, 0.06), transparent 24%),
+    linear-gradient(180deg, #f6f5f1 0%, #efeee9 100%);
+}
+
+.mp-page.mp-playing {
+  overflow: hidden;
+  background: #101318;
+}
+
+.mp-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.mp-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 64px;
+  padding: 14px 24px;
+  border-bottom: 1px solid rgba(231, 228, 221, 0.8);
+  background: rgba(246, 245, 241, 0.82);
+  backdrop-filter: blur(16px) saturate(150%);
+}
+
+.mp-back {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink-2);
+  font-size: 12px;
+  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+}
+
+.mp-back:hover {
+  border-color: var(--line-strong);
+  background: #fff;
+  color: var(--ink);
+}
+
+.mp-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.mp-brand span {
+  color: var(--ink-3);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mp-brand b {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.mp-server {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mp-lobby,
+.mp-room {
+  width: min(980px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 54px 0 70px;
+}
+
+.mp-hero {
+  max-width: 640px;
+  margin-bottom: 30px;
+}
+
+.mp-eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+}
+
+.mp-hero h1 {
+  margin: 0 0 12px;
+  font-size: clamp(32px, 5vw, 52px);
+  font-weight: 620;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+}
+
+.mp-hero > p:last-child {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.mp-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.mp-card {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 50px -38px rgba(24, 26, 30, 0.4);
+  backdrop-filter: blur(14px) saturate(130%);
+}
+
+.mp-card-kicker {
+  margin-bottom: 8px;
+  color: var(--ink-3);
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+}
+
+.mp-card h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 620;
+  letter-spacing: -0.03em;
+}
+
+.mp-card > p {
+  margin: 0 0 18px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.mp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 16px 0;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.mp-field select,
+.mp-field input,
+.mp-invite input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ink);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.mp-field select:focus,
+.mp-field input:focus,
+.mp-invite input:focus {
+  border-color: #b9c9f5;
+  box-shadow: 0 0 0 3px rgba(47, 95, 224, 0.1);
+}
+
+.mp-primary,
+.mp-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.mp-primary {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 8px 18px -10px rgba(47, 95, 224, 0.6);
+}
+
+.mp-primary:hover:not(:disabled) {
+  background: #2856d1;
+  transform: translateY(-1px);
+}
+
+.mp-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mp-secondary {
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--ink-2);
+}
+
+.mp-secondary:hover {
+  background: #fff;
+  color: var(--ink);
+}
+
+.mp-note {
+  margin: 12px 0 0 !important;
+  color: var(--ink-3) !important;
+  font-size: 10.5px !important;
+  line-height: 1.6 !important;
+}
+
+.mp-message {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mp-error {
+  border: 1px solid #f0d7cd;
+  background: #fff5f0;
+  color: #9c451d;
+}
+
+.mp-status {
+  border: 1px solid #d8e2fb;
+  background: #f4f7ff;
+  color: var(--accent-ink);
+}
+
+.mp-connecting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  text-align: center;
+}
+
+.mp-connecting h2 {
+  margin-top: 18px;
+}
+
+.mp-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(47, 95, 224, 0.18);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: mp-spin 0.75s linear infinite;
+}
+
+@keyframes mp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- 等待房间 ---------- */
+.mp-room {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 18px;
+}
+
+.mp-room-head {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.mp-room-head h1 {
+  margin: 0;
+  color: var(--accent-ink);
+  font-size: clamp(48px, 8vw, 86px);
+  font-weight: 580;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.mp-room-head p {
+  margin-top: 12px;
+}
+
+.mp-invite {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.mp-invite input {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-2);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.mp-invite .mp-primary {
+  width: auto;
+  flex: none;
+}
+
+.mp-room-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mp-room-title h2 {
+  margin: 0;
+}
+
+.mp-room-title span {
+  color: var(--ink-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mp-player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.mp-player-list li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.mp-player-list i,
+.mp-peers i {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.mp-player-name {
+  overflow: hidden;
+  flex: 1;
+  color: var(--ink-2);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-player-list em {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.mp-player-list em.me {
+  background: var(--surface-2);
+  color: var(--ink-3);
+}
+
+.mp-waiting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 !important;
+  padding: 13px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--ink-2) !important;
+}
+
+.mp-leave {
+  width: 100%;
+  margin-top: 10px;
+}
+
+/* ---------- 游戏 HUD ---------- */
+.mp-game-top {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  pointer-events: none;
+}
+
+.mp-room-chip,
+.mp-weather-chip,
+.mp-exit {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9px;
+  background: rgba(18, 21, 27, 0.68);
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 24px -18px #000;
+  backdrop-filter: blur(12px);
+  font-size: 11px;
+}
+
+.mp-room-chip span,
+.mp-room-chip i,
+.mp-weather-chip span {
+  color: rgba(255, 255, 255, 0.55);
+  font-style: normal;
+}
+
+.mp-room-chip b {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+.mp-room-chip i {
+  font-variant-numeric: tabular-nums;
+}
+
+.mp-weather-chip {
+  margin-left: auto;
+  pointer-events: auto;
+}
+
+.mp-weather-chip select {
+  height: 24px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 11px;
+  outline: none;
+}
+
+.mp-weather-chip option {
+  color: var(--ink);
+}
+
+.mp-exit {
+  pointer-events: auto;
+  cursor: pointer;
+  color: #fff;
+}
+
+.mp-exit:hover {
+  background: rgba(214, 69, 69, 0.78);
+}
+
+.mp-peers {
+  position: absolute;
+  top: 58px;
+  left: 16px;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: min(520px, 55vw);
+  pointer-events: none;
+}
+
+.mp-peers span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: rgba(18, 21, 27, 0.48);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 9.5px;
+  backdrop-filter: blur(8px);
+}
+
+.mp-interact {
+  position: absolute;
+  bottom: 70px;
+  left: 50%;
+  z-index: 16;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(18, 21, 27, 0.74);
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 11px;
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.mp-interact kbd,
+.mp-desktop-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-family: inherit;
+  font-size: 9.5px;
+}
+
+.mp-lock-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 14;
+  padding: 8px 13px;
+  transform: translate(-50%, 28px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(18, 21, 27, 0.58);
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 10.5px;
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.mp-auto-badge {
+  position: absolute;
+  bottom: 70px;
+  left: 16px;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 11px;
+  border-radius: 8px;
+  background: rgba(18, 21, 27, 0.7);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.mp-auto-badge span {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 9.5px;
+}
+
+.mp-desktop-hint {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 13px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(18, 21, 27, 0.58);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10.5px;
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.mp-desktop-hint span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 远端玩家 IP 标签（CSS2DRenderer） */
+.mp-player-label {
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  background: rgba(18, 21, 27, 0.72);
+  color: rgba(255, 255, 255, 0.9);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+
+/* ---------- 移动端操控 ---------- */
+.mp-mobile-ui {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.mp-look-zone {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 54%;
+  z-index: 10;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.mp-stick-wrap {
+  position: absolute;
+  left: 22px;
+  bottom: 24px;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 9px;
+  pointer-events: auto;
+}
+
+.mp-stick {
+  position: relative;
+  width: 124px;
+  height: 124px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  background: rgba(18, 21, 27, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  touch-action: none;
+}
+
+.mp-stick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50px;
+  height: 50px;
+  margin: -25px 0 0 -25px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.mp-mobile-actions {
+  position: absolute;
+  right: 18px;
+  bottom: 22px;
+  z-index: 13;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  pointer-events: auto;
+}
+
+.mp-mobile-actions button {
+  min-width: 74px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 9px;
+  background: rgba(18, 21, 27, 0.7);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 11px;
+  font-weight: 550;
+  backdrop-filter: blur(10px);
+  touch-action: manipulation;
+}
+
+.mp-mobile-actions button:active {
+  background: rgba(47, 95, 224, 0.8);
+}
+
+/* ---------- 弹窗 / toast ---------- */
+.mp-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(9, 11, 15, 0.58);
+  backdrop-filter: blur(7px);
+}
+
+.mp-modal {
+  width: min(430px, 100%);
+  padding: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: #f8f7f4;
+  box-shadow: 0 30px 90px -30px #000;
+}
+
+.mp-modal .mp-eyebrow {
+  margin-bottom: 10px;
+}
+
+.mp-modal h2 {
+  margin: 0 0 9px;
+  font-size: 25px;
+  font-weight: 620;
+  letter-spacing: -0.03em;
+}
+
+.mp-modal p:not(.mp-eyebrow) {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.mp-modal-actions {
+  display: flex;
+  gap: 9px;
+  margin-top: 20px;
+}
+
+.mp-modal-actions .mp-primary {
+  width: auto;
+  flex: 1;
+}
+
+.mp-modal-progress {
+  height: 3px;
+  margin-top: 20px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--line);
+}
+
+.mp-modal-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  animation: mp-progress 2.5s linear forwards;
+}
+
+@keyframes mp-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.mp-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  z-index: 60;
+  padding: 9px 14px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: rgba(18, 21, 27, 0.88);
+  color: #fff;
+  box-shadow: 0 12px 30px -18px #000;
+  font-size: 11.5px;
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 760px) {
+  body {
+    overflow: auto;
+  }
+
+  .mp-topbar {
+    min-height: 58px;
+    padding: 11px 14px;
+    gap: 10px;
+  }
+
+  .mp-brand span,
+  .mp-server {
+    display: none;
+  }
+
+  .mp-brand b {
+    font-size: 13px;
+  }
+
+  .mp-lobby,
+  .mp-room {
+    width: calc(100% - 28px);
+    padding: 30px 0 44px;
+  }
+
+  .mp-grid,
+  .mp-room {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .mp-hero {
+    margin-bottom: 22px;
+  }
+
+  .mp-hero h1 {
+    font-size: 36px;
+  }
+
+  .mp-hero > p:last-child {
+    font-size: 12px;
+  }
+
+  .mp-card {
+    padding: 18px;
+    border-radius: 14px;
+  }
+
+  .mp-room-head h1 {
+    font-size: 64px;
+  }
+
+  .mp-invite {
+    flex-direction: column;
+  }
+
+  .mp-invite .mp-primary {
+    width: 100%;
+  }
+
+  .mp-page.mp-playing {
+    overflow: hidden;
+  }
+
+  .mp-game-top {
+    top: 9px;
+    left: 9px;
+    right: 9px;
+    gap: 6px;
+  }
+
+  .mp-room-chip,
+  .mp-weather-chip,
+  .mp-exit {
+    height: 32px;
+    padding: 0 8px;
+  }
+
+  .mp-room-chip span {
+    display: none;
+  }
+
+  .mp-weather-chip {
+    margin-left: auto;
+    max-width: 155px;
+    overflow: hidden;
+  }
+
+  .mp-weather-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mp-peers {
+    top: 50px;
+    left: 10px;
+    max-width: 56vw;
+  }
+
+  .mp-desktop-hint {
+    display: none;
+  }
+
+  .mp-auto-badge {
+    bottom: 76px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+  }
+
+  .mp-interact {
+    bottom: 170px;
+  }
+
+  .mp-toast {
+    bottom: 18px;
+    max-width: calc(100% - 28px);
+  }
+}
+
+@media (max-width: 460px) {
+  .mp-weather-chip {
+    display: none;
+  }
+
+  .mp-mobile-actions {
+    right: 12px;
+    bottom: 16px;
+  }
+
+  .mp-mobile-actions button {
+    min-width: 66px;
+    height: 34px;
+    font-size: 10.5px;
+  }
+
+  .mp-stick-wrap {
+    left: 14px;
+    bottom: 16px;
+  }
+
+  .mp-stick {
+    width: 112px;
+    height: 112px;
+  }
+}
+
+/* ---------- 房间列表 / 房间天气 ---------- */
+.mp-room-list-card {
+  margin-top: 18px;
+}
+
+.mp-room-list-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.mp-room-list-head h2 {
+  margin: 0;
+}
+
+.mp-room-refresh {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--ink-2);
+  font-size: 11px;
+}
+
+.mp-room-refresh:disabled {
+  opacity: 0.5;
+}
+
+.mp-room-list-empty {
+  margin: 0 !important;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--ink-3) !important;
+  text-align: center;
+}
+
+.mp-room-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mp-room-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.mp-room-list li > b {
+  color: var(--accent-ink);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+.mp-room-list li > span {
+  flex: 1;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mp-room-list li > em {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: 9.5px;
+  font-style: normal;
+}
+
+.mp-room-join {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #cfdaff;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.mp-room-join:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mp-room-weather {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.mp-room-weather div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mp-room-weather span {
+  color: var(--ink-3);
+  font-size: 10.5px;
+}
+
+.mp-room-weather b {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.mp-room-weather em {
+  color: var(--ink-3);
+  font-size: 9.5px;
+  font-style: normal;
+}
+
+.mp-room-weather .mp-secondary {
+  flex: none;
+  min-height: 32px;
+  padding: 0 11px;
+  font-size: 10.5px;
+}
+
+/* ---------- 游戏 HUD：与单人漫游一致的顶栏布局 ---------- */
+.mp-game-top {
+  top: 12px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  gap: 8px;
+}
+
+.mp-room-chip,
+.mp-exit {
+  height: 34px;
+}
+
+.mp-page.mp-host:not(.is-mobile) .sim-clock {
+  left: 20px;
+}
+
+.mp-page.mp-playing .walk-hud {
+  width: max-content;
+  max-width: calc(100vw - 28px);
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 5px;
+  white-space: normal;
+}
+
+.mp-page.mp-playing:not(.is-mobile) .compass {
+  bottom: 110px;
+}
+
+.mp-page.mp-playing .mp-toast {
+  bottom: 112px;
+}
+
+.mp-page.is-mobile .mp-game-top {
+  top: 10px;
+  left: 10px;
+  right: auto;
+  transform: none;
+}
+
+.mp-page.is-mobile.mp-guest.is-walking .compass {
+  right: 12px;
+}
+
+.mp-page.is-mobile.mp-playing .mp-toast {
+  bottom: 112px;
+  max-width: calc(100% - 28px);
+}
+
+@media (max-width: 760px) {
+  .mp-room-list li {
+    flex-wrap: wrap;
+    padding: 8px 10px;
+  }
+
+  .mp-room-list li > span {
+    flex-basis: calc(100% - 100px);
+  }
+
+  .mp-room-list li > em {
+    order: 3;
+  }
+
+  .mp-room-join {
+    order: 4;
+    margin-left: auto;
+  }
+
+  .mp-game-top {
+    top: 10px;
+    left: 10px;
+    right: auto;
+    transform: none;
+  }
+
+  .mp-room-weather {
+    align-items: flex-start;
+  }
+}
+
+/* ---------- 房间消息 ---------- */
+.mp-chat-feed {
+  position: absolute;
+  left: 16px;
+  bottom: 170px;
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  width: min(310px, 48vw);
+  pointer-events: none;
+}
+
+.mp-chat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(18, 21, 27, 0.78);
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 1.45;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(10px);
+  animation: mp-chat-in 0.22s ease both;
+}
+
+.mp-chat-item b {
+  flex: none;
+  color: #b9d4ff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.mp-chat-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgba(255, 255, 255, 0.84);
+}
+
+@keyframes mp-chat-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mp-message-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 14px 76px;
+  background: rgba(10, 12, 16, 0.26);
+  backdrop-filter: blur(2px);
+}
+
+.mp-message-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(520px, 100%);
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(250, 250, 248, 0.98);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.26);
+}
+
+.mp-message-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mp-message-head b {
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.mp-message-head span {
+  color: var(--ink-3);
+  font-size: 9.5px;
+}
+
+.mp-message-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.mp-message-input-row input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.mp-message-input-row em {
+  flex: none;
+  color: var(--ink-3);
+  font-size: 9.5px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.mp-message-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mp-message-actions .mp-primary,
+.mp-message-actions .mp-secondary {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.is-mobile .mp-chat-feed {
+  left: 12px;
+  bottom: 150px;
+  width: min(240px, 60vw);
+}
+
+.is-mobile .mp-chat-item {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.is-mobile .mp-message-layer {
+  align-items: flex-end;
+  padding: 0;
+}
+
+.is-mobile .mp-message-box {
+  width: 100%;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  border-radius: 16px 16px 0 0;
+}
+
+.is-mobile .mp-message-head span {
+  display: none;
+}
+
+.is-mobile .walk-mobile-actions {
+  max-width: calc(100vw - 210px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.is-mobile .walk-mobile-actions::-webkit-scrollbar {
+  display: none;
+}

@@ -1,7 +1,15 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { isFurnitureKind } from '../core/infra'
 import type { Booth, Infra, Pt, Venue } from '../core/types'
+
+interface MinimapPlayer {
+  id: string
+  nickname: string
+  x: number
+  z: number
+  color?: string
+}
 
 const props = defineProps<{
   venue: Venue | null
@@ -10,10 +18,78 @@ const props = defineProps<{
   pose: { x: number; z: number; yaw: number } | null
   mobile?: boolean
   expanded?: boolean
+  players?: MinimapPlayer[]
 }>()
 
+const emit = defineEmits<{
+  (e: 'collapse'): void
+}>()
+
+const rootEl = ref<HTMLDivElement | null>(null)
 const canvasEl = ref<HTMLCanvasElement | null>(null)
+const expandedLocal = ref(false)
+const activePlayerId = ref<string | null>(null)
+const isExpanded = computed(() => !!props.expanded || expandedLocal.value)
 let observer: ResizeObserver | null = null
+
+interface PlayerHit {
+  id: string
+  x: number
+  y: number
+  radius: number
+}
+let playerHits: PlayerHit[] = []
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  const radius = Math.min(r, w / 2, h / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.arcTo(x + w, y, x + w, y + h, radius)
+  ctx.arcTo(x + w, y + h, x, y + h, radius)
+  ctx.arcTo(x, y + h, x, y, radius)
+  ctx.arcTo(x, y, x + w, y, radius)
+  ctx.closePath()
+}
+
+function drawPlayerLabel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  text: string,
+  uiScale: number,
+  width: number,
+  height: number,
+) {
+  const fontSize = Math.min(14, Math.max(10, Math.round(9 * uiScale)))
+  const label = text.length > 22 ? `${text.slice(0, 21)}…` : text
+  ctx.save()
+  ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
+  const textWidth = ctx.measureText(label).width
+  const boxW = Math.min(width - 8, textWidth + 14)
+  const boxH = fontSize + 10
+  const boxX = Math.max(4, Math.min(width - boxW - 4, x - boxW / 2))
+  let boxY = y - boxH - 11
+  if (boxY < 4) boxY = y + 12
+  boxY = Math.max(4, Math.min(height - boxH - 4, boxY))
+  roundRect(ctx, boxX, boxY, boxW, boxH, 5)
+  ctx.fillStyle = 'rgba(15, 18, 24, 0.92)'
+  ctx.fill()
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.24)'
+  ctx.lineWidth = 1
+  ctx.stroke()
+  ctx.fillStyle = '#fff'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(label, boxX + 7, boxY + boxH / 2 + 0.5)
+  ctx.restore()
+}
 
 function draw() {
   const canvas = canvasEl.value
@@ -59,7 +135,9 @@ function draw() {
   const mapX = (x: number) => offsetX + x * scale
   const mapY = (z: number) => offsetY + z * scale
 
-  ctx.fillStyle = 'rgba(20, 24, 30, 0.82)'
+  ctx.fillStyle = isExpanded.value
+    ? 'rgba(15, 18, 24, 0.97)'
+    : 'rgba(20, 24, 30, 0.82)'
   ctx.fillRect(0, 0, w, h)
 
   if (props.venue) {
@@ -145,6 +223,32 @@ function draw() {
     ctx.stroke()
   }
 
+  // 其他玩家位置
+  playerHits = []
+  const dotRadius = Math.max(3.6, Math.min(7, 3.2 * uiScale))
+  for (const player of props.players ?? []) {
+    if (!Number.isFinite(player.x) || !Number.isFinite(player.z)) continue
+    const x = mapX(player.x)
+    const y = mapY(player.z)
+    const radius = dotRadius
+    const color = player.color || '#7dd3fc'
+    if (activePlayerId.value === player.id) {
+      ctx.beginPath()
+      ctx.arc(x, y, radius + 4, 0, Math.PI * 2)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'
+      ctx.lineWidth = 1.4
+      ctx.stroke()
+    }
+    ctx.beginPath()
+    ctx.arc(x, y, radius, 0, Math.PI * 2)
+    ctx.fillStyle = color
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(20, 25, 32, 0.9)'
+    ctx.lineWidth = 1.2
+    ctx.stroke()
+    playerHits.push({ id: player.id, x, y, radius: Math.max(12, radius + 6) })
+  }
+
   const px = mapX(pose.x)
   const py = mapY(pose.z)
   const heading = Math.atan2(-Math.cos(pose.yaw), -Math.sin(pose.yaw))
@@ -163,10 +267,72 @@ function draw() {
   ctx.lineWidth = uiScale
   ctx.stroke()
   ctx.restore()
+
+  const active = props.players?.find((player) => player.id === activePlayerId.value)
+  if (active) {
+    drawPlayerLabel(ctx, mapX(active.x), mapY(active.z), active.nickname, uiScale, w, h)
+  }
+}
+
+function findPlayerHit(x: number, y: number): PlayerHit | null {
+  return (
+    [...playerHits]
+      .reverse()
+      .find((item) => Math.hypot(item.x - x, item.y - y) <= item.radius) ?? null
+  )
+}
+
+function onMinimapClick(event: MouseEvent) {
+  const root = rootEl.value
+  if (!root) return
+  const rect = root.getBoundingClientRect()
+  const x = event.clientX - rect.left
+  const y = event.clientY - rect.top
+  const hit = findPlayerHit(x, y)
+
+  // 移动端先放大地图；如果点的正好是玩家点，同时显示该玩家名称
+  if (props.mobile && !isExpanded.value) {
+    expandedLocal.value = true
+    activePlayerId.value = hit?.id ?? null
+    void nextTick(draw)
+    return
+  }
+
+  activePlayerId.value = hit
+    ? activePlayerId.value === hit.id
+      ? null
+      : hit.id
+    : null
+  draw()
+}
+
+function collapseMinimap() {
+  if (expandedLocal.value) expandedLocal.value = false
+  activePlayerId.value = null
+  emit('collapse')
+  void nextTick(draw)
 }
 
 watch(() => props.pose, draw, { deep: true })
 watch([() => props.venue, () => props.booths, () => props.infras], draw, { deep: true })
+watch(
+  () => props.players,
+  (players) => {
+    if (
+      activePlayerId.value &&
+      !players?.some((player) => player.id === activePlayerId.value)
+    ) {
+      activePlayerId.value = null
+    }
+    draw()
+  },
+  { deep: true },
+)
+watch(isExpanded, async () => {
+  activePlayerId.value = null
+  await nextTick()
+  draw()
+})
 
 onMounted(() => {
   draw()
@@ -180,12 +346,27 @@ onBeforeUnmount(() => observer?.disconnect())
 </script>
 
 <template>
-  <canvas
-    ref="canvasEl"
+  <div
+    ref="rootEl"
     class="walk-minimap"
-    :class="{ 'is-mobile': mobile, expanded }"
+    :class="{ 'is-mobile': mobile, expanded: isExpanded }"
+    :title="mobile && !isExpanded ? '点击放大地图' : undefined"
     aria-label="漫游缩略地图"
-  />
+    @pointerdown.stop
+    @click.stop="onMinimapClick"
+  >
+    <canvas ref="canvasEl" class="walk-minimap-canvas" aria-hidden="true" />
+    <button
+      v-if="mobile && isExpanded"
+      type="button"
+      class="walk-minimap-close"
+      aria-label="缩小地图"
+      @pointerdown.stop
+      @click.stop="collapseMinimap"
+    >
+      ×
+    </button>
+  </div>
 </template>
 
 <style scoped>
@@ -200,7 +381,8 @@ onBeforeUnmount(() => observer?.disconnect())
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 14px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.26);
-  pointer-events: none;
+  pointer-events: auto;
+  touch-action: manipulation;
   overflow: hidden;
   transition:
     top 0.28s cubic-bezier(0.2, 0.8, 0.3, 1),
@@ -210,6 +392,13 @@ onBeforeUnmount(() => observer?.disconnect())
     transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1),
     border-radius 0.28s ease,
     box-shadow 0.28s ease;
+}
+
+.walk-minimap-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
 }
 
 .walk-minimap.is-mobile {
@@ -238,5 +427,25 @@ onBeforeUnmount(() => observer?.disconnect())
   border-color: rgba(255, 255, 255, 0.28);
   border-radius: 18px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.44);
+}
+
+.walk-minimap-close {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(18, 21, 27, 0.76);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
 }
 </style>

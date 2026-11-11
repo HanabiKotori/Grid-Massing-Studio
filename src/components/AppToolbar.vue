@@ -21,6 +21,10 @@ defineProps<{
   underlayVisible: boolean
   weatherActive: boolean
   walkActive: boolean
+  /** 多人房间内只保留显示 / 画质 / 天气 */
+  multiplayer?: boolean
+  /** 访客不能修改天气 */
+  weatherDisabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -43,6 +47,7 @@ const emit = defineEmits<{
   (e: 'import'): void
   (e: 'open-weather'): void
   (e: 'open-help'): void
+  (e: 'open-multiplayer'): void
   (e: 'toggle-walk'): void
 }>()
 
@@ -82,7 +87,7 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
     </button>
 
     <div class="tool-main">
-      <div class="tool-group">
+      <div v-if="!multiplayer" class="tool-group">
         <button
           class="tool-btn tool-parent"
           :class="{ on: toolMenu === 'view' }"
@@ -252,7 +257,7 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
         </div>
       </div>
 
-      <div class="tool-group">
+      <div v-if="!multiplayer" class="tool-group">
         <button
           class="tool-btn tool-parent"
           :class="{ on: toolMenu === 'data' }"
@@ -281,17 +286,34 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
       <button
         class="tool-btn tool-with-key"
         :class="{ on: weatherActive }"
-        title="天气面板 (Alt+W)"
+        :disabled="weatherDisabled"
+        :title="weatherDisabled ? '只有房主可以修改天气' : '天气面板 (Alt+W)'"
         @click="emit('open-weather')"
       >
         <span>天气</span>
         <kbd v-if="!isMobile" class="tool-key wide">Alt+W</kbd>
       </button>
-      <button class="tool-btn tool-with-key" title="帮助 (F1)" @click="emit('open-help')">
+      <button
+        v-if="!multiplayer"
+        class="tool-btn tool-with-key"
+        title="帮助 (F1)"
+        @click="emit('open-help')"
+      >
         <span>帮助</span>
         <kbd v-if="!isMobile" class="tool-key">F1</kbd>
       </button>
       <button
+        v-if="!multiplayer"
+        class="tool-btn tool-with-key"
+        :disabled="!hasVenue"
+        :title="hasVenue ? '多人漫游 (G)' : '请先绘制场馆'"
+        @click="emit('open-multiplayer')"
+      >
+        <span>多人</span>
+        <kbd v-if="!isMobile" class="tool-key">G</kbd>
+      </button>
+      <button
+        v-if="!multiplayer"
         class="tool-btn tool-with-key"
         :class="{ on: walkActive }"
         :disabled="!hasVenue"

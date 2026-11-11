@@ -15,6 +15,7 @@ import {
   polygonArea,
 } from './core/polygon'
 import { Stage } from './core/Stage'
+import { saveStoredProject } from './core/projectStore'
 import sampleSceneJson from './data/sample-scene.json'
 import { exportBoothList, type SceneJson } from './core/sceneFile'
 import {
@@ -81,6 +82,7 @@ const {
   walkAutoSpeed,
   walkAutoLoop,
   walkTourInfo,
+  walkUiHidden,
   presentationOn,
   walkPose,
   minimapExpanded,
@@ -677,6 +679,25 @@ function closeMergeDialog() {
   mergeDialog.value = null
 }
 
+/** 多人漫游在新页面运行；先落盘当前场景，避免跳转丢失最新编辑 */
+async function openMultiplayer() {
+  if (!venue.value) {
+    toast('请先创建场馆')
+    return
+  }
+  try {
+    await saveStoredProject({
+      version: 1,
+      savedAt: Date.now(),
+      scene: buildSceneJson(),
+    })
+    window.location.assign(new URL('multiplayer.html', window.location.href).href)
+  } catch (err) {
+    console.error(err)
+    toast('进入多人漫游失败：无法保存当前场景')
+  }
+}
+
 const { onKey } = useEditorShortcuts({
   presentationOn,
   showHelp,
@@ -718,6 +739,7 @@ const { onKey } = useEditorShortcuts({
   deleteSelectedBooths,
   deleteInfra,
   toggleGrid,
+  openMultiplayer,
 })
 
 onMounted(() => {
@@ -737,11 +759,15 @@ onMounted(() => {
     onWalkView: (v) => (walkView.value = v),
     onWalkAuto: (on) => {
       walkAuto.value = on
-      if (!on) walkTourInfo.value = null
+      if (!on) {
+        walkTourInfo.value = null
+        walkUiHidden.value = false
+      }
     },
     onWalkAutoFail: () =>
       toast('自动巡游：未找到可通行路线，请先在场馆内留出通道'),
     onWalkTourInfo: (info) => (walkTourInfo.value = info),
+    onWalkUiHidden: (hidden) => (walkUiHidden.value = hidden),
     onWalkAutoSpeed: (v) => (walkAutoSpeed.value = Math.round(v * 10) / 10),
     onWalkAutoLoop: (v) => (walkAutoLoop.value = v),
     onWeatherShortcut: () => openWeather(),
@@ -755,6 +781,7 @@ onMounted(() => {
       if (s === 'off') {
         walkAuto.value = false
         walkTourInfo.value = null
+        walkUiHidden.value = false
         toolsCollapsed.value = false
         if (isMobile.value) void exitWalkFullscreen()
       }
@@ -854,8 +881,9 @@ onBeforeUnmount(() => {
       'quality-low': quality === 'low',
       'is-mobile': isMobile,
       'is-walking': walkState !== 'off',
+      'walk-ui-hidden': walkUiHidden,
       presenting: presentationOn,
-    }"
+      }"
   >
   <div ref="hostEl" class="viewport" />
 
@@ -956,6 +984,7 @@ onBeforeUnmount(() => {
       @import="triggerImport"
       @open-weather="openWeather"
       @open-help="openHelp"
+      @open-multiplayer="openMultiplayer"
       @toggle-walk="toggleWalk"
     />
 
@@ -978,6 +1007,7 @@ onBeforeUnmount(() => {
       :walk-auto-speed="walkAutoSpeed"
       :walk-auto-loop="walkAutoLoop"
       :walk-tour-info="walkTourInfo"
+      :walk-ui-hidden="walkUiHidden"
       :get-stage="() => stage"
       @toggle-auto="toggleWalkAuto"
       @update:speed="changeWalkAutoSpeed"

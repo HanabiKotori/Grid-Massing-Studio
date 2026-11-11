@@ -20,6 +20,10 @@ const props = defineProps<{
   canUndo: boolean
   canRedo: boolean
   northDeg: number
+  /** 多人房间：隐藏品牌、编辑 / 预览切换与实时天气，只保留时间 / 罗盘 */
+  multiplayer?: boolean
+  /** 是否显示模拟时间；多人房间仅房主显示 */
+  showClock?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -50,7 +54,7 @@ watch(
 </script>
 
 <template>
-  <header class="brand">
+  <header v-if="!multiplayer" class="brand">
     <div class="brand-mark">
       <svg
         width="19"
@@ -93,7 +97,12 @@ watch(
     </div>
   </header>
 
-  <div class="sim-clock" :class="{ night: !sunIsDay }" title="模拟时间">
+  <div
+    v-if="showClock !== false"
+    class="sim-clock"
+    :class="{ night: !sunIsDay }"
+    title="模拟时间"
+  >
     <div class="sim-clock-head">
       <svg
         v-if="sunIsDay"
@@ -192,7 +201,7 @@ watch(
   </div>
 
   <div
-    v-if="!isMobile && liveWeather && weatherOn"
+    v-if="!multiplayer && !isMobile && liveWeather && weatherOn"
     class="sim-weather"
     :title="`${liveWeather.city} · ${liveWeather.weather} ${liveWeather.temperature}°C · 湿度 ${liveWeather.humidity}%`"
   >
@@ -203,7 +212,10 @@ watch(
     <span>{{ liveWeather.temperature }}°C</span>
   </div>
 
-  <div v-if="!isMobile || walkState === 'off'" class="mode-switch">
+  <div
+    v-if="!multiplayer && (!isMobile || walkState === 'off')"
+    class="mode-switch"
+  >
     <button
       class="mode-btn"
       :class="{ on: !renderOnly }"
