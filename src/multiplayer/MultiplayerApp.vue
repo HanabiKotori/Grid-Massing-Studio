@@ -383,7 +383,8 @@ function buildInviteLink(code: string): string {
     name: 'multiplayer',
     query: { room: code },
   }).href
-  return new URL(href, window.location.origin).toString()
+  // 使用当前页面地址解析，子目录部署时保留部署路径
+  return new URL(href, window.location.href).toString()
 }
 
 function send(payload: Record<string, unknown>) {

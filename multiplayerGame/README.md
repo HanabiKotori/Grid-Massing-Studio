@@ -1,6 +1,6 @@
 # Grid Massing Studio · 多人漫游服务
 
-纯 Node.js WebSocket 房间服务，为 `/multiplayer` 路由提供：
+纯 Node.js WebSocket 房间服务，为 `/#/multiplayer` 路由提供：
 
 - 房间创建 / 加入 / 满员校验；
 - 房主场景只保存在服务内存，不做持久化；
@@ -66,10 +66,6 @@ VITE_MULTIPLAYER_WS_URL=wss://your-domain.com/ws
 Node 服务监听本机 `3010`，Nginx 负责静态页面并将 `/ws` 反向代理到 Node：
 
 ```nginx
-location / {
-    try_files $uri $uri/ /index.html;
-}
-
 location /ws {
     proxy_pass http://127.0.0.1:3010;
     proxy_http_version 1.1;
@@ -82,7 +78,7 @@ location /ws {
 }
 ```
 
-多人页面的正式地址是 `/multiplayer`，邀请链接为 `/multiplayer?room=房间号`；旧的 `/multiplayer.html` 已删除。
+多人页面的正式地址是 `/#/multiplayer`，邀请链接为 `/#/multiplayer?room=房间号`；hash 路由不需要 Nginx 回退。旧的 `/multiplayer` 路径和 `/multiplayer.html` 已不再使用。
 
 - 页面必须与 WebSocket 同为 HTTPS / WSS，否则浏览器会拦截混合内容。
 - 宝塔面板和阿里云安全组都需放行 `443`。

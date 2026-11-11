@@ -1,30 +1,8 @@
-import { createRouter, createWebHistory } from 'vue-router'
-
-/**
- * 从入口脚本位置推导部署目录：
- * 根目录得到 /，子目录部署得到 /app/，不受当前路由影响。
- */
-function appBase(): string {
-  const scripts = [
-    ...document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]'),
-  ]
-  const paths = scripts.map(
-    (script) => new URL(script.src, window.location.href).pathname,
-  )
-  // 开发环境优先匹配 Vite 注入的真实入口 /src/main.ts，忽略 /@vite/client
-  for (const path of paths) {
-    const srcAt = path.indexOf('/src/')
-    if (srcAt >= 0) return path.slice(0, srcAt + 1) || '/'
-  }
-  for (const path of paths) {
-    const assetsAt = path.indexOf('/assets/')
-    if (assetsAt >= 0) return path.slice(0, assetsAt + 1) || '/'
-  }
-  return '/'
-}
+import { createRouter, createWebHashHistory } from 'vue-router'
 
 const router = createRouter({
-  history: createWebHistory(appBase()),
+  // hash 模式不依赖服务器把未知路径回退到 index.html
+  history: createWebHashHistory(),
   routes: [
     {
       path: '/',
