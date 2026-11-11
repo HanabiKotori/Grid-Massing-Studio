@@ -11,10 +11,6 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 900,
     rollupOptions: {
-      input: {
-        main: 'index.html',
-        multiplayer: 'multiplayer.html',
-      },
       output: {
         manualChunks: {
           three: ['three'],

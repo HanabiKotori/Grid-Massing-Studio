@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import ActionDock from './components/ActionDock.vue'
 import AppToolbar from './components/AppToolbar.vue'
 import HelpMobilePanel from './components/HelpMobilePanel.vue'
@@ -168,6 +169,7 @@ watch(mobileDocked, (on) => {
   if (!on) dockExpanded.value = false
 })
 
+const router = useRouter()
 let stage: Stage | null = null
 
 let seq = 0
@@ -317,6 +319,7 @@ const {
   applyVenueXray,
   toggleVenueXray,
   toggleVenueTop,
+  dispose: disposeEditorUi,
 } = useEditorUi({
   venue,
   mode,
@@ -691,7 +694,7 @@ async function openMultiplayer() {
       savedAt: Date.now(),
       scene: buildSceneJson(),
     })
-    window.location.assign(new URL('multiplayer.html', window.location.href).href)
+    await router.push({ name: 'multiplayer' })
   } catch (err) {
     console.error(err)
     toast('进入多人漫游失败：无法保存当前场景')
@@ -863,6 +866,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('resize', onOrientationChange)
   window.removeEventListener('orientationchange', onOrientationChange)
+  disposeEditorUi()
   disposeEditorState()
   disposeHistory()
   disposeScenePersistence()

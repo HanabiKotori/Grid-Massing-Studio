@@ -4,27 +4,33 @@ import type { LiveWeather } from '../core/amapWeather'
 import type { WalkState } from '../core/Stage'
 import WeatherIcon from './WeatherIcon.vue'
 
-const props = defineProps<{
-  venueName: string
-  editingVenueName: boolean
-  simTime: string
-  sunIsDay: boolean
-  sunPlaying: boolean
-  sunMinutes: number
-  sunPercent: string
-  liveWeather: LiveWeather | null
-  weatherOn: boolean
-  isMobile: boolean
-  walkState: WalkState
-  renderOnly: boolean
-  canUndo: boolean
-  canRedo: boolean
-  northDeg: number
-  /** 多人房间：隐藏品牌、编辑 / 预览切换与实时天气，只保留时间 / 罗盘 */
-  multiplayer?: boolean
-  /** 是否显示模拟时间；多人房间仅房主显示 */
-  showClock?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    venueName: string
+    editingVenueName: boolean
+    simTime: string
+    sunIsDay: boolean
+    sunPlaying: boolean
+    sunMinutes: number
+    sunPercent: string
+    liveWeather: LiveWeather | null
+    weatherOn: boolean
+    isMobile: boolean
+    walkState: WalkState
+    renderOnly: boolean
+    canUndo: boolean
+    canRedo: boolean
+    northDeg: number
+    /** 多人房间：隐藏品牌、编辑 / 预览切换与实时天气，只保留时间 / 罗盘 */
+    multiplayer?: boolean
+    /** 是否显示模拟时间；多人房间仅房主显示 */
+    showClock?: boolean
+  }>(),
+  {
+    // 单人页面不传该 prop，Boolean 缺省会被 Vue 转成 false，这里显式恢复显示
+    showClock: true,
+  },
+)
 
 const emit = defineEmits<{
   (e: 'update:venue-name', value: string): void

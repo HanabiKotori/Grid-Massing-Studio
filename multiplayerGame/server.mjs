@@ -39,9 +39,46 @@ const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const HEARTBEAT_MS = 30000
 const DEFAULT_DENSITIES = { rain: 1, snow: 1, dust: 1 }
 const DEFAULT_VISIBILITY = 100
+const PLAYER_COLORS = [
+  '#4f7cff',
+  '#e05c5c',
+  '#23a06b',
+  '#d18a2c',
+  '#8c5cf0',
+  '#1f9bb5',
+  '#d95f9a',
+  '#6f8f3a',
+]
+
+function playerColor(index) {
+  return PLAYER_COLORS[index % PLAYER_COLORS.length]
+}
+
+function nextPlayerColor(room) {
+  const used = new Set([...room.players.values()].map((player) => player.color))
+  return (
+    PLAYER_COLORS.find((color) => !used.has(color)) ||
+    playerColor(room.players.size)
+  )
+}
+
+function sanitizeNickname(value, fallback) {
+  const text = String(value || '')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .trim()
+    .slice(0, 20)
+  return text || fallback
+}
+
+function sanitizeColor(value, fallback) {
+  const text = String(value || '').trim()
+  return /^#[0-9a-f]{6}$/i.test(text) ? text.toLowerCase() : fallback
+}
 
 /** @type {Map<string, Room>} */
 const rooms = new Map()
+/** 当前仍连接的多人页面客户端，用于大厅在线人数 */
+const clients = new Set()
 
 function makeId() {
   return crypto.randomUUID()
@@ -68,13 +105,20 @@ function clampNumber(value, min, max, fallback = 0) {
   return Math.max(min, Math.min(max, n))
 }
 
+// 朝向不做范围截断，只归一化到 [-π, π]，避免长时间旋转后远端模型停转
+function normalizeAngle(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return 0
+  return ((n + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI
+}
+
 function sanitizeState(raw) {
   const state = raw && typeof raw === 'object' ? raw : {}
   return {
     x: clampNumber(state.x, -10000, 10000),
     z: clampNumber(state.z, -10000, 10000),
     y: clampNumber(state.y, -50, 500),
-    yaw: clampNumber(state.yaw, -Math.PI * 4, Math.PI * 4),
+    yaw: normalizeAngle(state.yaw),
     pitch: clampNumber(state.pitch, -Math.PI, Math.PI),
     view: state.view === 'third' ? 'third' : 'first',
     auto: state.auto === true,
@@ -141,6 +185,7 @@ function snapshot(room) {
     players: [...room.players.values()].map((player) => ({
       id: player.id,
       nickname: player.nickname,
+      color: player.color,
       isHost: player.isHost,
       state: player.state,
     })),
@@ -195,12 +240,15 @@ function createRoom(ws, client, message) {
     started: false,
     createdAt: Date.now(),
     players: new Map(),
+    /** targetId -> actorId：被拖拽的玩家与操作者 */
+    drag: new Map(),
   }
 
   const player = {
     id: client.id,
     ws,
-    nickname: client.nickname,
+    nickname: sanitizeNickname(client.nickname, client.nickname),
+    color: playerColor(0),
     isHost: true,
     state: sanitizeState(null),
   }
@@ -213,7 +261,7 @@ function createRoom(ws, client, message) {
     type: 'created',
     code,
     selfId: client.id,
-    nickname: client.nickname,
+    nickname: player.nickname,
     room: snapshot(room),
   })
   console.info(`[room] ${code} 创建，房主 ${client.nickname}，上限 ${maxPlayers}`)
@@ -242,7 +290,8 @@ function joinRoom(ws, client, message) {
   const player = {
     id: client.id,
     ws,
-    nickname: client.nickname,
+    nickname: sanitizeNickname(client.nickname, client.nickname),
+    color: nextPlayerColor(room),
     isHost: false,
     state: sanitizeState(null),
   }
@@ -254,7 +303,7 @@ function joinRoom(ws, client, message) {
     type: 'joined',
     code,
     selfId: client.id,
-    nickname: client.nickname,
+    nickname: player.nickname,
     scene: room.scene,
     room: snapshot(room),
   })
@@ -265,6 +314,7 @@ function joinRoom(ws, client, message) {
       player: {
         id: player.id,
         nickname: player.nickname,
+        color: player.color,
         isHost: false,
         state: player.state,
       },
@@ -288,6 +338,144 @@ function startRoom(ws, client) {
   room.started = true
   broadcast(room, { type: 'started', serverTime: Date.now() })
   console.info(`[room] ${room.code} 开始漫游`)
+}
+
+function sendRoomNotice(room, text) {
+  broadcast(room, {
+    type: 'message',
+    id: 'system',
+    nickname: '系统',
+    text,
+    serverTime: Date.now(),
+  })
+}
+
+function clearPlayerDrag(room, playerId) {
+  for (const [targetId, actorId] of [...room.drag.entries()]) {
+    if (targetId !== playerId && actorId !== playerId) continue
+    room.drag.delete(targetId)
+    broadcast(room, {
+      type: 'interaction',
+      action: 'drag-end',
+      fromId: actorId,
+      targetId,
+    })
+  }
+}
+
+function handleInteraction(ws, client, message) {
+  const room = rooms.get(client.roomCode)
+  if (!room) return
+  const actor = room.players.get(client.id)
+  const target = room.players.get(message.targetId)
+  if (!actor || !target || target.id === actor.id) return
+  const action = message.action
+  if (!['knockback', 'drag-start', 'drag-move', 'drag-end'].includes(action)) {
+    return
+  }
+
+  // 触发互动要求双方在 1m 内；服务端留少量延迟容差
+  if (action === 'knockback' || action === 'drag-start') {
+    const distance = Math.hypot(
+      actor.state.x - target.state.x,
+      actor.state.z - target.state.z,
+    )
+    if (distance > 1.3) return
+  }
+
+  if (action === 'knockback') {
+    const x = clampNumber(message.x, -10000, 10000, target.state.x)
+    const z = clampNumber(message.z, -10000, 10000, target.state.z)
+    target.state.x = x
+    target.state.z = z
+    // 击退会打断该目标正在进行的拖拽
+    if (room.drag.has(target.id)) {
+      const previousActor = room.drag.get(target.id)
+      room.drag.delete(target.id)
+      broadcast(room, {
+        type: 'interaction',
+        action: 'drag-end',
+        fromId: previousActor,
+        targetId: target.id,
+      })
+    }
+    broadcast(room, {
+      type: 'interaction',
+      action,
+      fromId: actor.id,
+      targetId: target.id,
+      x,
+      z,
+    })
+    sendRoomNotice(room, `${actor.nickname} 击退了 ${target.nickname}`)
+    return
+  }
+
+  if (action === 'drag-start') {
+    const currentActor = room.drag.get(target.id)
+    if (currentActor && currentActor !== actor.id) return
+    for (const [draggedTarget, draggingActor] of room.drag) {
+      if (draggingActor === actor.id && draggedTarget !== target.id) {
+        return
+      }
+    }
+    room.drag.set(target.id, actor.id)
+    broadcast(room, {
+      type: 'interaction',
+      action,
+      fromId: actor.id,
+      targetId: target.id,
+    })
+    sendRoomNotice(room, `${actor.nickname} 开始拖拽 ${target.nickname}`)
+    return
+  }
+
+  if (room.drag.get(target.id) !== actor.id) return
+
+  if (action === 'drag-move') {
+    target.state.x = clampNumber(message.x, -10000, 10000, target.state.x)
+    target.state.z = clampNumber(message.z, -10000, 10000, target.state.z)
+    broadcast(room, {
+      type: 'interaction',
+      action,
+      fromId: actor.id,
+      targetId: target.id,
+      x: target.state.x,
+      z: target.state.z,
+    })
+    return
+  }
+
+  room.drag.delete(target.id)
+  broadcast(room, {
+    type: 'interaction',
+    action,
+    fromId: actor.id,
+    targetId: target.id,
+  })
+  sendRoomNotice(room, `${actor.nickname} 松开了 ${target.nickname}`)
+}
+
+function setPlayerProfile(ws, client, message) {
+  const room = rooms.get(client.roomCode)
+  const player = room?.players.get(client.id)
+  if (!room || !player) return
+  const nickname = sanitizeNickname(message.nickname, player.nickname)
+  const color = sanitizeColor(message.color, player.color)
+  if (nickname === player.nickname && color === player.color) return
+  player.nickname = nickname
+  player.color = color
+  client.nickname = nickname
+  broadcast(room, {
+    type: 'player-updated',
+    player: {
+      id: player.id,
+      nickname: player.nickname,
+      color: player.color,
+      isHost: player.isHost,
+      state: player.state,
+    },
+  })
 }
 
 function setGate(ws, client, message) {
@@ -384,8 +572,18 @@ function leaveRoom(ws, client, reason = 'leave') {
   client.isHost = false
   if (!player) return
 
+  // 拖拽中退出时解除目标锁定
+  clearPlayerDrag(room, player.id)
+
   if (player.isHost) {
     rooms.delete(room.code)
+    // 房主退出时解除所有客人的房间绑定，让客人可在大厅继续创建 / 加入
+    for (const member of room.players.values()) {
+      const memberClient = member.ws?.client
+      if (!memberClient || memberClient.id === player.id) continue
+      memberClient.roomCode = null
+      memberClient.isHost = false
+    }
     broadcast(room, { type: 'room-closed', reason: 'host-left' }, player.id)
     room.players.clear()
     console.info(`[room] ${room.code} 房主退出，房间解散`)
@@ -415,7 +613,11 @@ function roomSummaries() {
 }
 
 function listRooms(ws) {
-  send(ws, { type: 'room-list', rooms: roomSummaries() })
+  send(ws, {
+    type: 'room-list',
+    rooms: roomSummaries(),
+    online: clients.size,
+  })
 }
 
 function onMessage(ws, client, message) {
@@ -432,9 +634,23 @@ function onMessage(ws, client, message) {
     case 'state': {
       const room = rooms.get(client.roomCode)
       const player = room?.players.get(client.id)
-      if (player) player.state = sanitizeState(message.state)
+      if (player) {
+        const next = sanitizeState(message.state)
+        // 被拖拽期间位置由操作者驱动，忽略目标自己的位移输入
+        if (room.drag?.has(client.id)) {
+          next.x = player.state.x
+          next.z = player.state.z
+        }
+        player.state = next
+      }
       break
     }
+    case 'interact':
+      handleInteraction(ws, client, message)
+      break
+    case 'profile':
+      setPlayerProfile(ws, client, message)
+      break
     case 'gate':
       setGate(ws, client, message)
       break
@@ -469,6 +685,7 @@ const server = http.createServer((req, res) => {
         ok: true,
         rooms: rooms.size,
         players: [...rooms.values()].reduce((sum, room) => sum + room.players.size, 0),
+        online: clients.size,
         tickHz: TICK_HZ,
       }),
     )
@@ -493,10 +710,13 @@ wss.on('connection', (ws, req) => {
   ws.isAlive = true
   const client = {
     id: makeId(),
+    ws,
     nickname: ipFromRequest(req),
     roomCode: null,
     isHost: false,
   }
+  ws.client = client
+  clients.add(client)
 
   ws.on('pong', () => {
     ws.isAlive = true
@@ -514,6 +734,7 @@ wss.on('connection', (ws, req) => {
   })
 
   ws.on('close', () => {
+    clients.delete(client)
     leaveRoom(ws, client, 'disconnect')
   })
 

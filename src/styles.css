@@ -1538,11 +1538,17 @@ input[type='range']::-moz-range-thumb {
   left: 50%;
   transform: translateX(-50%);
   z-index: 30;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 32px));
   padding: 9px 16px;
   border-radius: 10px;
   background: rgba(25, 27, 31, 0.92);
   color: #fff;
   font-size: 12.5px;
+  line-height: 1.45;
+  text-align: center;
+  overflow-wrap: anywhere;
   box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(8px);
 }
@@ -3434,9 +3440,9 @@ input[type='range']::-moz-range-thumb {
 
 /* 漫游时罗盘抬到左侧摇杆上方，避免重叠 */
 .is-mobile.is-walking .compass {
-  top: 14px;
+  top: 176px;
   left: auto;
-  right: calc(10px + 180px + 6px);
+  right: 10px;
   bottom: auto;
   width: 48px;
   height: 48px;
@@ -3619,7 +3625,7 @@ input[type='range']::-moz-range-thumb {
   }
 
   .is-mobile.is-walking .compass {
-    right: calc(10px + 160px + 6px);
+    right: 10px;
   }
 }
 
@@ -3787,9 +3793,9 @@ input[type='range']::-moz-range-thumb {
 
   .is-mobile.is-walking .compass {
     display: grid;
-    top: 14px;
+    top: 176px;
     left: auto;
-    right: calc(10px + 180px + 6px);
+    right: 10px;
     bottom: auto;
     width: 48px;
     height: 48px;

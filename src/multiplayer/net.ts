@@ -5,6 +5,7 @@ import type { ParticleDensities, WeatherKind } from '../core/weather'
 export interface RoomPlayer {
   id: string
   nickname: string
+  color: string
   isHost: boolean
   state: WalkNetState
 }
@@ -33,7 +34,21 @@ export interface RoomSummary {
   started: boolean
 }
 
+export type InteractionAction =
+  | 'knockback'
+  | 'drag-start'
+  | 'drag-move'
+  | 'drag-end'
+
 export type ServerMessage =
+  | {
+      type: 'interaction'
+      action: InteractionAction
+      fromId: string
+      targetId: string
+      x?: number
+      z?: number
+    }
   | {
       type: 'created'
       code: string
@@ -50,6 +65,7 @@ export type ServerMessage =
       room: RoomSnapshot
     }
   | { type: 'player-joined'; player: RoomPlayer }
+  | { type: 'player-updated'; player: RoomPlayer }
   | { type: 'player-left'; id: string; nickname?: string; reason?: string }
   | { type: 'started'; serverTime: number }
   | { type: 'gate'; id: string; open: boolean }
@@ -69,7 +85,7 @@ export type ServerMessage =
       serverTime: number
     }
   | RoomSnapshot
-  | { type: 'room-list'; rooms: RoomSummary[] }
+  | { type: 'room-list'; rooms: RoomSummary[]; online: number }
   | { type: 'room-closed'; reason: string }
   | { type: 'join-error'; reason: string; message: string }
   | { type: 'create-error'; message: string }
@@ -107,6 +123,20 @@ export interface ClientJoinMessage {
 export interface ClientStateMessage {
   type: 'state'
   state: WalkNetState
+}
+
+export interface ClientProfileMessage {
+  type: 'profile'
+  nickname: string
+  color: string
+}
+
+export interface ClientInteractionMessage {
+  type: 'interact'
+  action: InteractionAction
+  targetId: string
+  x?: number
+  z?: number
 }
 
 export interface ClientGateMessage {

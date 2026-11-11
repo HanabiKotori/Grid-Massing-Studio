@@ -57,6 +57,7 @@ interface EditorUiOptions {
 
 export function useEditorUi(options: EditorUiOptions) {
   let rotatePending = false
+  let orientationTimer = 0
 
   async function requestWalkFullscreen() {
     if (!options.isMobile.value) return
@@ -302,19 +303,40 @@ export function useEditorUi(options: EditorUiOptions) {
 
   function onOrientationChange() {
     options.isPortrait.value = window.innerHeight > window.innerWidth
-    if (!options.isPortrait.value && options.showRotateHint.value) {
-      options.showRotateHint.value = false
-      if (rotatePending) {
-        rotatePending = false
-        startWalkPick()
-        options.toast('已横屏，点击地面选择起点')
+    window.clearTimeout(orientationTimer)
+    orientationTimer = 0
+
+    if (!options.isPortrait.value) {
+      if (options.showRotateHint.value) {
+        options.showRotateHint.value = false
+        if (rotatePending) {
+          rotatePending = false
+          startWalkPick()
+          options.toast('已横屏，点击地面选择起点')
+        }
       }
-    } else if (
-      options.isPortrait.value &&
-      options.walkState.value === 'walk'
-    ) {
-      options.showRotateHint.value = true
+      return
     }
+
+    // 全屏 / 方向锁定可能短暂报告竖屏，稳定后再退出漫游
+    orientationTimer = window.setTimeout(() => {
+      orientationTimer = 0
+      if (!options.isPortrait.value) return
+      if (
+        options.walkState.value === 'walk' ||
+        options.walkState.value === 'enter' ||
+        options.walkState.value === 'pick'
+      ) {
+        rotatePending = true
+        options.showRotateHint.value = true
+        options.getStage()?.stopWalk()
+      }
+    }, 300)
+  }
+
+  function dispose() {
+    window.clearTimeout(orientationTimer)
+    orientationTimer = 0
   }
 
   function cancelRotateHint() {
@@ -381,5 +403,6 @@ export function useEditorUi(options: EditorUiOptions) {
     toggleVenueXray,
     toggleVenueTop,
     requestWalkFullscreen,
+    dispose,
   }
 }

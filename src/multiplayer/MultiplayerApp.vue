@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  shallowRef,
+} from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import AppToolbar from '../components/AppToolbar.vue'
 import SceneStatus from '../components/SceneStatus.vue'
 import WalkMinimap from '../components/WalkMinimap.vue'
@@ -49,10 +57,15 @@ const selfId = ref('')
 const hostId = ref('')
 const maxPlayers = ref(4)
 const players = ref<RoomPlayer[]>([])
+const roomStarted = ref(false)
+const profileName = ref('')
+const profileColor = ref('#4f7cff')
+const showPlayerList = ref(false)
 const roomGates = ref<Record<string, boolean>>({})
 const inviteLink = ref('')
 const roomList = ref<RoomSummary[]>([])
 const roomListLoading = ref(false)
+const onlineCount = ref(0)
 const showWeatherPanel = ref(false)
 
 const scene = shallowRef<LoadedMultiplayerScene | null>(null)
@@ -103,8 +116,42 @@ const isMobile = ref(
     window.matchMedia('(pointer: coarse)').matches ||
     /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent),
 )
+const isPortrait = ref(window.innerHeight > window.innerWidth)
+const fullscreenActive = ref(!!document.fullscreenElement)
+const fullscreenIssue = ref<'' | 'unsupported' | 'failed'>('')
+const orientationPromptDismissed = ref(false)
 
+const route = useRoute()
+const router = useRouter()
 const isHost = computed(() => !!selfId.value && selfId.value === hostId.value)
+const showOrientationPrompt = computed(
+  () =>
+    isMobile.value &&
+    phase.value === 'game' &&
+    !paused.value &&
+    !hostLeft.value &&
+    !messageOpen.value &&
+    !showWeatherPanel.value &&
+    !orientationPromptDismissed.value &&
+    ((isPortrait.value && walkState.value === 'off') ||
+      (!isPortrait.value && !!fullscreenIssue.value && !fullscreenActive.value)),
+)
+const orientationTitle = computed(() =>
+  isPortrait.value ? '请将手机横过来' : '未能自动进入全屏',
+)
+const orientationText = computed(() => {
+  if (fullscreenIssue.value === 'unsupported') {
+    return isPortrait.value
+      ? '当前浏览器不支持全屏 API，请横屏操作以获得完整视野。'
+      : '当前浏览器不支持全屏 API，请保持横屏并继续漫游。'
+  }
+  if (fullscreenIssue.value === 'failed') {
+    return '浏览器未允许自动进入全屏，请横屏操作，或点击下方按钮手动重试。'
+  }
+  return isPortrait.value
+    ? '横屏可获得更完整的漫游视野；也可以点击全屏由浏览器尝试自动横屏。'
+    : '点击全屏可隐藏浏览器地址栏，获得更完整的漫游视野。'
+})
 const minimapPlayers = computed(() =>
   players.value
     .filter((player) => player.id !== selfId.value)
@@ -113,11 +160,10 @@ const minimapPlayers = computed(() =>
       nickname: player.nickname,
       x: player.state.x,
       z: player.state.z,
-      color: colorFor(player.id),
+      color: playerColorOf(player),
     })),
 )
 const createSizeOptions = [2, 3, 4, 5, 6, 7, 8]
-const homeUrl = new URL('./', window.location.href).href
 const serverLabel = (() => {
   try {
     return new URL(multiplayerWebSocketUrl()).host
@@ -166,6 +212,8 @@ let leaving = false
 let pendingHostScene: LoadedMultiplayerScene | null = null
 let redirecting = false
 let startAttempted = false
+let fullscreenAttempted = false
+let portraitExitTimer: number | null = null
 
 function toast(text: string) {
   toastMsg.value = text
@@ -176,19 +224,94 @@ function toast(text: string) {
   }, 2200)
 }
 
-/** 移动端进入漫游时与单人漫游一致：全屏并尝试锁定横屏 */
-async function enterWalkFullscreen() {
+function clearPortraitExitTimer() {
+  if (portraitExitTimer !== null) {
+    window.clearTimeout(portraitExitTimer)
+    portraitExitTimer = null
+  }
+}
+
+/** 全屏 / 方向锁定会短暂触发竖屏尺寸，等方向稳定后再决定是否退出 */
+function schedulePortraitExitCheck(delay = 320) {
+  clearPortraitExitTimer()
+  portraitExitTimer = window.setTimeout(() => {
+    portraitExitTimer = null
+    if (isPortrait.value) exitWalkForPortrait()
+  }, delay)
+}
+
+function syncViewport() {
+  isPortrait.value = window.innerHeight > window.innerWidth
+  if (isPortrait.value) schedulePortraitExitCheck()
+  else clearPortraitExitTimer()
+}
+
+function syncFullscreenState() {
+  fullscreenActive.value = !!document.fullscreenElement
+}
+
+function notifyFullscreenIssue() {
   if (!isMobile.value) return
+  if (fullscreenIssue.value === 'unsupported') {
+    toast('浏览器不支持全屏，请横屏操作')
+  } else if (fullscreenIssue.value === 'failed') {
+    toast('无法自动进入全屏，请横屏操作或手动重试')
+  }
+}
+
+/**
+ * 移动端进入漫游时尝试全屏并锁定横屏。
+ * 来自服务器消息的调用没有用户手势，浏览器可能拒绝；失败后由横屏弹窗提供手动重试。
+ */
+async function enterWalkFullscreen(): Promise<boolean> {
+  if (!isMobile.value) return false
+  fullscreenIssue.value = ''
+  syncFullscreenState()
+  const root = document.documentElement as HTMLElement & {
+    requestFullscreen?: () => Promise<void>
+  }
+  const supported =
+    !!document.fullscreenElement ||
+    (document.fullscreenEnabled !== false &&
+      typeof root.requestFullscreen === 'function')
+  if (!supported) {
+    fullscreenIssue.value = 'unsupported'
+    notifyFullscreenIssue()
+    return false
+  }
+
   try {
     if (!document.fullscreenElement) {
-      await document.documentElement.requestFullscreen()
+      await root.requestFullscreen?.()
     }
-    const orientation = window.screen.orientation as ScreenOrientation & {
-      lock?: (orientation: string) => Promise<void>
-    }
+    syncFullscreenState()
+  } catch {
+    fullscreenIssue.value = 'failed'
+    notifyFullscreenIssue()
+    return false
+  }
+
+  try {
+    const orientation = window.screen.orientation as
+      | (ScreenOrientation & {
+          lock?: (orientation: string) => Promise<void>
+        })
+      | undefined
     if (orientation?.lock) await orientation.lock('landscape')
   } catch {
-    /* 浏览器不支持全屏 / 方向锁定时静默降级 */
+    // 方向锁定失败时仍可进入全屏，随后用横屏提示引导
+  }
+  window.setTimeout(() => {
+    syncViewport()
+    syncFullscreenState()
+  }, 300)
+  return true
+}
+
+async function retryWalkFullscreen() {
+  const entered = await enterWalkFullscreen()
+  if (entered && !isPortrait.value) {
+    toast(fullscreenActive.value ? '已进入全屏' : '已尝试进入横屏')
   }
 }
 
@@ -198,7 +321,14 @@ async function exitWalkFullscreen() {
     if (document.fullscreenElement) await document.exitFullscreen()
   } catch {
     /* ignore */
+  } finally {
+    syncFullscreenState()
+    syncViewport()
   }
+}
+
+function onFullscreenChange() {
+  syncFullscreenState()
 }
 
 /**
@@ -242,12 +372,18 @@ function colorFor(id: string): string {
   return `hsl(${hashString(id) % 360} 55% 58%)`
 }
 
+function playerColorOf(player: RoomPlayer): string {
+  return /^#[0-9a-f]{6}$/i.test(player.color || '')
+    ? player.color
+    : colorFor(player.id)
+}
+
 function buildInviteLink(code: string): string {
-  const url = new URL(window.location.href)
-  url.search = ''
-  url.hash = ''
-  url.searchParams.set('room', code)
-  return url.toString()
+  const href = router.resolve({
+    name: 'multiplayer',
+    query: { room: code },
+  }).href
+  return new URL(href, window.location.origin).toString()
 }
 
 function send(payload: Record<string, unknown>) {
@@ -260,7 +396,7 @@ function scheduleHome(delay = 2600) {
   redirecting = true
   if (redirectTimer !== null) window.clearTimeout(redirectTimer)
   redirectTimer = window.setTimeout(() => {
-    window.location.assign(homeUrl)
+    void router.push({ name: 'editor' })
   }, delay)
 }
 
@@ -272,13 +408,19 @@ function stopStateTimer() {
 }
 
 function cleanupStage() {
+  clearPortraitExitTimer()
   stopStateTimer()
   if (timeSyncTimer !== null) {
     window.clearTimeout(timeSyncTimer)
     timeSyncTimer = null
   }
+  if (redirectTimer !== null) {
+    window.clearTimeout(redirectTimer)
+    redirectTimer = null
+  }
   messageOpen.value = false
   messageDraft.value = ''
+  showPlayerList.value = false
   for (const timer of chatTimers.values()) window.clearTimeout(timer)
   chatTimers.clear()
   chatMessages.value = []
@@ -405,9 +547,15 @@ function adoptRoom(room: RoomSnapshot, code: string, self: string) {
   roomCode.value = code
   selfId.value = self
   startAttempted = false
+  roomStarted.value = room.started
   hostId.value = room.hostId
   maxPlayers.value = room.maxPlayers
   players.value = room.players
+  const me = room.players.find((player) => player.id === self)
+  if (me) {
+    profileName.value = me.nickname
+    profileColor.value = playerColorOf(me)
+  }
   applyWeatherSettings(
     room.weather,
     room.weatherOn,
@@ -518,6 +666,7 @@ function syncRemotePlayers() {
       .map((player) => ({
         id: player.id,
         nickname: player.nickname,
+        color: playerColorOf(player),
         state: player.state,
       })),
   )
@@ -542,6 +691,7 @@ function updatePlayers(incoming: RoomPlayer[]) {
 function applyRoomSnapshot(room: RoomSnapshot) {
   hostId.value = room.hostId
   maxPlayers.value = room.maxPlayers
+  roomStarted.value = room.started
   updatePlayers(room.players)
   // 游戏内时间由房主通过 time 消息实时同步，避免 10 Hz 快照反复覆盖
   if (phase.value !== 'game') {
@@ -558,11 +708,44 @@ function applyRoomSnapshot(room: RoomSnapshot) {
     )
   }
   if (phase.value === 'game') syncRemotePlayers()
-  if (room.started && phase.value === 'room') void startGame()
+  // 房主由自己的开始操作进入；客人留在房间页等待点击「开始漫游」
+  if (
+    room.started &&
+    phase.value === 'room' &&
+    isHost.value &&
+    !startAttempted
+  ) {
+    void startGame()
+  }
+}
+
+function enterRoomWalk() {
+  if (!roomStarted.value || phase.value !== 'room' || busy.value) return
+  void startGame()
+}
+
+function saveProfile() {
+  if (!selfId.value) return
+  const current = players.value.find((player) => player.id === selfId.value)
+  const nickname = profileName.value.trim().slice(0, 20)
+  if (!nickname) {
+    profileName.value = current?.nickname || ''
+    toast('玩家名称不能为空')
+    return
+  }
+  const color = /^#[0-9a-f]{6}$/i.test(profileColor.value)
+    ? profileColor.value
+    : '#4f7cff'
+  profileName.value = nickname
+  profileColor.value = color
+  send({ type: 'profile', nickname, color })
 }
 
 function startRoom() {
-  if (!isHost.value || busy.value) return
+  if (!isHost.value || busy.value || roomStarted.value) return
+  // 房主点击「开始漫游」仍持有用户手势，优先在这里请求全屏
+  fullscreenAttempted = true
+  void enterWalkFullscreen()
   busy.value = true
   send({ type: 'start' })
 }
@@ -574,7 +757,12 @@ async function startGame() {
     return
   }
   startAttempted = true
-  void enterWalkFullscreen()
+  orientationPromptDismissed.value = false
+  if (!fullscreenAttempted) {
+    // 客人由服务器 started 消息触发，没有用户手势；失败后显示横屏 / 全屏提示
+    fullscreenAttempted = true
+    void enterWalkFullscreen()
+  }
   const current = scene.value
   const infras = current.infras.map((infra) => {
     if (infra.kind !== 'gate') return infra
@@ -638,6 +826,10 @@ async function startGame() {
       onToggleGate: (id) => {
         toggleGate(id)
       },
+      onRemoteInteract: (event) => {
+        if (phase.value !== 'game') return
+        send({ type: 'interact', ...event })
+      },
     })
     stage.value = nextStage
     nextStage.setMode('idle')
@@ -670,6 +862,8 @@ async function startGame() {
     const spawn = nextStage.findWalkSpawn(seed)
     lastPose.value = { x: spawn.x, z: spawn.z }
     nextStage.enterWalkAt(spawn)
+    // 等全屏与方向锁定完成后再确认是否真的处于竖屏
+    if (isMobile.value) schedulePortraitExitCheck(500)
     startStateTimer()
   } catch (err) {
     console.error(err)
@@ -880,11 +1074,82 @@ function updateWalkAutoLoop(value: boolean) {
 }
 
 function resumeWalk() {
+  if (isMobile.value && isPortrait.value) {
+    toast('请先将手机横过来')
+    return
+  }
   paused.value = false
+  // 已从竖屏中断恢复，不再重复弹出全屏失败提示
+  orientationPromptDismissed.value = true
   if (isMobile.value) void enterWalkFullscreen()
   const current = stage.value
   if (!current) return
   current.enterWalkAt({ x: lastPose.value.x, z: lastPose.value.z })
+}
+
+/** 移动端漫游不支持竖屏：检测到竖屏立即退出漫游 */
+function exitWalkForPortrait() {
+  if (
+    !isMobile.value ||
+    !isPortrait.value ||
+    phase.value !== 'game' ||
+    walkState.value === 'off'
+  ) {
+    return
+  }
+  stage.value?.stopWalk()
+  paused.value = true
+}
+
+/** 退出房间后回到大厅，保留 WebSocket 连接供房间列表与再次创建使用 */
+function resetToLobby(notice = '已退出房间，可重新创建或加入房间') {
+  if (redirectTimer !== null) {
+    window.clearTimeout(redirectTimer)
+    redirectTimer = null
+  }
+  redirecting = false
+  leaving = false
+  startAttempted = false
+  pendingHostScene = null
+  scene.value = null
+  phase.value = 'lobby'
+  roomStarted.value = false
+  showPlayerList.value = false
+  profileName.value = ''
+  profileColor.value = '#4f7cff'
+  roomCode.value = ''
+  selfId.value = ''
+  hostId.value = ''
+  maxPlayers.value = 4
+  players.value = []
+  roomGates.value = {}
+  inviteLink.value = ''
+  joinCode.value = ''
+  autoJoining.value = false
+  busy.value = false
+  error.value = ''
+  status.value = notice
+  hostLeft.value = false
+  closeTitle.value = '房主已退出'
+  closeMessage.value = '房间已解散，正在返回多人大厅…'
+  paused.value = false
+  walkUiHidden.value = false
+  fullscreenAttempted = false
+  fullscreenIssue.value = ''
+  orientationPromptDismissed.value = false
+  clearPortraitExitTimer()
+  toolMenu.value = null
+  toolsCollapsed.value = false
+  underlayVisible.value = true
+  lastPose.value = { x: 0, z: 0 }
+
+  // 刷新后不应再自动加入旧房间
+  if (route.query.room !== undefined) {
+    const query = { ...route.query }
+    delete query.room
+    void router.replace({ name: 'multiplayer', query })
+  }
+  void requestRoomList()
 }
 
 function leaveGame() {
@@ -892,34 +1157,26 @@ function leaveGame() {
   leaving = true
   stopStateTimer()
   send({ type: 'leave' })
-  intentionalClose = true
   cleanupStage()
-  window.setTimeout(() => {
-    socket?.close()
-    window.location.assign(homeUrl)
-  }, 160)
+  resetToLobby()
 }
 
 function goHome() {
   if (phase.value !== 'lobby') {
     leaveGame()
-    return
   }
-  window.location.assign(homeUrl)
+  void router.push({ name: 'editor' })
 }
 
 function handleRoomClosed(reason: string) {
   if (hostLeft.value) return
-  hostLeft.value = true
-  closeTitle.value = reason === 'host-left' ? '房主已退出' : '房间已关闭'
-  closeMessage.value =
+  const notice =
     reason === 'host-left'
-      ? '房主已退出，房间自动解散。正在返回默认页面…'
-      : '多人服务已关闭，正在返回默认页面…'
-  intentionalClose = true
+      ? '房主已退出，已返回多人大厅'
+      : '房间已关闭，已返回多人大厅'
+  // 保留连接，清理房间状态后直接回到多人大厅
   cleanupStage()
-  socket?.close()
-  scheduleHome(2600)
+  resetToLobby(notice)
 }
 
 function onSocketClose() {
@@ -969,7 +1226,7 @@ function handleMessage(message: ServerMessage) {
       phase.value = 'room'
       busy.value = false
       autoJoining.value = false
-      if (message.room.started) void startGame()
+      // 邀请进入后停留在房间页，由客人点击「开始漫游」再创建 Stage
       break
     }
     case 'room':
@@ -977,13 +1234,42 @@ function handleMessage(message: ServerMessage) {
       applyRoomSnapshot(message)
       break
     case 'started':
-      if (phase.value === 'room') void startGame()
+      roomStarted.value = true
+      if (isHost.value && phase.value === 'room') void startGame()
       break
+    case 'interaction': {
+      if (message.targetId !== selfId.value) break
+      const current = stage.value
+      if (message.action === 'drag-start') {
+        current?.setInteractionLocked(true)
+        break
+      }
+      if (message.action === 'drag-end') {
+        current?.setInteractionLocked(false)
+        break
+      }
+      if (typeof message.x === 'number' && typeof message.z === 'number') {
+        current?.applyExternalWalkPosition(message.x, message.z)
+      }
+      if (message.action === 'knockback') {
+        current?.setInteractionLocked(false)
+        current?.shakeWalkCamera(1)
+      }
+      break
+    }
     case 'player-joined':
       if (!players.value.some((player) => player.id === message.player.id)) {
         updatePlayers([...players.value, message.player])
       }
       break
+    case 'player-updated': {
+      const updated = players.value.map((player) =>
+        player.id === message.player.id ? message.player : player,
+      )
+      updatePlayers(updated)
+      if (phase.value === 'game') syncRemotePlayers()
+      break
+    }
     case 'player-left':
       updatePlayers(players.value.filter((player) => player.id !== message.id))
       break
@@ -1006,6 +1292,7 @@ function handleMessage(message: ServerMessage) {
       break
     case 'room-list':
       roomList.value = message.rooms
+      onlineCount.value = Number.isFinite(message.online) ? message.online : 0
       roomListLoading.value = false
       break
     case 'room-closed':
@@ -1043,16 +1330,56 @@ function onSocketMessage(event: MessageEvent) {
   }
 }
 
-async function copyInvite() {
+/** 非安全上下文或无剪贴板权限时，用临时文本框直接复制 */
+function copyTextFallback(text: string): boolean {
+  const field = document.createElement('textarea')
+  field.value = text
+  field.setAttribute('readonly', '')
+  field.style.position = 'fixed'
+  field.style.left = '-9999px'
+  field.style.top = '0'
+  field.style.opacity = '0'
+  document.body.appendChild(field)
+  field.focus()
+  field.select()
+  field.setSelectionRange(0, text.length)
+  let copied = false
   try {
-    await navigator.clipboard.writeText(inviteLink.value)
+    copied = document.execCommand('copy')
+  } catch {
+    copied = false
+  }
+  field.remove()
+  return copied
+}
+
+async function copyInvite() {
+  const link = inviteLink.value
+  if (!link) return
+
+  let copied = false
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(link)
+      copied = true
+    } catch {
+      copied = false
+    }
+  }
+  if (!copied) copied = copyTextFallback(link)
+
+  if (copied) {
     status.value = '邀请链接已复制'
     toast('邀请链接已复制')
-  } catch {
-    const input = document.querySelector<HTMLInputElement>('.mp-invite input')
-    input?.select()
-    window.prompt('复制邀请链接', inviteLink.value)
+    return
   }
+
+  // 不弹 alert / prompt，只选中输入框并提示手动复制
+  const input = document.querySelector<HTMLInputElement>('.mp-invite input')
+  input?.focus()
+  input?.select()
+  status.value = '复制失败，请长按邀请链接手动复制'
+  toast('复制失败，请手动复制链接')
 }
 
 async function requestRoomList() {
@@ -1088,6 +1415,32 @@ function onPointerLockChange() {
   pointerLocked.value = !!document.pointerLockElement
 }
 
+function onPlayerListKeyDown(event: KeyboardEvent) {
+  if (event.key !== 'Tab') return
+  if (
+    phase.value !== 'game' ||
+    paused.value ||
+    hostLeft.value ||
+    messageOpen.value
+  ) {
+    return
+  }
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  showPlayerList.value = true
+}
+
+function onPlayerListKeyUp(event: KeyboardEvent) {
+  if (event.key !== 'Tab' || phase.value !== 'game') return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  showPlayerList.value = false
+}
+
+function onWindowBlur() {
+  showPlayerList.value = false
+}
+
 /** 消息输入框打开时优先消费 Esc，避免继续触发漫游退出 / 暂停 */
 function onMessageKeyDown(event: KeyboardEvent) {
   if (!messageOpen.value || event.key !== 'Escape') return
@@ -1097,26 +1450,42 @@ function onMessageKeyDown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
-  const code = new URLSearchParams(window.location.search).get('room')
+  const rawCode = route.query.room
+  const code = Array.isArray(rawCode) ? rawCode[0] : rawCode
   if (code) {
     joinCode.value = code.trim().toUpperCase()
     autoJoining.value = true
     void joinGame(joinCode.value)
   }
   startRoomListPoll()
+  syncViewport()
+  syncFullscreenState()
   window.addEventListener('beforeunload', onBeforeUnload)
+  window.addEventListener('resize', syncViewport)
+  window.addEventListener('orientationchange', syncViewport)
+  document.addEventListener('fullscreenchange', onFullscreenChange)
   document.addEventListener('pointerlockchange', onPointerLockChange)
   window.addEventListener('keydown', onMessageKeyDown, true)
+  window.addEventListener('keydown', onPlayerListKeyDown, true)
+  window.addEventListener('keyup', onPlayerListKeyUp, true)
+  window.addEventListener('blur', onWindowBlur)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', onBeforeUnload)
+  window.removeEventListener('resize', syncViewport)
+  window.removeEventListener('orientationchange', syncViewport)
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
   document.removeEventListener('pointerlockchange', onPointerLockChange)
   window.removeEventListener('keydown', onMessageKeyDown, true)
+  window.removeEventListener('keydown', onPlayerListKeyDown, true)
+  window.removeEventListener('keyup', onPlayerListKeyUp, true)
+  window.removeEventListener('blur', onWindowBlur)
   stopStateTimer()
   if (listTimer !== null) window.clearTimeout(listTimer)
   if (redirectTimer !== null) window.clearTimeout(redirectTimer)
   if (toastTimer !== null) window.clearTimeout(toastTimer)
+  clearPortraitExitTimer()
   intentionalClose = true
   cleanupStage()
   try {
@@ -1150,13 +1519,29 @@ onBeforeUnmount(() => {
 
       <main v-if="phase === 'lobby'" class="mp-lobby">
         <section class="mp-hero">
-          <p class="mp-eyebrow">MULTIPLAYER WALKTHROUGH</p>
+          <div class="mp-hero-top">
+            <p class="mp-eyebrow">MULTIPLAYER WALKTHROUGH</p>
+            <span class="mp-online-badge" aria-live="polite">
+              <i aria-hidden="true" />
+              {{ onlineCount }} 人在线
+            </span>
+          </div>
           <h1>一起在场馆里走一圈</h1>
           <p>
             房主使用当前浏览器 IndexedDB 中的场景创建房间，邀请朋友进入。
-            只有漫游模式，不进入编辑；昵称暂时显示为连接 IP。
+            只有漫游模式，不进入编辑；昵称和模型颜色可在房间内修改。
           </p>
         </section>
+
+        <div
+          v-if="error || status"
+          class="mp-alert-stack"
+          role="status"
+          aria-live="polite"
+        >
+          <p v-if="error" class="mp-message mp-error">{{ error }}</p>
+          <p v-if="status" class="mp-message mp-status">{{ status }}</p>
+        </div>
 
         <section v-if="autoJoining" class="mp-card mp-connecting">
           <span class="mp-spinner" />
@@ -1249,8 +1634,6 @@ onBeforeUnmount(() => {
           </ul>
         </section>
 
-        <p v-if="error" class="mp-message mp-error">{{ error }}</p>
-        <p v-if="status" class="mp-message mp-status">{{ status }}</p>
       </main>
 
       <main v-else class="mp-room">
@@ -1263,6 +1646,7 @@ onBeforeUnmount(() => {
             <button type="button" class="mp-primary" @click="copyInvite">复制邀请链接</button>
           </div>
           <p v-if="error" class="mp-message mp-error">{{ error }}</p>
+          <p v-if="status" class="mp-message mp-status">{{ status }}</p>
         </section>
 
         <section class="mp-card">
@@ -1272,17 +1656,66 @@ onBeforeUnmount(() => {
           </div>
           <ul class="mp-player-list">
             <li v-for="player in players" :key="player.id">
-              <i :style="{ background: colorFor(player.id) }" />
+              <i :style="{ background: playerColorOf(player) }" />
               <span class="mp-player-name">{{ player.nickname }}</span>
               <em v-if="player.isHost">房主</em>
               <em v-if="player.id === selfId" class="me">你</em>
             </li>
           </ul>
 
-          <p v-if="!isHost" class="mp-waiting">
-            <span class="mp-spinner" />
-            等待房主开始漫游…
-          </p>
+          <div class="mp-profile-editor">
+            <div class="mp-profile-head">
+              <b>我的资料</b>
+              <span>只能修改自己的名称和颜色</span>
+            </div>
+            <label class="mp-profile-field">
+              <span>名称</span>
+              <input
+                v-model="profileName"
+                maxlength="20"
+                autocomplete="off"
+                @change="saveProfile"
+                @keydown.enter.prevent="saveProfile"
+              />
+            </label>
+            <label class="mp-profile-field">
+              <span>颜色</span>
+              <span class="mp-color-field">
+                <i :style="{ background: profileColor }" />
+                <input
+                  v-model="profileColor"
+                  type="color"
+                  @change="saveProfile"
+                />
+              </span>
+            </label>
+          </div>
+
+          <template v-if="!isHost">
+            <p v-if="!roomStarted" class="mp-waiting">
+              <span class="mp-spinner" />
+              等待房主开始漫游…
+            </p>
+            <p v-else class="mp-ready">房主已开始漫游，可以进入</p>
+            <div class="mp-room-weather">
+              <div>
+                <span>房间天气</span>
+                <b>{{ weatherLabel }}</b>
+              </div>
+              <em>由房主设置</em>
+            </div>
+            <button
+              type="button"
+              class="mp-primary"
+              :disabled="!roomStarted || busy"
+              @click="enterRoomWalk"
+            >
+              {{ roomStarted ? '开始漫游' : '准备中' }}
+            </button>
+            <p v-if="!roomStarted" class="mp-note">
+              房主开始漫游后，这里会解锁「开始漫游」。
+            </p>
+          </template>
 
           <template v-else>
             <div class="mp-room-weather">
@@ -1294,19 +1727,16 @@ onBeforeUnmount(() => {
                 天气设置
               </button>
             </div>
-            <button type="button" class="mp-primary" :disabled="busy" @click="startRoom">
-              {{ busy ? '正在准备…' : '开始漫游' }}
+            <button
+              type="button"
+              class="mp-primary"
+              :disabled="busy || roomStarted"
+              @click="startRoom"
+            >
+              {{ roomStarted ? '漫游已开始' : busy ? '正在准备…' : '开始漫游' }}
             </button>
-            <p class="mp-note">开始后房间仍可加入新玩家，直到人数上限。</p>
+            <p class="mp-note">开始后客人会在房间页点击「开始漫游」进入。</p>
           </template>
-
-          <div v-if="!isHost" class="mp-room-weather">
-            <div>
-              <span>房间天气</span>
-              <b>{{ weatherLabel }}</b>
-            </div>
-            <em>由房主设置</em>
-          </div>
 
           <button type="button" class="mp-secondary mp-leave" @click="leaveGame">
             退出房间
@@ -1317,6 +1747,51 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <div ref="stageHost" class="mp-stage" />
+
+      <div
+        v-if="showOrientationPrompt"
+        class="mp-modal-backdrop mp-orientation-backdrop"
+      >
+        <div class="mp-modal mp-orientation-card">
+          <div class="mp-orientation-icon" aria-hidden="true">
+            <svg
+              width="54"
+              height="54"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect x="7" y="2.5" width="10" height="19" rx="2.5" />
+              <path d="M10.5 5h3" />
+              <path d="M3.5 8.5a9 9 0 0 1 2.2-3.2" />
+              <path d="M3.5 8.5V5.7M3.5 8.5h2.8" />
+            </svg>
+          </div>
+          <p class="mp-eyebrow">MOBILE VIEW</p>
+          <h2>{{ orientationTitle }}</h2>
+          <p>{{ orientationText }}</p>
+          <div class="mp-modal-actions">
+            <button
+              v-if="fullscreenIssue !== 'unsupported'"
+              type="button"
+              class="mp-primary"
+              @click="retryWalkFullscreen"
+            >
+              {{ fullscreenIssue ? '重试全屏' : '全屏并横屏' }}
+            </button>
+            <button
+              type="button"
+              class="mp-secondary"
+              @click="orientationPromptDismissed = true"
+            >
+              继续漫游
+            </button>
+          </div>
+        </div>
+      </div>
 
       <SceneStatus
         v-if="scene"
@@ -1432,6 +1907,27 @@ onBeforeUnmount(() => {
         <button type="button" class="mp-exit" @click="leaveGame">退出房间</button>
       </div>
 
+      <div
+        v-if="showPlayerList && !paused && !hostLeft"
+        class="mp-tab-overlay"
+        role="dialog"
+        aria-label="房间玩家列表"
+      >
+        <div class="mp-tab-card">
+          <p class="mp-eyebrow">PLAYERS</p>
+          <h2>房间玩家</h2>
+          <ul class="mp-tab-player-list">
+            <li v-for="player in players" :key="player.id">
+              <i :style="{ background: playerColorOf(player) }" />
+              <span>{{ player.nickname }}</span>
+              <em v-if="player.isHost">房主</em>
+              <em v-if="player.id === selfId" class="me">你</em>
+            </li>
+          </ul>
+          <p class="mp-tab-hint">松开 Tab 关闭</p>
+        </div>
+      </div>
+
       <div v-if="chatMessages.length && !messageOpen" class="mp-chat-feed">
         <div v-for="item in chatMessages" :key="item.key" class="mp-chat-item">
           <b>{{ item.nickname }}</b>
@@ -1443,14 +1939,17 @@ onBeforeUnmount(() => {
         v-if="!isMobile && !pointerLocked && !paused && !hostLeft && !messageOpen"
         class="mp-lock-hint"
       >
-        点击画面锁定鼠标视角
+        点击画面锁定鼠标视角 · 左键击退 / 右键按住拖动 1m 内玩家
       </div>
 
       <div v-if="paused && !hostLeft" class="mp-modal-backdrop">
         <div class="mp-modal">
           <p class="mp-eyebrow">PAUSED</p>
-          <h2>已退出漫游</h2>
-          <p>可以回到当前房间继续，或退出房间返回默认页面。</p>
+          <h2>{{ isMobile && isPortrait ? '请将手机横过来' : '已退出漫游' }}</h2>
+          <p v-if="isMobile && isPortrait">
+            移动端漫游不支持竖屏，已退出漫游状态。请横屏后点击「继续漫游」。
+          </p>
+          <p v-else>可以回到当前房间继续，或退出房间返回房间创建界面。</p>
           <div class="mp-modal-actions">
             <button type="button" class="mp-primary" @click="resumeWalk">继续漫游</button>
             <button type="button" class="mp-secondary" @click="leaveGame">退出房间</button>
@@ -1520,3 +2019,5 @@ onBeforeUnmount(() => {
     <div v-if="toastMsg" class="mp-toast">{{ toastMsg }}</div>
   </div>
 </template>
+
+<style src="./multiplayer.css"></style>

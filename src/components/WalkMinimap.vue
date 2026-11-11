@@ -402,10 +402,13 @@ onBeforeUnmount(() => observer?.disconnect())
 }
 
 .walk-minimap.is-mobile {
-  top: 72px;
-  left: calc(100% - 144px);
+  /* 常态与放大态都以中心点定位，避免 right:auto / left:50% 跳变 */
+  top: calc(var(--walk-minimap-top, 72px) + 48px);
+  right: auto;
+  left: calc(100% - 76px);
   width: 132px;
   height: 96px;
+  transform: translate(-50%, -50%);
 }
 
 @media (max-width: 1100px) {
@@ -419,6 +422,7 @@ onBeforeUnmount(() => observer?.disconnect())
 
 .walk-minimap.expanded {
   top: 50%;
+  right: auto;
   left: 50%;
   z-index: 80;
   width: min(72vw, 760px);

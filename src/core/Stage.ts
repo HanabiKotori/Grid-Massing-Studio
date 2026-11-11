@@ -84,7 +84,21 @@ export interface WalkNetState {
 export interface RemoteWalkPlayer {
   id: string
   nickname: string
+  color?: string
   state: WalkNetState
+}
+
+export type RemoteInteractionAction =
+  | 'knockback'
+  | 'drag-start'
+  | 'drag-move'
+  | 'drag-end'
+
+export interface RemoteInteractionEvent {
+  targetId: string
+  action: RemoteInteractionAction
+  x?: number
+  z?: number
 }
 
 interface RemoteAvatar {
@@ -169,6 +183,8 @@ export interface StageOptions {
   onWeatherShortcut?: () => void
   /** 漫游中按 Y 打开消息输入 */
   onMessageShortcut?: () => void
+  /** 左键击退 / 右键拖动其他玩家时发送互动消息 */
+  onRemoteInteract?: (event: RemoteInteractionEvent) => void
   /** 手动天气变化 */
   onWeatherChange?: (kind: WeatherKind) => void
   /** 底图被 Ctrl + 拖动 / 滚轮缩放后回传新的位置与尺寸 */
@@ -266,6 +282,15 @@ const JUMP_SPEED = 5.6
 /** 与场馆墙体保持的安全距离（墙体厚 0.24m） */
 const WALL_PAD = 0.5
 const MOUSE_SENS = 0.0021
+/** 玩家互动的最大水平距离 */
+const REMOTE_INTERACT_RANGE = 1
+const TWO_PI = Math.PI * 2
+
+/** 把朝向归一化到 [-π, π]，避免长时间旋转后数值无限增大 */
+function normalizeAngle(angle: number): number {
+  if (!Number.isFinite(angle)) return 0
+  return ((angle + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI
+}
 /** 自动巡游每个展台停留时长：留足看名称 / 展商 / 面积的时间 */
 const WALK_TOUR_DWELL = 6000
 
@@ -727,7 +752,22 @@ export class Stage {
   private walkLegL: THREE.Object3D | null = null
   private walkLegR: THREE.Object3D | null = null
   private walkAnimPhase = 0
+  /** 第一人称步行时的轻微镜头晃动 */
+  private walkBobPhase = 0
+  private walkBobMix = 0
   private walkCameraRay = new THREE.Raycaster()
+  /** 右键选中其他玩家后的拖拽 / 击退状态 */
+  private remoteInteractTarget: string | null = null
+  private remoteInteractDragging = false
+  private remoteDragOrigin = new THREE.Vector3()
+  private remoteDragOffsetX = 0
+  private remoteDragOffsetZ = 0
+  private remoteDragLastSent = 0
+  /** 被其他玩家拖拽时锁定自身移动 */
+  private walkExternalLocked = false
+  /** 击退 / 被击退时的镜头晃动 */
+  private walkShakeStart = 0
+  private walkShakeStrength = 0
   /** 漫游中按住 Alt 临时释放鼠标，松开后重新锁定 */
   private walkAltReleased = false
   /** 天气面板打开时暂停移动并释放鼠标 */
@@ -3476,6 +3516,7 @@ export class Stage {
     el.addEventListener('contextmenu', this.onContextMenu)
     document.addEventListener('mousemove', this.onWalkMouseMove)
     document.addEventListener('mousedown', this.onWalkMouseDown)
+    document.addEventListener('mouseup', this.onWalkMouseUp)
     document.addEventListener('pointerlockchange', this.onPointerLockChange)
     // 捕获阶段拦截，漫游时屏蔽页面全局快捷键
     window.addEventListener('keydown', this.onWalkKeyDown, true)
@@ -4452,6 +4493,18 @@ export class Stage {
     body.visible = active
     if (!active) return
 
+    if (dt > 0) {
+      const bobTarget =
+        moving && this.walkOnGround && this.walkState === 'walk' ? 1 : 0
+      this.walkBobMix = this.approach(this.walkBobMix, bobTarget, dt * 7)
+      if (bobTarget) {
+        const cadence = this.walkKeys.has('shift')
+          ? 10.4
+          : 7.2 + this.walkMoveBoost * 1.8
+        this.walkBobPhase += dt * cadence
+      }
+    }
+
     const feet = this.walkPos.y - EYE_HEIGHT
     // 身体始终在脚下，摄像机保持在头部眼高，避免第一人称看起来像悬空俯视
     body.scale.setScalar(1)
@@ -4532,6 +4585,8 @@ export class Stage {
     this.walkKeys.clear()
     this.walkMove = { x: 0, z: 0 }
     this.walkMoveBoost = 0
+    this.walkBobPhase = 0
+    this.walkBobMix = 0
     this.walkAltReleased = false
     this.walkUiPaused = false
     this.walkInnerPts = this.venue
@@ -4623,6 +4678,8 @@ export class Stage {
 
   private exitWalk(restore = true) {
     if (this.walkState === 'off') return
+    this.cancelRemoteInteraction()
+    this.walkExternalLocked = false
     this.stopWalkAuto()
     this.setWalkUiHidden(false)
     this.walkState = 'off'
@@ -4665,6 +4722,29 @@ export class Stage {
   private onWalkMouseMove = (e: MouseEvent) => {
     if (this.walkState !== 'walk' || this.walkAuto) return
     if (document.pointerLockElement !== this.renderer.domElement) return
+
+    if (this.remoteInteractTarget) {
+      const avatar = this.remotePlayers.get(this.remoteInteractTarget)
+      if (!avatar) {
+        this.resetRemoteInteraction()
+        return
+      }
+      if (!this.remoteInteractDragging) {
+        if (Math.hypot(e.movementX, e.movementY) < 2) return
+        this.remoteInteractDragging = true
+        this.remoteDragOrigin.copy(avatar.target)
+        this.remoteDragOffsetX = 0
+        this.remoteDragOffsetZ = 0
+        this.remoteDragLastSent = 0
+        this.opts.onRemoteInteract?.({
+          targetId: avatar.group.userData.remotePlayerId as string,
+          action: 'drag-start',
+        })
+      }
+      this.updateRemoteDrag(e.movementX, e.movementY)
+      return
+    }
+
     this.walkYaw -= e.movementX * MOUSE_SENS
     this.walkPitch -= e.movementY * MOUSE_SENS
     const lim = Math.PI / 2 - 0.05
@@ -5014,10 +5094,28 @@ export class Stage {
     this.opts.onWalkInteract?.(null)
   }
 
-  /** 漫游中左键切换最近出入口的开关 */
+  /**
+   * 漫游鼠标互动：
+   * 左键点击 1m 内其他玩家 = 击退；右键按住移动 = 拖拽。
+   * 没有命中其他玩家时，左键保留出入口开关逻辑。
+   */
   private onWalkMouseDown = (e: MouseEvent) => {
-    if (this.walkState !== 'walk' || this.walkUiPaused || e.button !== 0) return
+    if (this.walkState !== 'walk' || this.walkUiPaused) return
     if (e.target !== this.renderer.domElement) return
+
+    if (e.button === 2) {
+      e.preventDefault()
+      const targetId = this.pickRemotePlayer()
+      if (!targetId) return
+      this.remoteInteractTarget = targetId
+      this.remoteInteractDragging = false
+      this.remoteDragOffsetX = 0
+      this.remoteDragOffsetZ = 0
+      this.remoteDragLastSent = 0
+      return
+    }
+
+    if (e.button !== 0) return
 
     // Alt 释放鼠标后，点击画布也可以重新锁定（不依赖 keyup 的指针锁定权限）
     if (
@@ -5028,9 +5126,189 @@ export class Stage {
       this.lockPointer()
     }
 
+    const targetId = this.pickRemotePlayer()
+    if (targetId) {
+      e.preventDefault()
+      this.knockbackRemote(targetId)
+      return
+    }
+
     if (!this.walkInteractId) return
     e.preventDefault()
     this.opts.onToggleGate?.(this.walkInteractId)
+  }
+
+  private onWalkMouseUp = (e: MouseEvent) => {
+    if (e.button !== 2 || !this.remoteInteractTarget) return
+    if (this.remoteInteractDragging) {
+      this.opts.onRemoteInteract?.({
+        targetId: this.remoteInteractTarget,
+        action: 'drag-end',
+      })
+    }
+    this.resetRemoteInteraction()
+  }
+
+  /** 准星命中的远端玩家，仅允许 1m 内互动 */
+  private pickRemotePlayer(): string | null {
+    if (!this.remotePlayers.size) return null
+    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera)
+    const hits = this.raycaster.intersectObjects(
+      [...this.remotePlayers.values()].map((avatar) => avatar.group),
+      true,
+    )
+    for (const hit of hits) {
+      let object: THREE.Object3D | null = hit.object
+      while (object) {
+        const id = object.userData.remotePlayerId
+        if (typeof id === 'string') {
+          const avatar = this.remotePlayers.get(id)
+          if (!avatar) return null
+          const distance = Math.hypot(
+            avatar.target.x - this.walkPos.x,
+            avatar.target.z - this.walkPos.z,
+          )
+          return distance <= REMOTE_INTERACT_RANGE ? id : null
+        }
+        object = object.parent
+      }
+    }
+    return null
+  }
+
+  private updateRemoteDrag(movementX: number, movementY: number) {
+    const targetId = this.remoteInteractTarget
+    if (!targetId) return
+    const avatar = this.remotePlayers.get(targetId)
+    if (!avatar) return
+    this.remoteDragOffsetX += movementX * 0.012
+    this.remoteDragOffsetZ -= movementY * 0.012
+    const maxOffset = 6
+    const length = Math.hypot(this.remoteDragOffsetX, this.remoteDragOffsetZ)
+    if (length > maxOffset) {
+      this.remoteDragOffsetX *= maxOffset / length
+      this.remoteDragOffsetZ *= maxOffset / length
+    }
+
+    const now = performance.now()
+    if (now - this.remoteDragLastSent < 33) return
+    this.remoteDragLastSent = now
+
+    const rightX = Math.cos(this.walkYaw)
+    const rightZ = -Math.sin(this.walkYaw)
+    const forwardX = -Math.sin(this.walkYaw)
+    const forwardZ = -Math.cos(this.walkYaw)
+    const x =
+      this.remoteDragOrigin.x +
+      rightX * this.remoteDragOffsetX +
+      forwardX * this.remoteDragOffsetZ
+    const z =
+      this.remoteDragOrigin.z +
+      rightZ * this.remoteDragOffsetX +
+      forwardZ * this.remoteDragOffsetZ
+    if (this.walkBlocked(x, z, avatar.target.y)) return
+    this.opts.onRemoteInteract?.({
+      targetId,
+      action: 'drag-move',
+      x,
+      z,
+    })
+  }
+
+  private knockbackRemote(targetId: string) {
+    const avatar = this.remotePlayers.get(targetId)
+    if (!avatar) return
+    let dx = avatar.target.x - this.walkPos.x
+    let dz = avatar.target.z - this.walkPos.z
+    const len = Math.hypot(dx, dz)
+    if (len < 0.001) {
+      dx = -Math.sin(this.walkYaw)
+      dz = -Math.cos(this.walkYaw)
+    } else {
+      dx /= len
+      dz /= len
+    }
+    const feet = avatar.target.y
+    let distance = 1.4
+    let x = avatar.target.x + dx * distance
+    let z = avatar.target.z + dz * distance
+    if (this.walkBlocked(x, z, feet)) {
+      distance = 0.6
+      x = avatar.target.x + dx * distance
+      z = avatar.target.z + dz * distance
+    }
+    this.opts.onRemoteInteract?.({
+      targetId,
+      action: 'knockback',
+      x,
+      z,
+    })
+    this.shakeWalkCamera(0.9)
+  }
+
+  private resetRemoteInteraction() {
+    this.remoteInteractTarget = null
+    this.remoteInteractDragging = false
+    this.remoteDragOffsetX = 0
+    this.remoteDragOffsetZ = 0
+    this.remoteDragLastSent = 0
+  }
+
+  /** 退出漫游 / 失焦时主动结束拖拽，避免目标端一直锁移动 */
+  private cancelRemoteInteraction() {
+    if (this.remoteInteractTarget && this.remoteInteractDragging) {
+      this.opts.onRemoteInteract?.({
+        targetId: this.remoteInteractTarget,
+        action: 'drag-end',
+      })
+    }
+    this.resetRemoteInteraction()
+  }
+
+  /** 被其他玩家拖拽时锁定自身移动 */
+  setInteractionLocked(locked: boolean) {
+    this.walkExternalLocked = locked
+    if (locked) {
+      this.walkKeys.clear()
+      this.walkMove = { x: 0, z: 0 }
+      this.walkMoveBoost = 0
+      this.stopWalkAuto()
+    }
+  }
+
+  /** 拖拽 / 击退由服务端同步到目标客户端后，应用到本地位置 */
+  applyExternalWalkPosition(x: number, z: number): boolean {
+    if (this.walkState !== 'walk') return false
+    const feet = this.walkPos.y - EYE_HEIGHT
+    if (this.walkBlocked(x, z, feet)) return false
+    this.walkPos.x = x
+    this.walkPos.z = z
+    this.walkPos.y = this.walkSupport(x, z, feet) + EYE_HEIGHT
+    this.walkVelY = 0
+    this.walkOnGround = true
+    return true
+  }
+
+  /** 击退 / 被击退时触发短暂的镜头晃动 */
+  shakeWalkCamera(strength = 1) {
+    this.walkShakeStart = performance.now()
+    this.walkShakeStrength = Math.max(0.1, strength)
+  }
+
+  private applyWalkShake() {
+    if (this.walkState !== 'walk' || this.walkShakeStrength <= 0) return
+    const elapsed = performance.now() - this.walkShakeStart
+    const duration = 360
+    if (elapsed >= duration) {
+      this.walkShakeStrength = 0
+      return
+    }
+    const t = elapsed / 1000
+    const fade = 1 - elapsed / duration
+    const amp = 0.055 * this.walkShakeStrength * fade
+    this.camera.position.x += Math.sin(t * 95) * amp
+    this.camera.position.y += Math.cos(t * 120) * amp * 0.65
+    this.camera.rotateZ(Math.sin(t * 80) * 0.014 * this.walkShakeStrength * fade)
   }
 
   private walkCameraObjects(): THREE.Object3D[] {
@@ -5083,12 +5361,25 @@ export class Stage {
 
   private walkCameraPose(): { pos: THREE.Vector3; quat: THREE.Quaternion } {
     if (this.walkView === 'first') {
-      return {
-        pos: this.walkPos.clone(),
-        quat: new THREE.Quaternion().setFromEuler(
-          new THREE.Euler(this.walkPitch, this.walkYaw, 0, 'YXZ'),
-        ),
+      const pos = this.walkPos.clone()
+      const quat = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(this.walkPitch, this.walkYaw, 0, 'YXZ'),
+      )
+      if (this.walkState === 'walk' && this.walkBobMix > 0.002) {
+        const amount = this.walkBobMix
+        const phase = this.walkBobPhase
+        const lateral = Math.cos(phase) * 0.016 * amount
+        pos.x += Math.cos(this.walkYaw) * lateral
+        pos.z -= Math.sin(this.walkYaw) * lateral
+        pos.y += Math.sin(phase * 2) * 0.022 * amount
+        quat.multiply(
+          new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(0, 0, 1),
+            Math.sin(phase) * 0.0045 * amount,
+          ),
+        )
       }
+      return { pos, quat }
     }
 
     const pose = this.getThirdPersonPose()
@@ -5118,12 +5409,14 @@ export class Stage {
         this.walkViewTransition = null
         if (this.walkHead) this.walkHead.visible = this.walkView === 'third'
       }
+      this.applyWalkShake()
       return
     }
 
     const pose = this.walkCameraPose()
     this.camera.position.copy(pose.pos)
     this.camera.quaternion.copy(pose.quat)
+    this.applyWalkShake()
   }
 
   /** 移动端左摇杆：x 右正、z 前正，boost 为超出加速圈后的 0..1 加速量 */
@@ -5147,7 +5440,9 @@ export class Stage {
 
   /** 移动端跳跃按钮 */
   jumpWalk() {
-    if (this.walkState !== 'walk' || !this.walkOnGround) return
+    if (this.walkState !== 'walk' || !this.walkOnGround || this.walkExternalLocked) {
+      return
+    }
     this.stopWalkAuto()
     this.walkOnGround = false
     this.walkVelY = JUMP_SPEED
@@ -5180,7 +5475,7 @@ export class Stage {
 
   private updateWalk(dt: number) {
     if (this.walkUiPaused) {
-      this.updateWalkBody(0, false)
+      this.updateWalkBody(dt, false)
       this.applyWalkCamera()
       return
     }
@@ -5202,7 +5497,7 @@ export class Stage {
       this.walkVelY = 0
       this.walkOnGround = true
       if (k >= 1) this.walkReturn = null
-      this.updateWalkBody(0, false)
+      this.updateWalkBody(dt, false)
       this.applyWalkCamera()
       return
     }
@@ -5215,8 +5510,14 @@ export class Stage {
     if (this.walkKeys.has('a') || this.walkKeys.has('arrowleft')) s -= 1
     f = Math.max(-1, Math.min(1, f))
     s = Math.max(-1, Math.min(1, s))
+    if (this.walkExternalLocked) {
+      f = 0
+      s = 0
+    }
 
     const feet = this.walkPos.y - EYE_HEIGHT
+    const fromX = this.walkPos.x
+    const fromZ = this.walkPos.z
     if (f || s) {
       const speed = this.walkKeys.has('shift')
         ? RUN_SPEED
@@ -5231,6 +5532,7 @@ export class Stage {
       if (!this.walkBlocked(this.walkPos.x + dx, this.walkPos.z, feet)) this.walkPos.x += dx
       if (!this.walkBlocked(this.walkPos.x, this.walkPos.z + dz, feet)) this.walkPos.z += dz
     }
+    const moved = Math.hypot(this.walkPos.x - fromX, this.walkPos.z - fromZ)
 
     const support = this.walkSupport(this.walkPos.x, this.walkPos.z, feet)
     this.walkVelY -= GRAVITY * dt
@@ -5257,7 +5559,7 @@ export class Stage {
       }
     }
 
-    this.updateWalkBody(dt, !!(f || s))
+    this.updateWalkBody(dt, moved > 0.0001)
     this.applyWalkCamera()
   }
 
@@ -5284,7 +5586,7 @@ export class Stage {
     // 单次巡游在最后一个展台停留结束后，或中途关闭循环时，不再走回程
     if (!this.walkAutoLoop && tour.index > tour.lastStopIndex) {
       this.stopWalkAuto()
-      this.updateWalkBody(0, false)
+      this.updateWalkBody(dt, false)
       this.applyWalkCamera()
       return
     }
@@ -5307,27 +5609,27 @@ export class Stage {
         tour.waiting = false
         if (!this.walkAutoLoop && tour.index >= tour.lastStopIndex) {
           this.stopWalkAuto()
-          this.updateWalkBody(0, false)
+          this.updateWalkBody(dt, false)
           this.applyWalkCamera()
           return
         }
         tour.index++
         if (tour.index >= tour.points.length) {
           this.finishWalkTour()
-          this.updateWalkBody(0, false)
+          this.updateWalkBody(dt, false)
           this.applyWalkCamera()
           return
         }
         this.emitWalkTourInfo()
       }
-      this.updateWalkBody(0, false)
+      this.updateWalkBody(dt, false)
       this.applyWalkCamera()
       return
     }
 
     if (tour.index >= tour.points.length) {
       this.finishWalkTour()
-      this.updateWalkBody(0, false)
+      this.updateWalkBody(dt, false)
       this.applyWalkCamera()
       return
     }
@@ -5346,7 +5648,7 @@ export class Stage {
       } else {
         tour.index++
       }
-      this.updateWalkBody(0, false)
+      this.updateWalkBody(dt, false)
       this.applyWalkCamera()
       return
     }
@@ -5358,7 +5660,7 @@ export class Stage {
     const feet = this.walkPos.y - EYE_HEIGHT
     if (this.walkBlocked(nx, nz, feet)) {
       this.stopWalkAuto()
-      this.updateWalkBody(0, false)
+      this.updateWalkBody(dt, false)
       this.applyWalkCamera()
       return
     }
@@ -5877,7 +6179,11 @@ export class Stage {
   /** 漫游缩略图使用的位置与朝向 */
   getWalkPose(): { x: number; z: number; yaw: number } | null {
     if (this.walkState !== 'walk' && this.walkState !== 'enter') return null
-    return { x: this.walkPos.x, z: this.walkPos.z, yaw: this.walkYaw }
+    return {
+      x: this.walkPos.x,
+      z: this.walkPos.z,
+      yaw: normalizeAngle(this.walkYaw),
+    }
   }
 
   /** 多人联机：从指定位置直接进入漫游 */
@@ -5911,7 +6217,7 @@ export class Stage {
       x: this.walkPos.x,
       z: this.walkPos.z,
       y: Math.max(0, this.walkPos.y - EYE_HEIGHT),
-      yaw: this.walkYaw,
+      yaw: normalizeAngle(this.walkYaw),
       pitch: this.walkPitch,
       view: this.walkView,
       auto: this.walkAuto,
@@ -5924,8 +6230,9 @@ export class Stage {
     for (const player of players) {
       seen.add(player.id)
       let avatar = this.remotePlayers.get(player.id)
+      const yaw = normalizeAngle(player.state.yaw)
       if (!avatar) {
-        avatar = this.createRemoteAvatar(player.id, player.nickname)
+        avatar = this.createRemoteAvatar(player.id, player.nickname, player.color)
         this.remotePlayers.set(player.id, avatar)
         avatar.group.position.set(
           player.state.x,
@@ -5933,16 +6240,24 @@ export class Stage {
           player.state.z,
         )
         avatar.target.copy(avatar.group.position)
-        avatar.yaw = player.state.yaw
-        avatar.yawTarget = player.state.yaw
+        avatar.yaw = yaw
+        avatar.yawTarget = yaw
         avatar.group.rotation.y = avatar.yaw
       }
       if (avatar.nickname !== player.nickname) {
         avatar.nickname = player.nickname
         avatar.labelEl.textContent = player.nickname
       }
+      if (player.color) {
+        const nextColor = new THREE.Color(player.color)
+        if (avatar.color.getHexString() !== nextColor.getHexString()) {
+          avatar.color.copy(nextColor)
+          const material = avatar.body.material as THREE.MeshStandardMaterial
+          material.color.copy(nextColor)
+        }
+      }
       avatar.target.set(player.state.x, Math.max(0, player.state.y), player.state.z)
-      avatar.yawTarget = player.state.yaw
+      avatar.yawTarget = yaw
       avatar.pitchTarget = player.state.pitch
     }
     for (const id of [...this.remotePlayers.keys()]) {
@@ -5954,10 +6269,16 @@ export class Stage {
     for (const id of [...this.remotePlayers.keys()]) this.removeRemoteAvatar(id)
   }
 
-  private createRemoteAvatar(id: string, nickname: string): RemoteAvatar {
+  private createRemoteAvatar(
+    id: string,
+    nickname: string,
+    playerColor?: string,
+  ): RemoteAvatar {
     let hash = 0
     for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0
-    const color = new THREE.Color().setHSL((Math.abs(hash) % 360) / 360, 0.55, 0.58)
+    const color = playerColor
+      ? new THREE.Color(playerColor)
+      : new THREE.Color().setHSL((Math.abs(hash) % 360) / 360, 0.55, 0.58)
 
     const group = new THREE.Group()
     const body = new THREE.Mesh(
@@ -6037,7 +6358,7 @@ export class Stage {
       avatar.group.position.lerp(avatar.target, alpha)
       let delta = avatar.yawTarget - avatar.yaw
       delta = ((delta + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI
-      avatar.yaw += delta * alpha
+      avatar.yaw = normalizeAngle(avatar.yaw + delta * alpha)
       avatar.group.rotation.y = avatar.yaw
       avatar.pitch += (avatar.pitchTarget - avatar.pitch) * alpha
       avatar.visor.rotation.x = -avatar.pitch
@@ -6437,6 +6758,7 @@ export class Stage {
     el.removeEventListener('contextmenu', this.onContextMenu)
     document.removeEventListener('mousemove', this.onWalkMouseMove)
     document.removeEventListener('mousedown', this.onWalkMouseDown)
+    document.removeEventListener('mouseup', this.onWalkMouseUp)
     document.removeEventListener('pointerlockchange', this.onPointerLockChange)
     window.removeEventListener('keydown', this.onWalkKeyDown, true)
     window.removeEventListener('keyup', this.onWalkKeyUp, true)
