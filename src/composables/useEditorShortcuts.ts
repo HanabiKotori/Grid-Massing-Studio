@@ -42,6 +42,8 @@ interface EditorShortcutOptions {
   redo: () => void
   deleteSelectedBooths: () => void
   deleteInfra: (id: string) => void
+  /** 方向键微调选中的家具，单位 m */
+  nudgeSelectedFurniture: (dx: number, dz: number) => void
   toggleGrid: () => void
   openMultiplayer: () => void
 }
@@ -217,6 +219,32 @@ export function useEditorShortcuts(options: EditorShortcutOptions) {
         options.confirmHeight()
         ;(el as HTMLInputElement).blur()
       }
+      return
+    }
+
+    // 方向键微调家具：0.01m / 次；避免抢走下拉框的方向键
+    if (
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      options.mode.value === 'idle' &&
+      options.walkState.value === 'off' &&
+      !options.hasMergeDialog() &&
+      options.selectedInfraId.value &&
+      el?.tagName !== 'SELECT' &&
+      (e.key === 'ArrowUp' ||
+        e.key === 'ArrowDown' ||
+        e.key === 'ArrowLeft' ||
+        e.key === 'ArrowRight')
+    ) {
+      e.preventDefault()
+      let dx = 0
+      let dz = 0
+      if (e.key === 'ArrowLeft') dx = -0.01
+      else if (e.key === 'ArrowRight') dx = 0.01
+      else if (e.key === 'ArrowUp') dz = -0.01
+      else dz = 0.01
+      options.nudgeSelectedFurniture(dx, dz)
       return
     }
 

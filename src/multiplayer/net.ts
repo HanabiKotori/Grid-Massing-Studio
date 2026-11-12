@@ -86,6 +86,7 @@ export type ServerMessage =
     }
   | RoomSnapshot
   | { type: 'room-list'; rooms: RoomSummary[]; online: number }
+  | { type: 'kicked'; message: string }
   | { type: 'room-closed'; reason: string }
   | { type: 'join-error'; reason: string; message: string }
   | { type: 'create-error'; message: string }
@@ -160,4 +161,9 @@ export interface ClientListMessage {
 export interface ClientChatMessage {
   type: 'message'
   text: string
+}
+
+export interface ClientKickMessage {
+  type: 'kick'
+  id: string
 }

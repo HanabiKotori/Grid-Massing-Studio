@@ -362,6 +362,7 @@ const {
   updateInfraDims,
   moveInfra,
   moveInfraGroup,
+  nudgeInfra,
   rotateInfra,
   toggleGate,
   setGateOpenMode,
@@ -741,6 +742,9 @@ const { onKey } = useEditorShortcuts({
   redo,
   deleteSelectedBooths,
   deleteInfra,
+  nudgeSelectedFurniture: (dx, dz) => {
+    if (selectedInfraId.value) nudgeInfra(selectedInfraId.value, dx, dz)
+  },
   toggleGrid,
   openMultiplayer,
 })

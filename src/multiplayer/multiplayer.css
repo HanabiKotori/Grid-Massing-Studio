@@ -568,10 +568,11 @@
   padding: 20px;
   background: rgba(9, 11, 15, 0.5);
   backdrop-filter: blur(5px);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .mp-tab-card {
+  position: relative;
   width: min(360px, 100%);
   padding: 22px;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -585,6 +586,24 @@
   font-size: 24px;
   font-weight: 620;
   letter-spacing: -0.03em;
+}
+
+.mp-tab-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink-2);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .mp-tab-player-list {
@@ -636,6 +655,34 @@
 .mp-tab-player-list em.me {
   background: #eaf1ff;
   color: var(--accent-ink);
+}
+
+.mp-kick {
+  flex: none;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid #f0c9c3;
+  border-radius: 6px;
+  background: #fff5f3;
+  color: #b94b3c;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mp-kick:hover {
+  border-color: #df9d93;
+  background: #ffeae6;
+}
+
+.mp-room-chip {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.mp-room-chip:hover {
+  border-color: rgba(255, 255, 255, 0.24);
 }
 
 .mp-tab-hint {

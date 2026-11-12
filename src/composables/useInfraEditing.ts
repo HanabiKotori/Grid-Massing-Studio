@@ -405,6 +405,46 @@ export function useInfraEditing(options: InfraEditingOptions) {
     options.toast(`${target.name} 已移动`)
   }
 
+  /** 方向键微调家具，步进 0.01m；只接受家具类型 */
+  function nudgeInfra(id: string, dx: number, dz: number) {
+    const target = options.infras.value.find((it) => it.id === id)
+    if (!target || !isFurnitureKind(target.kind)) return
+    const x = Math.round((target.x + dx) * 100) / 100
+    const z = Math.round((target.z + dz) * 100) / 100
+    if (x === target.x && z === target.z) return
+
+    if (
+      !furnitureInsideBooth(
+        options.booths.value,
+        target.kind,
+        x,
+        z,
+        target.width,
+        target.depth,
+        target.rotation,
+      )
+    ) {
+      options.toast('家具需完整位于展台内部')
+      return
+    }
+    if (
+      !infraSpotFree(
+        options.infras.value,
+        options.booths.value,
+        x,
+        z,
+        target,
+        id,
+      )
+    ) {
+      options.toast('该位置已被占用')
+      return
+    }
+    options.infras.value = options.infras.value.map((it) =>
+      it.id === id ? { ...it, x, z } : it,
+    )
+  }
+
   /** 相邻多选整体拖动：全部通过校验后一次性写回 */
   function moveInfraGroup(
     targets: { id: string; x: number; z: number; rotation: number }[],
@@ -553,6 +593,7 @@ export function useInfraEditing(options: InfraEditingOptions) {
     updateInfraDims,
     moveInfra,
     moveInfraGroup,
+    nudgeInfra,
     rotateInfra,
     toggleGate,
     setGateOpenMode,

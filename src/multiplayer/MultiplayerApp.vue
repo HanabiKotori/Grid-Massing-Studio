@@ -358,8 +358,29 @@ const {
 const weatherLabel = computed(
   () => WEATHER_OPTIONS.find((item) => item.kind === roomWeather.value)?.label ?? '晴',
 )
+const activeWeather = computed<WeatherKind>(() =>
+  weatherOn.value ? roomWeather.value : 'clear',
+)
 const weatherActive = computed(
-  () => showWeatherPanel.value || roomWeather.value !== 'clear' || !weatherOn.value,
+  () => showWeatherPanel.value || activeWeather.value !== 'clear',
+)
+
+const LENS_WEATHER = new Set<WeatherKind>([
+  'haze',
+  'fog',
+  'light-rain',
+  'heavy-rain',
+  'thunder',
+  'light-snow',
+  'heavy-snow',
+  'dust',
+])
+const weatherLensOn = computed(
+  () =>
+    walkState.value === 'walk' &&
+    walkView.value === 'first' &&
+    !scene.value?.venue?.ceiling &&
+    LENS_WEATHER.has(activeWeather.value),
 )
 
 function hashString(value: string): number {
@@ -725,6 +746,11 @@ function enterRoomWalk() {
   void startGame()
 }
 
+function kickPlayer(player: RoomPlayer) {
+  if (!isHost.value || player.id === selfId.value || player.isHost) return
+  send({ type: 'kick', id: player.id })
+}
+
 function saveProfile() {
   if (!selfId.value) return
   const current = players.value.find((player) => player.id === selfId.value)
@@ -781,6 +807,11 @@ async function startGame() {
     error.value = '三维视图初始化失败'
     return
   }
+
+  // Stage 构造时会先按本地当前时间初始化太阳并可能回传 onSunTime；
+  // 必须先保存房间时间，构造完成后再用该值覆盖，否则晚到客人会变成本地时间。
+  const initialSunProgress = sunProgress.value
+  const initialSunPlaying = sunPlaying.value
 
   try {
     const nextStage = new Stage(stageHost.value, {
@@ -839,8 +870,8 @@ async function startGame() {
     nextStage.setWeather(weatherOn.value ? roomWeather.value : 'clear')
     nextStage.setParticleDensities(particleDensities.value)
     nextStage.setWeatherVisibility(weatherVisibility.value / 100)
-    nextStage.setSunProgress(sunProgress.value)
-    nextStage.setSunPaused(!sunPlaying.value)
+    nextStage.setSunPaused(!initialSunPlaying)
+    nextStage.setSunProgress(initialSunProgress)
     nextStage.setWalkAutoSpeed(walkAutoSpeed.value)
     nextStage.setWalkAutoLoop(walkAutoLoop.value)
     nextStage.setBoothLabelsVisible(boothLabelsOn.value)
@@ -1180,6 +1211,12 @@ function handleRoomClosed(reason: string) {
   resetToLobby(notice)
 }
 
+function handleKicked(message: string) {
+  if (hostLeft.value) return
+  cleanupStage()
+  resetToLobby(message || '你已被房主移出房间')
+}
+
 function onSocketClose() {
   if (intentionalClose || leaving || hostLeft.value) return
   if (phase.value === 'room' || phase.value === 'game') {
@@ -1295,6 +1332,9 @@ function handleMessage(message: ServerMessage) {
       roomList.value = message.rooms
       onlineCount.value = Number.isFinite(message.online) ? message.online : 0
       roomListLoading.value = false
+      break
+    case 'kicked':
+      handleKicked(message.message)
       break
     case 'room-closed':
       handleRoomClosed(message.reason)
@@ -1416,30 +1456,56 @@ function onPointerLockChange() {
   pointerLocked.value = !!document.pointerLockElement
 }
 
+function openPlayerList() {
+  if (
+    phase.value !== 'game' ||
+    paused.value ||
+    hostLeft.value ||
+    messageOpen.value ||
+    showWeatherPanel.value ||
+    showPlayerList.value
+  ) {
+    return
+  }
+  showPlayerList.value = true
+  // 释放鼠标并暂停漫游输入，方便点击踢出
+  stage.value?.suspendWalkForUi()
+}
+
+function closePlayerList() {
+  if (!showPlayerList.value) return
+  showPlayerList.value = false
+  stage.value?.resumeWalkFromUi()
+}
+
 function onPlayerListKeyDown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && showPlayerList.value) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    closePlayerList()
+    return
+  }
   if (event.key !== 'Tab') return
   if (
     phase.value !== 'game' ||
     paused.value ||
     hostLeft.value ||
-    messageOpen.value
+    messageOpen.value ||
+    showWeatherPanel.value
   ) {
     return
   }
   event.preventDefault()
   event.stopImmediatePropagation()
-  showPlayerList.value = true
-}
-
-function onPlayerListKeyUp(event: KeyboardEvent) {
-  if (event.key !== 'Tab' || phase.value !== 'game') return
-  event.preventDefault()
-  event.stopImmediatePropagation()
-  showPlayerList.value = false
+  if (showPlayerList.value) closePlayerList()
+  else openPlayerList()
 }
 
 function onWindowBlur() {
-  showPlayerList.value = false
+  if (showPlayerList.value) {
+    showPlayerList.value = false
+    stage.value?.resumeWalkFromUi()
+  }
 }
 
 /** 消息输入框打开时优先消费 Esc，避免继续触发漫游退出 / 暂停 */
@@ -1468,7 +1534,6 @@ onMounted(() => {
   document.addEventListener('pointerlockchange', onPointerLockChange)
   window.addEventListener('keydown', onMessageKeyDown, true)
   window.addEventListener('keydown', onPlayerListKeyDown, true)
-  window.addEventListener('keyup', onPlayerListKeyUp, true)
   window.addEventListener('blur', onWindowBlur)
 })
 
@@ -1480,7 +1545,6 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerlockchange', onPointerLockChange)
   window.removeEventListener('keydown', onMessageKeyDown, true)
   window.removeEventListener('keydown', onPlayerListKeyDown, true)
-  window.removeEventListener('keyup', onPlayerListKeyUp, true)
   window.removeEventListener('blur', onWindowBlur)
   stopStateTimer()
   if (listTimer !== null) window.clearTimeout(listTimer)
@@ -1661,6 +1725,14 @@ onBeforeUnmount(() => {
               <span class="mp-player-name">{{ player.nickname }}</span>
               <em v-if="player.isHost">房主</em>
               <em v-if="player.id === selfId" class="me">你</em>
+              <button
+                v-if="isHost && player.id !== selfId"
+                type="button"
+                class="mp-kick"
+                @click="kickPlayer(player)"
+              >
+                踢出
+              </button>
             </li>
           </ul>
 
@@ -1748,6 +1820,19 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <div ref="stageHost" class="mp-stage" />
+
+      <Transition name="weather-fx">
+        <div
+          v-if="walkState === 'walk' && activeWeather !== 'clear'"
+          class="weather-fx"
+          :class="[activeWeather, walkView]"
+          aria-hidden="true"
+        >
+          <div class="weather-atmos" />
+          <div v-if="weatherLensOn" class="weather-lens" />
+          <div v-if="activeWeather === 'thunder'" class="weather-flash" />
+        </div>
+      </Transition>
 
       <div
         v-if="showOrientationPrompt"
@@ -1900,7 +1985,14 @@ onBeforeUnmount(() => {
       />
 
       <div class="mp-game-top">
-        <div class="mp-room-chip">
+        <div
+          class="mp-room-chip"
+          role="button"
+          tabindex="0"
+          title="查看房间玩家"
+          @click.stop="openPlayerList"
+          @keydown.enter.prevent.stop="openPlayerList"
+        >
           <span>房间</span>
           <b>{{ roomCode }}</b>
           <i>{{ players.length }}/{{ maxPlayers }} 人</i>
@@ -1913,8 +2005,17 @@ onBeforeUnmount(() => {
         class="mp-tab-overlay"
         role="dialog"
         aria-label="房间玩家列表"
+        @pointerdown.self="closePlayerList"
       >
         <div class="mp-tab-card">
+          <button
+            type="button"
+            class="mp-tab-close"
+            aria-label="关闭玩家列表"
+            @click="closePlayerList"
+          >
+            ×
+          </button>
           <p class="mp-eyebrow">PLAYERS</p>
           <h2>房间玩家</h2>
           <ul class="mp-tab-player-list">
@@ -1923,9 +2024,19 @@ onBeforeUnmount(() => {
               <span>{{ player.nickname }}</span>
               <em v-if="player.isHost">房主</em>
               <em v-if="player.id === selfId" class="me">你</em>
+              <button
+                v-if="isHost && player.id !== selfId"
+                type="button"
+                class="mp-kick"
+                @click="kickPlayer(player)"
+              >
+                踢出
+              </button>
             </li>
           </ul>
-          <p class="mp-tab-hint">松开 Tab 关闭</p>
+          <p class="mp-tab-hint">
+            {{ isMobile ? '点击右上角或背景关闭' : '按 Tab / Esc 或点击右上角关闭' }}
+          </p>
         </div>
       </div>
 

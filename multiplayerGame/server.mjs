@@ -564,6 +564,34 @@ function setTime(ws, client, message) {
   )
 }
 
+function kickPlayer(ws, client, message) {
+  const room = rooms.get(client.roomCode)
+  if (!room || room.hostId !== client.id) return
+  const target = room.players.get(String(message.id || ''))
+  if (!target || target.id === client.id || target.isHost) return
+
+  clearPlayerDrag(room, target.id)
+  room.players.delete(target.id)
+  const targetClient = target.ws?.client
+  if (targetClient) {
+    targetClient.roomCode = null
+    targetClient.isHost = false
+  }
+  send(target.ws, {
+    type: 'kicked',
+    message: '你已被房主移出房间',
+  })
+  broadcast(room, {
+    type: 'player-left',
+    id: target.id,
+    nickname: target.nickname,
+    reason: 'kicked',
+  })
+  console.info(
+    `[room] ${room.code} 房主移出 ${target.nickname}，${room.players.size}/${room.maxPlayers}`,
+  )
+}
+
 function leaveRoom(ws, client, reason = 'leave') {
   const room = rooms.get(client.roomCode)
   if (!room) return
@@ -662,6 +690,9 @@ function onMessage(ws, client, message) {
       break
     case 'message':
       sendChatMessage(ws, client, message)
+      break
+    case 'kick':
+      kickPlayer(ws, client, message)
       break
     case 'leave':
       leaveRoom(ws, client, 'leave')
