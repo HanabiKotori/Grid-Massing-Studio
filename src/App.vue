@@ -1125,8 +1125,6 @@ onBeforeUnmount(() => {
       <div class="coord-item"><span>边长</span><b>{{ segmentLength ? segmentLength.toFixed(1) : '—' }}</b><i>m</i></div>
     </div>
 
-    <div v-if="gridOn" class="legend"><i />网格 1 格 = 1 米</div>
-
     <aside v-if="!isMobile && !showWelcome" class="wb-right">
       <Inspector
       :venue="venue"
@@ -1231,8 +1229,11 @@ onBeforeUnmount(() => {
       </ol>
       <div class="welcome-actions">
         <button class="btn primary" @click="startVenueDraw">开始绘制</button>
-        <button class="btn" @click="loadSample">载入示例</button>
-        <button class="btn" @click="showHelp = true">帮助</button>
+        <div class="welcome-sub">
+          <button class="btn" @click="loadSample">载入示例</button>
+          <button class="btn" @click="triggerImport">导入 JSON</button>
+          <button class="btn" @click="showHelp = true">帮助</button>
+        </div>
       </div>
     </div>
 

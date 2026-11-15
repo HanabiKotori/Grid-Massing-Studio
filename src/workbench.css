@@ -1592,6 +1592,32 @@ body {
   color: var(--ink);
 }
 
+/* 高度预设快捷按钮 */
+.wb .dock .chip {
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 5px;
+  background: #16171b;
+  color: var(--ink-2);
+  font-size: 11px;
+}
+
+.wb .dock .chip:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--ink);
+}
+
+.wb .dock .chip.on {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+}
+
+.wb .dock input[type='range'] {
+  accent-color: var(--accent);
+}
+
 .wb .pill {
   background: var(--accent-soft);
   color: var(--accent-ink);
@@ -2956,6 +2982,78 @@ body {
 
 .wb .booth-label-name {
   color: #1a1c20;
+}
+
+/* ---------- 欢迎弹窗 ---------- */
+
+.app.wb .welcome {
+  background: rgba(11, 12, 14, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 40px 90px -30px #000;
+  color: var(--ink-2);
+}
+
+.app.wb .welcome h2 {
+  color: var(--ink);
+}
+
+.app.wb .welcome > p {
+  color: var(--ink-3);
+}
+
+.app.wb .steps li {
+  color: var(--ink-2);
+}
+
+.app.wb .steps i {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--ink-2);
+}
+
+.app.wb .welcome .btn {
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: #16171b;
+  color: var(--ink-2);
+  box-shadow: none;
+}
+
+.app.wb .welcome .btn:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--ink);
+}
+
+.app.wb .welcome .btn.primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+}
+
+.app.wb .welcome .btn.primary:hover {
+  background: #7f8bef;
+}
+
+.app.wb .welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 主按钮不能被 column 布局拉伸，高度与下面一排保持一致 */
+.app.wb .welcome-actions > .btn {
+  flex: none;
+  height: 32px;
+}
+
+.app.wb .welcome-sub {
+  display: flex;
+  gap: 8px;
+}
+
+.app.wb .welcome-sub .btn {
+  flex: 1;
 }
 
 /* ---------- toast 浮在时间轴之上 ---------- */
