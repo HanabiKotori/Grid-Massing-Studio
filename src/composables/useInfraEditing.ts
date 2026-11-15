@@ -197,6 +197,8 @@ export function useInfraEditing(options: InfraEditingOptions) {
       ...(kind === 'elevator'
         ? { count: copied?.count ?? ELEVATOR_DEFAULT_COUNT }
         : {}),
+      ...(copied?.material ? { material: copied.material } : {}),
+      ...(copied?.texture ? { texture: copied.texture } : {}),
     }
 
     pendingInfraCopy.value = null
@@ -226,6 +228,25 @@ export function useInfraEditing(options: InfraEditingOptions) {
       it.id === id ? { ...it, name } : it,
     )
     options.toast(`已重命名为「${name}」`)
+  }
+
+  function updateInfraMaterial(
+    id: string,
+    patch: { material?: string | null; texture?: string | null },
+  ) {
+    options.infras.value = options.infras.value.map((it) => {
+      if (it.id !== id) return it
+      const next = { ...it }
+      if ('material' in patch) {
+        if (patch.material) next.material = patch.material
+        else delete next.material
+      }
+      if ('texture' in patch) {
+        if (patch.texture) next.texture = patch.texture
+        else delete next.texture
+      }
+      return next
+    })
   }
 
   function deleteInfra(id: string) {
@@ -591,6 +612,7 @@ export function useInfraEditing(options: InfraEditingOptions) {
     renameInfra,
     deleteInfra,
     updateInfraDims,
+    updateInfraMaterial,
     moveInfra,
     moveInfraGroup,
     nudgeInfra,

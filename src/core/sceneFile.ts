@@ -7,6 +7,10 @@ import {
   WINDOW_SILL,
   clampInfraDims,
 } from './infra'
+import {
+  isMaterialPresetId,
+  normalizeMaterialTexture,
+} from './materials'
 import { UNDERLAY_DEFAULT_OPACITY, clampUnderlaySpec } from './underlay'
 import type {
   Booth,
@@ -201,6 +205,8 @@ export function readInfra(
 
   const gateMode: GateOpenMode =
     r.openMode === 'side' || r.openMode === 'up' ? r.openMode : 'double'
+  const material = isMaterialPresetId(r.material) ? r.material : undefined
+  const texture = normalizeMaterialTexture(r.texture)
   return {
     id,
     kind: kindTyped,
@@ -209,6 +215,8 @@ export function readInfra(
     z,
     rotation: Number.isFinite(rotation) ? rotation : 0,
     ...dims,
+    ...(material ? { material } : {}),
+    ...(texture ? { texture } : {}),
     ...(kindTyped === 'window'
       ? { height: windowHeight, sill: Math.round(windowSill * 10) / 10 }
       : {}),

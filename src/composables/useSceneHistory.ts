@@ -79,7 +79,9 @@ function sameInfras(a: Infra[], b: Infra[]): boolean {
       (x.sill ?? 0) === (y.sill ?? 0) &&
       (x.open ?? false) === (y.open ?? false) &&
       (x.openMode ?? 'double') === (y.openMode ?? 'double') &&
-      (x.count ?? 0) === (y.count ?? 0)
+      (x.count ?? 0) === (y.count ?? 0) &&
+      (x.material ?? '') === (y.material ?? '') &&
+      (x.texture ?? '') === (y.texture ?? '')
     )
   })
 }

@@ -1,0 +1,29 @@
+{
+  "note": "1K color maps for furniture and infrastructure wall presets. All assets are CC0.",
+  "textures": [
+    {
+      "file": "wood-oak.jpg",
+      "name": "Wood 066",
+      "source": "ambientCG",
+      "url": "https://ambientcg.com/a/Wood066",
+      "license": "CC0 1.0",
+      "role": "light oak wood for tables, counters and wall panels"
+    },
+    {
+      "file": "concrete-wall.jpg",
+      "name": "Concrete 034",
+      "source": "ambientCG",
+      "url": "https://ambientcg.com/a/Concrete034",
+      "license": "CC0 1.0",
+      "role": "raw concrete wall finish"
+    },
+    {
+      "file": "plaster-white.jpg",
+      "name": "Plaster 001",
+      "source": "ambientCG",
+      "url": "https://ambientcg.com/a/Plaster001",
+      "license": "CC0 1.0",
+      "role": "white plaster wall finish"
+    }
+  ]
+}

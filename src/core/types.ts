@@ -104,6 +104,10 @@ export interface Infra {
   open?: boolean
   /** 开启方式（仅 gate），默认对开 */
   openMode?: GateOpenMode
+  /** 预设材质 id（家具与墙面） */
+  material?: string
+  /** 自定义贴图 data URL（家具与墙面） */
+  texture?: string
 }
 
 export type EditorMode =

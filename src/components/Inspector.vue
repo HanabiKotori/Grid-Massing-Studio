@@ -12,6 +12,13 @@ import {
   gateOpenModeOf,
   isFurnitureKind,
 } from '../core/infra'
+import {
+  materialPresetById,
+  materialPresetsFor,
+  materialPreviewUrl,
+  readMaterialImage,
+  type MaterialPreset,
+} from '../core/materials'
 import { boundsOf, perimeter, pointInPolygon, polygonArea } from '../core/polygon'
 import type {
   Booth,
@@ -54,6 +61,7 @@ const props = defineProps<{
 const venueOpen = ref(true)
 const boothOpen = ref(true)
 const infraOpen = ref(true)
+const materialUploadingId = ref<string | null>(null)
 
 const emit = defineEmits<{
   (e: 'draw-venue'): void
@@ -92,6 +100,12 @@ const emit = defineEmits<{
   (e: 'logo', id: string, dataUrl: string): void
   (e: 'remove-logo', id: string): void
   (e: 'logo-error', message: string): void
+  (
+    e: 'infra-material',
+    id: string,
+    patch: { material?: string | null; texture?: string | null },
+  ): void
+  (e: 'material-error', message: string): void
   (e: 'underlay-file', file: File): void
   (e: 'center-underlay'): void
   (e: 'toggle-underlay-lock'): void
@@ -632,6 +646,57 @@ function onSizeChange(id: string, key: SizeField['key'], e: Event) {
   const patch: { width?: number; depth?: number; height?: number; sill?: number } = {}
   patch[key] = Number(snapped.toFixed(2))
   emit('infra-size', id, patch)
+}
+
+function materialScope(kind: InfraKind): 'furniture' | 'wall' | null {
+  if (kind === 'wall') return 'wall'
+  return isFurnitureKind(kind) ? 'furniture' : null
+}
+
+function materialPresetsOf(kind: InfraKind): MaterialPreset[] {
+  const scope = materialScope(kind)
+  return scope ? materialPresetsFor(scope) : []
+}
+
+function materialLabel(it: Infra): string {
+  if (it.texture) return '自定义贴图'
+  return materialPresetById(it.material)?.label ?? '默认'
+}
+
+function materialSwatchStyle(preset: MaterialPreset) {
+  const url = materialPreviewUrl(preset)
+  return url
+    ? { backgroundColor: preset.swatch, backgroundImage: `url("${url}")` }
+    : { backgroundColor: preset.swatch }
+}
+
+function selectInfraMaterial(it: Infra, materialId: string | null) {
+  emit('infra-material', it.id, {
+    material: materialId,
+    texture: null,
+  })
+}
+
+async function onInfraMaterialFile(it: Infra, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  materialUploadingId.value = it.id
+  try {
+    const texture = await readMaterialImage(file)
+    emit('infra-material', it.id, {
+      material: null,
+      texture,
+    })
+  } catch (err) {
+    emit(
+      'material-error',
+      err instanceof Error ? err.message : '材质贴图处理失败',
+    )
+  } finally {
+    materialUploadingId.value = null
+  }
 }
 
 const editingId = ref<string | null>(null)
@@ -1320,6 +1385,70 @@ function onLogoChange(id: string, e: Event) {
                   />
                   <i>m</i>
                 </label>
+
+                <div v-if="materialScope(it.kind)" class="infra-material">
+                  <div class="infra-material-head">
+                    <span>材质</span>
+                    <em>{{ materialLabel(it) }}</em>
+                  </div>
+                  <div class="material-grid">
+                    <button
+                      type="button"
+                      class="material-swatch default"
+                      :class="{ on: !it.material && !it.texture }"
+                      title="默认材质"
+                      @click.stop="selectInfraMaterial(it, null)"
+                    >
+                      默认
+                    </button>
+                    <button
+                      v-for="preset in materialPresetsOf(it.kind)"
+                      :key="preset.id"
+                      type="button"
+                      class="material-swatch"
+                      :class="{
+                        on: it.material === preset.id && !it.texture,
+                      }"
+                      :style="materialSwatchStyle(preset)"
+                      :title="preset.label"
+                      :aria-label="preset.label"
+                      @click.stop="selectInfraMaterial(it, preset.id)"
+                    />
+                    <button
+                      v-if="it.texture"
+                      type="button"
+                      class="material-swatch custom on"
+                      :style="{ backgroundImage: `url(${it.texture})` }"
+                      title="自定义贴图"
+                      @click.stop
+                    />
+                  </div>
+                  <div class="infra-material-actions">
+                    <label
+                      class="mini material-upload"
+                      :class="{ disabled: materialUploadingId === it.id }"
+                    >
+                      {{
+                        materialUploadingId === it.id
+                          ? '处理中…'
+                          : '上传自定义贴图'
+                      }}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        @change="onInfraMaterialFile(it, $event)"
+                      />
+                    </label>
+                    <button
+                      v-if="it.texture"
+                      type="button"
+                      class="mini"
+                      @click.stop="selectInfraMaterial(it, null)"
+                    >
+                      清除贴图
+                    </button>
+                  </div>
+                </div>
 
                 <div class="infra-tools">
                   <template v-if="it.kind !== 'gate' && it.kind !== 'window'">

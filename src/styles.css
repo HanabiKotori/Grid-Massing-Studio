@@ -2170,6 +2170,111 @@ input[type='range']::-moz-range-thumb {
   flex: none;
 }
 
+.infra-material {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 3px;
+}
+
+.infra-material-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ink-3);
+  font-size: 10.5px;
+}
+
+.infra-material-head em {
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 9.5px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  gap: 5px;
+}
+
+.material-swatch {
+  position: relative;
+  height: 34px;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background-color: #f4f2ec;
+  background-position: center;
+  background-size: cover;
+  color: var(--ink-3);
+  font-size: 9.5px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.material-swatch:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.material-swatch.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(47, 95, 224, 0.16);
+}
+
+.material-swatch.default {
+  background-image: repeating-linear-gradient(
+    135deg,
+    #f1efe8,
+    #f1efe8 5px,
+    #e6e3da 5px,
+    #e6e3da 10px
+  );
+}
+
+.material-swatch.custom::after {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgba(20, 24, 30, 0.72);
+  color: #fff;
+  content: '自定义';
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.infra-material-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.material-upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.material-upload.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.material-upload input {
+  display: none;
+}
+
 .infra-tools {
   grid-column: 1 / -1;
   display: flex;

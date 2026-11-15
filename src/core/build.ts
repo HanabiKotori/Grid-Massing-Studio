@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { OPEN_FLOOR_HEIGHT } from './booth'
-import { ELEVATOR_DEFAULT_COUNT, WINDOW_DEPTH, WINDOW_SILL } from './infra'
+import { ELEVATOR_DEFAULT_COUNT, WINDOW_DEPTH, WINDOW_SILL, isFurnitureKind } from './infra'
+import { materialPresetById, materialTextureUrl } from './materials'
 import { insetPolygon, pointInPolygon, signedArea } from './polygon'
 import type { GateOpenMode, Infra, Pt } from './types'
 
@@ -855,6 +856,80 @@ function furnitureMats(ghost: boolean) {
     metalness: 0.12,
   })
   return { wall, edge, fabric, fabricDark, metal }
+}
+
+// ---------- 家具 / 基础设施墙面材质 ----------
+
+const finishTextureLoader = new THREE.TextureLoader()
+const finishTextureCache = new Map<string, THREE.Texture>()
+
+function finishTexture(
+  url: string,
+  repeatX: number,
+  repeatY: number,
+): THREE.Texture {
+  const key = `${url}|${repeatX.toFixed(2)}|${repeatY.toFixed(2)}`
+  const cached = finishTextureCache.get(key)
+  if (cached) return cached
+  const texture = finishTextureLoader.load(url)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.wrapS = THREE.RepeatWrapping
+  texture.wrapT = THREE.RepeatWrapping
+  texture.anisotropy = 4
+  texture.repeat.set(repeatX, repeatY)
+  texture.needsUpdate = true
+  finishTextureCache.set(key, texture)
+  return texture
+}
+
+function applyInfraFinish(group: THREE.Group, infra: Infra) {
+  if (infra.kind !== 'wall' && !isFurnitureKind(infra.kind)) return
+  const preset = materialPresetById(infra.material)
+  if (!infra.texture && !preset) return
+
+  const isWall = infra.kind === 'wall'
+  const baseUrl = infra.texture
+    ? undefined
+    : preset
+      ? materialTextureUrl(preset)
+      : undefined
+  let map: THREE.Texture | undefined
+  if (baseUrl) {
+    const tile = preset?.wallTile ?? 2.8
+    const repeatX = isWall ? Math.max(1, infra.width / tile) : 1
+    const repeatY = isWall ? Math.max(1, infra.height / tile) : 1
+    map = finishTexture(baseUrl, repeatX, repeatY)
+  } else if (infra.texture) {
+    map = finishTexture(infra.texture, 1, 1)
+  }
+
+  const color = new THREE.Color(
+    infra.texture ? '#ffffff' : (preset?.color ?? '#ffffff'),
+  )
+  const roughness = infra.texture ? 0.9 : (preset?.roughness ?? 0.9)
+  const metalness = infra.texture ? 0 : (preset?.metalness ?? 0)
+  const cloned = new Map<THREE.Material, THREE.Material>()
+
+  group.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh) return
+    const replace = (material: THREE.Material): THREE.Material => {
+      if (!(material instanceof THREE.MeshStandardMaterial)) return material
+      const existing = cloned.get(material)
+      if (existing) return existing
+      const next = material.clone()
+      next.map = map ?? null
+      next.color.copy(color)
+      next.roughness = roughness
+      next.metalness = metalness
+      next.needsUpdate = true
+      cloned.set(material, next)
+      return next
+    }
+    mesh.material = Array.isArray(mesh.material)
+      ? mesh.material.map(replace)
+      : replace(mesh.material)
+  })
 }
 
 /** 家具通用盒体：带描边，ghost 预览不投影 */
@@ -1715,6 +1790,7 @@ export function buildInfra(
       group = wallGroup(width, depth, height, openings, ghost)
   }
   group.name = `infra:${infra.id}`
+  if (!ghost) applyInfraFinish(group, infra)
   // 保留门扇姿态等构建期元数据，再附加基础设施标识
   group.userData = { ...group.userData, infraId: infra.id, kind }
   group.position.set(infra.x, 0, infra.z)

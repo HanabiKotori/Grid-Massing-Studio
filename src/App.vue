@@ -360,6 +360,7 @@ const {
   renameInfra,
   deleteInfra,
   updateInfraDims,
+  updateInfraMaterial,
   moveInfra,
   moveInfraGroup,
   nudgeInfra,
@@ -1096,6 +1097,8 @@ onBeforeUnmount(() => {
       @clear-infra-selection="clearInfraSelection"
       @delete-infra="deleteInfra"
       @infra-size="updateInfraDims"
+      @infra-material="updateInfraMaterial"
+      @material-error="toast"
       @rotate-infra="rotateInfra"
       @toggle-gate="toggleGate"
       @gate-open-mode="setGateOpenMode"
