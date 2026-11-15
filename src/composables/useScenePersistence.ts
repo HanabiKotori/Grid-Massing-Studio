@@ -1,4 +1,4 @@
-import { nextTick, type Ref, type ShallowRef } from 'vue'
+import { nextTick, ref, type Ref, type ShallowRef } from 'vue'
 import { isFurnitureKind } from '../core/infra'
 import { furnitureInsidePolygon } from '../core/infraGeometry'
 import { pointInPolygon } from '../core/polygon'
@@ -79,6 +79,10 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
   let autosaveReady = false
   let importedDuringRestore = false
 
+  /** 自动保存状态，供状态栏显示 */
+  const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const savedAt = ref<number | null>(null)
+
   function buildSceneJson(): SceneJson {
     return buildSceneFile({
       venue: options.venue.value,
@@ -94,13 +98,18 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
 
   async function saveProjectNow() {
     if (options.renderOnly.value) return
+    saveState.value = 'saving'
     try {
+      const at = Date.now()
       await saveStoredProject({
         version: 1,
-        savedAt: Date.now(),
+        savedAt: at,
         scene: buildSceneJson(),
       })
+      savedAt.value = at
+      saveState.value = 'saved'
     } catch (err) {
+      saveState.value = 'error'
       console.warn('自动保存失败', err)
     }
   }
@@ -336,6 +345,8 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
     applySceneJson,
     scheduleAutosave,
     restoreStoredProject,
+    saveState,
+    savedAt,
     dispose,
   }
 }

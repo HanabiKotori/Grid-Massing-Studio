@@ -53,7 +53,7 @@ const sections: HelpSection[] = [
     cards: [
       {
         title: '1. 绘制场馆',
-        text: '点击「开始绘制」或右侧「绘制场地面积」，在 1 m 网格上依次点击顶点，或按住左键拖拽直接拉出矩形场馆。回到起点、双击或按 Enter 闭合轮廓。',
+        text: '点左侧「场馆」分组行右侧的重置图标开始重绘（已有场馆会先确认）；在 1 m 网格上依次点击顶点，或按住左键拖拽直接拉出矩形。回到起点、双击或按 Enter 闭合轮廓。',
       },
       {
         title: '2. 设定净高',
@@ -61,11 +61,11 @@ const sections: HelpSection[] = [
       },
       {
         title: '3. 绘制展台',
-        text: '右侧选择标准 / 脚手架 / 光地，在馆内画出轮廓。标准与脚手架需要设定高度，光地直接生成 0.15 m 台板。',
+        text: '在左侧「展台」下展开标准 / 脚手架 / 光地，点分组右侧 + 进入绘制，在馆内画出轮廓。标准与脚手架需要设定高度，光地直接生成 0.15 m 台板。',
       },
       {
         title: '4. 设施与家具',
-        text: '从右侧基础设施或家具列表选择类型，再点击位置放置。家具必须完整落在同一展台内部。',
+        text: '在左侧「基础设施」或「家具」下展开类型，点分组右侧 + 后点击位置放置。从某个展台的家具分组新增时，镜头会飞到该展台，放置范围也只限这个展台内部。',
       },
       {
         title: '5. 检查与导出',
@@ -81,15 +81,15 @@ const sections: HelpSection[] = [
   {
     id: 'interface',
     title: '界面与视图',
-    lead: '画布是主工作区，顶部时间轴、分组工具栏和右侧场景结构分别控制环境、观察方式与模型数据。',
+    lead: '画布是主工作区；顶栏与时间轴控制环境与观察方式，左侧结构树管理对象，右侧属性面板编辑当前选中项。',
     cards: [
       {
         title: '顶部时间与太阳',
-        text: '时间轴按真实时间推进，默认当前本地时间。可拖动、播放/暂停，或点击时钟箭头回到当前时间。',
+        text: '时间轴按真实时间推进，默认当前本地时间。可拖动、播放/暂停，左端是 1×–100× 的推进倍率，点 − / + 或直接输入数值；点 06 / 12 / 18 / 24 跳到对应整点，点「现在」平滑回到当前时刻。',
       },
       {
         title: '分组工具栏',
-        text: '分成「视角 / 显示 / 画质 / 数据」四组，二级菜单在工具栏内部展开；帮助和漫游直接进入。显示菜单包含名称、刻度、面积、网格和底图开关；显示 → 名称 还有第三级菜单，可分别开关「展台」和「基础设施」名称；默认只显示展台名称，基础设施名称需手动开启。点击菜单内操作后工具栏会保持展开，方便连续调整；再次点击一级按钮或按 Esc 收起。打开天气、帮助、展示模式或进入漫游时会自动关闭菜单。画质单独作为一级菜单，可选极致 / 高 / 中 / 低。视角快捷键：T 俯视、I 轴测、F 适配。PC 为左侧竖向，移动端为顶部横向，可按内容宽度收起 / 展开。',
+        text: '顶栏左侧是视角 / 显示 / 画质 / 数据四组菜单，单击展开，执行操作后保持展开便于连续调整，再次点击或按 Esc 收起。显示菜单包含名称、刻度、面积、网格和底图开关；显示 → 名称 还有第三级菜单，可分别开关「展台」和「基础设施」名称，默认只显示展台名称。画质可选极致 / 高 / 中 / 低。视角快捷键：T 俯视、I 轴测、F 适配。',
       },
       {
         title: '快速设置',
@@ -101,11 +101,11 @@ const sections: HelpSection[] = [
       },
       {
         title: '右侧场景结构',
-        text: '分场馆、展台、基础设施三组，均可展开收起。顶部固定显示场馆面积和展台覆盖率；主动选中展台或设施时会自动展开对应卡片并定位到条目。新增展台或设施后不会跳离新增按钮，便于连续添加；新增家具时会定位到家具按钮组。',
+        text: '右栏只渲染当前选中的对象：未选中时是场馆统计与参数（面积、覆盖率、净高、底图），选中展台 / 设施 / 家具时切换为该对象的完整参数。字段按几何、外观、材质分组，数字可直接输入，滑块拖动即时生效。',
       },
       {
         title: '欢迎页与面板',
-        text: '首次进入且没有场景时显示欢迎页，右侧场景结构暂时隐藏；生成场馆后结构面板出现，PC 端从右向左滑入。',
+        text: '左侧结构树按「场馆 / 展台 / 基础设施 / 家具」组织，分组可展开收起，面板头有双箭头一键全展开或全收起。每级分组右侧的 + 直接进入对应新增流程；悬停某一行可点行尾 × 删除该对象。',
       },
       {
         title: '画布操作',
@@ -285,7 +285,7 @@ const sections: HelpSection[] = [
     cards: [
       {
         title: '真实时间',
-        text: '时间轴 24 小时制，1 秒现实时间 = 1 秒模拟时间，默认当前本地时间。可拖动滑块或点击回到当前时间。',
+        text: '时间轴 24 小时制，默认当前本地时间。左端倍率控制推进速度：1× 为实时（1 秒现实 = 1 秒模拟），100× 约 14 分钟走完一天。可拖动滑块、点刻度跳转或点「现在」回到当前时刻。',
       },
       {
         title: '播放与暂停',
@@ -297,7 +297,7 @@ const sections: HelpSection[] = [
       },
       {
         title: '手动天气',
-        text: '工具栏「天气」或按 Alt+W 打开面板，Alt+W 只负责打开 / 关闭面板，不改变当前天气。面板顶部有天气效果总开关：关闭时默认为晴天；开启或选择任意天气后生效。切换天气时天空、雾和主光会用约 0.9 秒平滑过渡。实时天气默认查询贵阳，也可以输入城市名或 adcode；PC 端场馆首次生成或载入后会按上次查询城市自动应用实时天气，并在时间组件右侧显示当前天气；移动端默认不自动应用，可在面板中打开「使用实时天气」开关。开关启用后，查询新城市会自动同步；关闭开关则回到晴天。下方可单独拖动雨、雪、沙尘的粒子浓度（0–100%）和能见度；拖动时弹窗与遮罩会暂时隐藏，只保留当前滑块方便观察场景，松开后恢复。当前天气没有对应粒子时滑块会提示并可预览同类天气。晴、少云、多云天空为天蓝色；少云和多云还会绘制缓慢漂移的云层。少云、多云和阴天同时有地面云影，太阳主光随之轻微明暗变化。第一人称漫游时叠加镜头雨滴、雾气和雷暴闪白。封闭顶棚下不显示降水。',
+        text: '时间轴右下的天气按钮或按 Alt+W 打开面板，Alt+W 只负责打开 / 关闭，不改变当前天气。面板顶部有天气效果总开关：关闭时默认为晴天；开启或选择任意天气后生效。切换天气时天空、雾和主光会用约 0.9 秒平滑过渡。实时天气默认查询贵阳，也可以输入城市名或 adcode；PC 端场馆首次生成或载入后会按上次查询城市自动应用实时天气，并在时间组件右侧显示当前天气；移动端默认不自动应用，可在面板中打开「使用实时天气」开关。开关启用后，查询新城市会自动同步；关闭开关则回到晴天。下方可单独拖动雨、雪、沙尘的粒子浓度（0–100%）和能见度；拖动时弹窗与遮罩会暂时隐藏，只保留当前滑块方便观察场景，松开后恢复。当前天气没有对应粒子时滑块会提示并可预览同类天气。晴、少云、多云天空为天蓝色；少云和多云还会绘制缓慢漂移的云层。少云、多云和阴天同时有地面云影，太阳主光随之轻微明暗变化。第一人称漫游时叠加镜头雨滴、雾气和雷暴闪白。封闭顶棚下不显示降水。',
       },
       {
         title: '极致灯光',
@@ -333,7 +333,7 @@ const sections: HelpSection[] = [
       },
       {
         title: '预览模式',
-        text: 'URL 加 `render=1` 进入纯渲染模式，隐藏编辑面板和快捷键，适合嵌入展示。',
+        text: '点顶栏右侧的预览按钮进入只读预览：两侧栏、时间轴与状态栏一起收起，视口铺满，只保留模型与顶栏；再点一次退出。URL 加 `render=1` 同样有效，适合嵌入展示。',
       },
       {
         title: '外部 API',
@@ -562,27 +562,29 @@ onMounted(() => closeEl.value?.focus())
 
 <style scoped>
 .help-mask {
+  --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
   position: fixed;
   inset: 0;
   z-index: 80;
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(18, 20, 24, 0.46);
-  backdrop-filter: blur(5px);
+  background: rgba(4, 5, 6, 0.7);
+  backdrop-filter: blur(4px);
 }
 
 .help-panel {
-  width: min(1040px, 100%);
-  max-height: min(780px, calc(100vh - 48px));
+  width: min(1000px, 100%);
+  max-height: min(800px, calc(100vh - 48px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  box-shadow: 0 30px 80px -28px rgba(20, 22, 28, 0.55);
-  animation: help-in 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
+  background: #0b0c0e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 40px 90px -30px #000;
+  color: #b6bac1;
+  animation: help-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .help-head {
@@ -591,41 +593,43 @@ onMounted(() => closeEl.value?.focus())
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 18px;
-  border-bottom: 1px solid var(--line);
+  padding: 13px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .help-title {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 10px;
   min-width: 0;
 }
 
 .help-mark {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 9px;
-  background: var(--ink);
-  color: #fff;
-  font-size: 17px;
-  font-weight: 600;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cdd3ff;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .help-title h2 {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
+  color: #ecedef;
 }
 
 .help-title p {
   margin: 2px 0 0;
-  font-size: 10.5px;
-  color: var(--ink-3);
+  font-size: 10px;
+  color: #5f636a;
 }
 
 .help-head-actions {
@@ -639,8 +643,8 @@ onMounted(() => closeEl.value?.focus())
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 10.5px;
-  color: var(--ink-3);
+  font-size: 10px;
+  color: #5f636a;
 }
 
 .help-f1 kbd,
@@ -648,95 +652,119 @@ onMounted(() => closeEl.value?.focus())
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 20px;
+  min-height: 19px;
   padding: 0 6px;
-  border: 1px solid var(--line-strong);
-  border-radius: 5px;
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-family: inherit;
-  font-size: 10px;
-  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background: #16171b;
+  color: #b6bac1;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 400;
   white-space: nowrap;
 }
 
 .help-close {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
-  border-radius: 7px;
-  color: var(--ink-2);
-  font-size: 20px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: #8b8f96;
+  font-size: 18px;
   line-height: 1;
+  cursor: pointer;
 }
 
 .help-close:hover {
-  background: var(--surface-2);
-  color: var(--ink);
+  background: rgba(255, 255, 255, 0.07);
+  color: #ecedef;
 }
 
 .help-body {
   min-height: 0;
   flex: 1;
   display: grid;
-  grid-template-columns: 218px minmax(0, 1fr);
+  grid-template-columns: 196px minmax(0, 1fr);
 }
 
 .help-nav {
   min-height: 0;
   overflow-y: auto;
-  padding: 12px;
-  border-right: 1px solid var(--line);
-  background: #faf9f6;
+  padding: 10px;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  background: #08090a;
+  scrollbar-width: thin;
 }
 
 .help-nav button {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 9px 10px;
-  border-radius: 8px;
-  color: var(--ink-2);
-  font-size: 12px;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #8b8f96;
+  font-size: 11.5px;
   text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
 .help-nav button span {
-  color: var(--ink-3);
-  font-size: 9.5px;
-  font-variant-numeric: tabular-nums;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: #454950;
 }
 
 .help-nav button:hover {
-  background: var(--surface-2);
-  color: var(--ink);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ecedef;
 }
 
+/* 选中态与天气面板预设列表一致：无底色、紫字、行尾圆点 */
 .help-nav button.active {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: none;
+  color: #cdd3ff;
 }
 
 .help-nav button.active span {
-  color: var(--accent-ink);
-  opacity: 0.65;
+  color: #8b93c7;
+}
+
+.help-nav button.active::after {
+  content: '';
+  flex: none;
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6f7ce8;
 }
 
 .help-content {
   min-width: 0;
   overflow-y: auto;
-  padding: 24px 28px 18px;
+  padding: 18px 22px 16px;
   scroll-behavior: smooth;
+  scrollbar-width: thin;
+}
+
+.help-content section {
+  max-width: 720px;
 }
 
 .help-quick {
-  margin: 0 0 18px;
-  padding: 11px 12px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: #faf9f6;
+  margin: 0 0 16px;
+  padding: 0 0 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0;
+  background: none;
 }
 
 .help-quick-head {
@@ -748,13 +776,17 @@ onMounted(() => closeEl.value?.focus())
 }
 
 .help-quick-head b {
-  font-size: 11.5px;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #5f636a;
 }
 
 .help-quick-head span {
-  color: var(--ink-3);
   font-size: 9.5px;
+  color: #454950;
 }
 
 .help-quick-grid {
@@ -764,104 +796,96 @@ onMounted(() => closeEl.value?.focus())
 }
 
 .help-quick-grid button {
-  height: 32px;
+  height: 30px;
   padding: 0 9px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fff;
-  color: var(--ink-2);
-  font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 5px;
+  background: #16171b;
+  color: #b6bac1;
+  font-size: 10.5px;
   text-align: left;
+  cursor: pointer;
 }
 
 .help-quick-grid button:hover {
-  border-color: var(--line-strong);
-  background: var(--surface-2);
-  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ecedef;
 }
 
 .help-quick-grid button.on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  border-color: transparent;
+  background: rgba(111, 124, 232, 0.16);
+  color: #cdd3ff;
 }
 
 .help-quick-grid button span {
-  color: var(--ink-3);
   font-size: 9px;
+  color: #5f636a;
 }
 
 .help-quick-grid button.on span {
-  color: var(--accent-ink);
-  opacity: 0.7;
+  color: #8b93c7;
 }
 
 .help-quick-grid button:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-.help-content section:not(.help-quick) {
-  max-width: 760px;
-}
-
-.help-content section {
-  max-width: 760px;
-}
-
 .help-lead {
-  margin: 0 0 18px;
-  color: var(--ink-2);
-  font-size: 12.5px;
+  margin: 0 0 12px;
+  color: #8b8f96;
+  font-size: 12px;
   line-height: 1.75;
 }
 
 .help-cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  display: block;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .help-card {
-  padding: 13px 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fbfaf7;
+  padding: 11px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0;
+  background: none;
 }
 
 .help-card h3 {
-  margin: 0 0 5px;
-  font-size: 12px;
+  margin: 0 0 4px;
+  font-size: 11.5px;
   font-weight: 600;
+  color: #ecedef;
 }
 
 .help-card p {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.7;
-  color: var(--ink-2);
+  color: #8b8f96;
 }
 
 .help-tip {
-  margin-top: 14px;
-  padding: 11px 13px;
-  border-left: 3px solid var(--accent);
-  border-radius: 0 8px 8px 0;
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  font-size: 11.5px;
+  margin-top: 12px;
+  padding: 9px 11px;
+  border-left: 2px solid #6f7ce8;
+  border-radius: 0 4px 4px 0;
+  background: rgba(111, 124, 232, 0.08);
+  color: #a8b2ff;
+  font-size: 10.5px;
   line-height: 1.7;
 }
 
 .help-shortcut-groups {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  margin-top: 14px;
+  gap: 16px;
+  margin-top: 10px;
 }
 
 .help-shortcut-group-head {
@@ -869,41 +893,42 @@ onMounted(() => closeEl.value?.focus())
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 4px;
-  padding: 0 2px;
+  margin-bottom: 2px;
+  padding: 0;
 }
 
 .help-shortcut-group-head h3 {
   margin: 0;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
+  color: #ecedef;
 }
 
 .help-shortcut-group-head span {
-  color: var(--ink-3);
+  color: #5f636a;
   font-size: 9.5px;
 }
 
 .help-shortcuts {
   width: 100%;
-  margin-top: 4px;
+  margin-top: 2px;
   border-collapse: collapse;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .help-shortcuts tr + tr {
-  border-top: 1px solid var(--line);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .help-shortcuts td {
-  padding: 9px 0;
+  padding: 7px 0;
   vertical-align: top;
-  color: var(--ink-2);
+  color: #8b8f96;
   line-height: 1.55;
 }
 
 .help-shortcuts td:first-child {
-  width: 150px;
+  width: 148px;
   padding-right: 16px;
 }
 
@@ -911,36 +936,42 @@ onMounted(() => closeEl.value?.focus())
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 24px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-  color: var(--ink-3);
+  margin-top: 20px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  color: #454950;
   font-size: 10px;
 }
 
 @keyframes help-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.99);
+    transform: translateY(8px) scale(0.995);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
 @media (max-width: 820px) {
   .help-mask {
-    padding: 10px;
+    padding: 0;
+    background: #0b0c0e;
+    backdrop-filter: none;
   }
 
   .help-panel {
-    max-height: calc(100dvh - 20px);
-    border-radius: 14px;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .help-head {
-    padding: 12px 14px;
+    padding: 14px 16px 12px;
   }
 
   .help-body {
@@ -953,9 +984,9 @@ onMounted(() => closeEl.value?.focus())
     gap: 4px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 8px;
-    border-right: none;
-    border-bottom: 1px solid var(--line);
+    padding: 8px 10px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     scrollbar-width: none;
   }
 
@@ -967,19 +998,19 @@ onMounted(() => closeEl.value?.focus())
     width: auto;
     flex: none;
     white-space: nowrap;
-    padding: 7px 9px;
+    padding: 6px 8px;
   }
 
   .help-content {
-    padding: 16px 14px 14px;
+    padding: 14px 16px 16px;
   }
 
-  .help-cards {
-    grid-template-columns: 1fr;
+  .help-quick-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .help-shortcuts td:first-child {
-    width: 112px;
+    width: 108px;
     padding-right: 10px;
   }
 

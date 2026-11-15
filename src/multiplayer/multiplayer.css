@@ -1722,3 +1722,486 @@
 .is-mobile .walk-mobile-actions::-webkit-scrollbar {
   display: none;
 }
+
+/* ---------- 深色工作台主题 ---------- */
+
+#multiplayer {
+  background: #08090a;
+}
+
+.mp-page {
+  color: #b6bac1;
+  background:
+    radial-gradient(circle at 12% 4%, rgba(111, 124, 232, 0.09), transparent 32%),
+    radial-gradient(circle at 88% 0%, rgba(111, 124, 232, 0.05), transparent 26%),
+    #08090a;
+}
+
+.mp-page.mp-playing {
+  background: #07080a;
+}
+
+/* 顶栏 */
+.mp-topbar {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 11, 13, 0.86);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+
+.mp-brand span {
+  color: #5f636a;
+}
+
+.mp-brand b {
+  color: #ecedef;
+}
+
+.mp-server {
+  color: #454950;
+}
+
+.mp-back {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: #16171b;
+  color: #b6bac1;
+}
+
+.mp-back:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ecedef;
+}
+
+/* 大厅标题 */
+.mp-eyebrow {
+  color: #5f636a;
+}
+
+.mp-online-badge {
+  border: 1px solid rgba(91, 189, 139, 0.28);
+  background: rgba(91, 189, 139, 0.12);
+  color: #7dd3a8;
+}
+
+.mp-hero h1 {
+  color: #ecedef;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  background-clip: border-box;
+}
+
+.mp-hero p {
+  color: #8b8f96;
+}
+
+/* 卡片 */
+.mp-card,
+.mp-connecting,
+.mp-room-list-card,
+.mp-room-head {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: #0b0c0e;
+  box-shadow: none;
+  color: #b6bac1;
+}
+
+.mp-card h1,
+.mp-card h2,
+.mp-card h3,
+.mp-connecting h2 {
+  color: #ecedef;
+}
+
+.mp-card p,
+.mp-note,
+.mp-connecting p {
+  color: #8b8f96;
+}
+
+.mp-card-kicker {
+  color: #5f636a;
+}
+
+/* 表单 */
+.mp-field > span {
+  color: #8b8f96;
+}
+
+.mp-field input,
+.mp-field select,
+.mp-invite input,
+.mp-message-input {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: #0e0f12;
+  color: #ecedef;
+}
+
+.mp-field input::placeholder,
+.mp-invite input::placeholder,
+.mp-message-input::placeholder {
+  color: #4a4e55;
+}
+
+.mp-field input:focus,
+.mp-field select:focus,
+.mp-message-input:focus {
+  border-color: rgba(111, 124, 232, 0.65);
+  outline: none;
+}
+
+/* 按钮 */
+.mp-primary {
+  border-color: transparent;
+  border-radius: 6px;
+  background: #6f7ce8;
+  color: #fff;
+}
+
+.mp-primary:hover:not(:disabled) {
+  background: #7f8bef;
+}
+
+.mp-primary:disabled {
+  background: rgba(111, 124, 232, 0.32);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.mp-secondary,
+.mp-room-refresh,
+.mp-kick,
+.mp-leave,
+.mp-exit,
+.mp-room-join {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: #16171b;
+  color: #b6bac1;
+}
+
+.mp-back:hover,
+.mp-secondary:hover,
+.mp-room-refresh:hover,
+.mp-room-join:hover:not(:disabled),
+.mp-leave:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: #1c1e22;
+  color: #ecedef;
+}
+
+.mp-kick:hover {
+  border-color: rgba(224, 108, 90, 0.42);
+  background: rgba(224, 108, 90, 0.12);
+  color: #e2856f;
+}
+
+/* 在线房间 */
+.mp-room-list li {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: none;
+  color: #b6bac1;
+}
+
+.mp-room-list li:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mp-room-list li span,
+.mp-room-list li em {
+  color: #8b8f96;
+}
+
+.mp-room-list li b {
+  color: #ecedef;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+}
+
+.mp-room-list li em {
+  color: #8b93c7;
+  font-style: normal;
+}
+
+.mp-room-list-empty {
+  color: #5f636a;
+}
+
+/* 房间页 */
+.mp-room-chip {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: #b6bac1;
+}
+
+.mp-player-list li {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: none;
+}
+
+.mp-profile-field > span:first-child {
+  color: #8b8f96;
+}
+
+.mp-profile-field input:not([type='color']) {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: #16171b;
+  color: #ecedef;
+}
+
+.mp-profile-field input:not([type='color']):focus {
+  border-color: rgba(111, 124, 232, 0.65);
+  outline: none;
+}
+
+.mp-player-name {
+  color: #ecedef;
+}
+
+.mp-waiting,
+.mp-connecting {
+  color: #8b8f96;
+}
+
+/* 弹窗 */
+.mp-modal-backdrop {
+  background: rgba(4, 5, 6, 0.72);
+}
+
+.mp-modal {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: #0b0c0e;
+  color: #b6bac1;
+}
+
+.mp-modal h2,
+.mp-modal h3 {
+  color: #ecedef;
+}
+
+/* 提示 */
+.mp-message {
+  color: #b6bac1;
+}
+
+.mp-error {
+  border: 1px solid rgba(224, 108, 90, 0.32);
+  background: rgba(224, 108, 90, 0.1);
+  color: #e2856f;
+}
+
+.mp-status {
+  border: 1px solid rgba(111, 124, 232, 0.3);
+  background: rgba(111, 124, 232, 0.1);
+  color: #a8b2ff;
+}
+
+.mp-toast {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #16171b;
+  color: #ecedef;
+}
+
+/* 漫游中的浮层 */
+.mp-message-box,
+.mp-profile-editor,
+.mp-tab-overlay,
+.mp-tab-card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 13, 15, 0.88);
+  color: #b6bac1;
+  backdrop-filter: blur(12px);
+}
+
+/* 顶部整条只是容器，不能铺底色；底色给里面的两个按钮 */
+.mp-game-top {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.mp-page .mp-room-chip,
+.mp-page .mp-exit {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(12, 13, 15, 0.86);
+  color: #b6bac1;
+  backdrop-filter: blur(12px);
+}
+
+.mp-page .mp-exit {
+  border-color: rgba(224, 108, 90, 0.35);
+  color: #e2856f;
+}
+
+.mp-page .mp-exit:hover {
+  background: rgba(224, 108, 90, 0.16);
+  color: #f0a08c;
+}
+
+.mp-chat-feed,
+.mp-chat-item {
+  border-color: rgba(255, 255, 255, 0.06);
+  color: #b6bac1;
+}
+
+.mp-message-head b,
+.mp-profile-head b {
+  color: #ecedef;
+}
+
+.mp-tab-hint {
+  color: #5f636a;
+}
+
+/* 竖屏提示 */
+.mp-orientation-backdrop {
+  background: rgba(4, 5, 6, 0.86);
+}
+
+.mp-orientation-card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0e0f12;
+  color: #b6bac1;
+}
+
+.mp-orientation-card h2 {
+  color: #ecedef;
+}
+
+/* ---------- 复用的编辑器 HUD：深色化 ---------- */
+
+.mp-page .sim-clock,
+.mp-page .compass,
+.mp-page .view-tools,
+.mp-page .walk-hud,
+.mp-page .walk-tip,
+.mp-page .walk-auto,
+.mp-page .walk-tour-info {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 13, 15, 0.86);
+  color: #b6bac1;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 18px 36px -24px rgba(0, 0, 0, 0.9);
+}
+
+/* 巡游卡外层只做定位，底色交给内部的 info，避免整块变黑 */
+.mp-page .walk-tour-card {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.mp-page .walk-tour-info {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mp-page .sim-clock b,
+.mp-page .sim-clock strong,
+.mp-page .sim-clock h3 {
+  color: #ecedef;
+}
+
+.mp-page .sim-clock span,
+.mp-page .sim-clock p {
+  color: #8b8f96;
+}
+
+.mp-page .compass {
+  color: #b6bac1;
+}
+
+.mp-page .view-tools .tool-btn,
+.mp-page .view-tools .tool-main,
+.mp-page .view-tools .tool-parent,
+.mp-page .view-tools .tool-collapse {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: #b6bac1;
+}
+
+.mp-page .view-tools .tool-btn:hover,
+.mp-page .view-tools .tool-main:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ecedef;
+}
+
+.mp-page .tool-menu {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #121317;
+  box-shadow: 0 20px 40px -16px rgba(0, 0, 0, 0.95);
+}
+
+.mp-page .tool-menu button {
+  color: #b6bac1;
+}
+
+.mp-page .tool-menu button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ecedef;
+}
+
+.mp-page .tool-menu button.on {
+  background: rgba(111, 124, 232, 0.16);
+  color: #cdd3ff;
+}
+
+.mp-page .walk-hud kbd,
+.mp-page .walk-tip kbd,
+.mp-page .walk-hud .key {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: #b6bac1;
+}
+
+.mp-page .walk-hud b,
+.mp-page .walk-tip b {
+  color: #ecedef;
+}
+
+/* Tab 玩家列表浮层 */
+.mp-page .mp-tab-close {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  background: #16171b;
+  color: #b6bac1;
+}
+
+.mp-page .mp-tab-close:hover {
+  background: #22242a;
+  color: #ecedef;
+}
+
+.mp-page .mp-tab-player-list li {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: none;
+}
+
+.mp-page .mp-tab-player-list span {
+  color: #b6bac1;
+}
+
+.mp-page .mp-tab-player-list em {
+  color: #8b8f96;
+}
+
+.mp-page .mp-tab-player-list button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  background: #16171b;
+  color: #b6bac1;
+}
+
+.mp-page .mp-tab-player-list button:hover {
+  border-color: rgba(224, 108, 90, 0.4);
+  background: rgba(224, 108, 90, 0.14);
+  color: #e2856f;
+}

@@ -2,11 +2,14 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ActionDock from './components/ActionDock.vue'
-import AppToolbar from './components/AppToolbar.vue'
+import AppTopBar from './components/AppTopBar.vue'
 import HelpMobilePanel from './components/HelpMobilePanel.vue'
 import HelpPanel from './components/HelpPanel.vue'
 import Inspector from './components/Inspector.vue'
-import SceneStatus from './components/SceneStatus.vue'
+import MobileViewer from './components/MobileViewer.vue'
+import SceneTree from './components/SceneTree.vue'
+import StatusBar from './components/StatusBar.vue'
+import SunTimeline from './components/SunTimeline.vue'
 import WalkMinimap from './components/WalkMinimap.vue'
 import WalkOverlay from './components/WalkOverlay.vue'
 import WeatherPanel from './components/WeatherPanel.vue'
@@ -38,7 +41,7 @@ import {
   QUALITY_LABELS,
   useEditorState,
 } from './composables/useEditorState'
-import type { Pt } from './core/types'
+import type { InfraKind, Pt } from './core/types'
 
 const {
   hostEl,
@@ -246,6 +249,8 @@ const {
   applySceneJson,
   scheduleAutosave,
   restoreStoredProject,
+  saveState,
+  savedAt,
   dispose: disposeScenePersistence,
 } = useScenePersistence({
   venue,
@@ -295,7 +300,6 @@ const {
   viewIso,
   fitView,
   toggleToolMenu,
-  toggleToolbarCollapse,
   enterPresentation,
   exitPresentation,
   openHelp,
@@ -397,6 +401,13 @@ function selectInfraFromPanel(id: string) {
 function selectBoothFromPanel(id: string, additive = false) {
   handlePick(id, additive, 'booth')
   stage?.focusBooth(id)
+}
+
+/** 点击结构树里的场馆名：取消选中，镜头回到全景 */
+function selectVenueNode() {
+  selectedIds.value = []
+  clearInfraSelection()
+  fitView()
 }
 
 const {
@@ -544,8 +555,24 @@ function setRenderOnly(on: boolean) {
     draftPoints.value = []
     if (walkState.value !== 'off') stage?.stopWalk()
   }
-  stage?.setReadOnly(on)
+  stage?.setReadOnly(on || isMobile.value)
 }
+
+const selectedCount = computed(
+  () => selectedIds.value.length + (selectedInfraId.value ? 1 : 0),
+)
+
+const selectedLabel = computed(() => {
+  if (selectedIds.value.length === 1) {
+    const b = booths.value.find((x) => x.id === selectedIds.value[0])
+    if (b) return b.name
+  }
+  if (selectedInfraId.value) {
+    const it = infras.value.find((x) => x.id === selectedInfraId.value)
+    if (it) return it.name
+  }
+  return ''
+})
 
 /** 对外暴露的场景 API */
 const gridMassingApi = {
@@ -827,11 +854,20 @@ onMounted(() => {
   stage.setInfraLabelsVisible(infraLabelsOn.value)
   stage.setBoothAreasVisible(areaOn.value)
   stage.setDimensionsVisible(dimOn.value)
-  stage.setReadOnly(renderOnly.value)
+  stage.setReadOnly(renderOnly.value || isMobile.value)
   window.addEventListener('keydown', onKey)
   window.addEventListener('resize', onOrientationChange)
   window.addEventListener('orientationchange', onOrientationChange)
   void restoreStoredProject()
+
+  // 演示 / 截图用：?sample=1 直接载入内置示例场景
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('sample') === '1') {
+    setTimeout(() => {
+      loadSample()
+      setTimeout(() => fitView(), 400)
+      setTimeout(() => fitView(), 1600)
+    }, 600)
+  }
 
   // 对外 API：导出展台 list / 场景，导入场景，切换纯渲染模式
   ;(window as unknown as { gridMassing?: typeof gridMassingApi }).gridMassing = gridMassingApi
@@ -867,6 +903,57 @@ function changeWalkAutoLoop(value: boolean) {
   stage?.setWalkAutoLoop(value)
 }
 
+/** 时间轴推进倍率：1× 为实时，最高 100× */
+const sunSpeed = ref(1)
+
+function setSunSpeed(value: number) {
+  sunSpeed.value = value
+  stage?.setSunSpeed(value)
+}
+
+/** 时间轴刻度：点击直接跳到对应整点 */
+function jumpSunHour(hour: number) {
+  const progress = Math.min(1, Math.max(0, hour / 24))
+  // 走过渡而不是瞬切，光照与天空会沿最短路径平滑过去
+  stage?.transitionSunTo(progress, 760)
+}
+
+/** 状态栏坐标：优先显示选中对象在网格坐标系中的位置 */
+const selectedPosition = computed<Pt | null>(() => {
+  if (selectedInfraId.value) {
+    const it = infras.value.find((x) => x.id === selectedInfraId.value)
+    return it ? { x: it.x, z: it.z } : null
+  }
+  const ids = selectedIds.value
+  if (!ids.length) return null
+  const picked = booths.value.filter((b) => ids.includes(b.id) && b.points.length)
+  if (!picked.length) return null
+  let minX = Infinity
+  let maxX = -Infinity
+  let minZ = Infinity
+  let maxZ = -Infinity
+  for (const b of picked) {
+    for (const p of b.points) {
+      if (p.x < minX) minX = p.x
+      if (p.x > maxX) maxX = p.x
+      if (p.z < minZ) minZ = p.z
+      if (p.z > maxZ) maxZ = p.z
+    }
+  }
+  return { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 }
+})
+
+function togglePresentation() {
+  if (presentationOn.value) exitPresentation()
+  else enterPresentation()
+}
+
+/** 结构树里从某个展台点「+」新增家具：镜头飞到该展台，放置范围也锁定在它内部 */
+function addFurniture(kind: InfraKind, boothId: string) {
+  stage?.focusBooth(boothId)
+  beginInfraPlace(kind, boothId)
+}
+
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('resize', onOrientationChange)
@@ -885,13 +972,15 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="app"
+    class="app wb"
     :class="{
       'quality-low': quality === 'low',
       'is-mobile': isMobile,
+      mobile: isMobile,
       'is-walking': walkState !== 'off',
       'walk-ui-hidden': walkUiHidden,
       presenting: presentationOn,
+      'render-only': renderOnly,
       }"
   >
   <div ref="hostEl" class="viewport" />
@@ -906,15 +995,6 @@ onBeforeUnmount(() => {
     :expanded="minimapExpanded"
   />
 
-  <button
-    v-if="presentationOn"
-    type="button"
-    class="presentation-exit"
-    @click="exitPresentation"
-  >
-    退出展示 · Esc
-  </button>
-
     <Transition name="weather-fx">
       <div
         v-if="walkState === 'walk' && weather !== 'clear'"
@@ -928,41 +1008,18 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
 
-    <SceneStatus
+    <AppTopBar
+      v-if="!isMobile"
       :venue-name="venueName"
       :editing-venue-name="editingVenueName"
       :sim-time="simTime"
       :sun-is-day="sunIsDay"
-      :sun-playing="sunPlaying"
-      :sun-minutes="sunMinutes"
-      :sun-percent="sunPercent"
       :live-weather="liveWeather"
       :weather-on="weatherOn"
-      :is-mobile="isMobile"
-      :walk-state="walkState"
-      :render-only="renderOnly"
       :can-undo="canUndo"
       :can-redo="canRedo"
-      :north-deg="northDeg"
-      @update:venue-name="venueName = $event"
-      @begin-rename="beginVenueRename"
-      @finish-rename="finishVenueRename"
-      @cancel-rename="cancelVenueRename"
-      @toggle-sun="toggleSunPlay"
-      @reset-sun="resetSunToNow"
-      @sun-scrub="onSunScrub"
-      @set-render="setRenderOnly"
-      @undo="undo"
-      @redo="redo"
-    />
-
-    <AppToolbar
-      :is-mobile="isMobile"
-      :tools-collapsed="toolsCollapsed"
-      :tool-menu="toolMenu"
-      :tool-sub-menu="toolSubMenu"
-      :has-venue="!!venue"
       :render-only="renderOnly"
+      :has-venue="!!venue"
       :quality="quality"
       :quality-label="qualityLabel"
       :booth-labels-on="boothLabelsOn"
@@ -974,7 +1031,27 @@ onBeforeUnmount(() => {
       :underlay-visible="!!underlay?.visible"
       :weather-active="weatherOn && weather !== 'clear'"
       :walk-active="walkState !== 'off'"
-      @toggle-collapse="toggleToolbarCollapse"
+      :tool-menu="toolMenu"
+      :tool-sub-menu="toolSubMenu"
+      @update:venue-name="venueName = $event"
+      @begin-rename="beginVenueRename"
+      @finish-rename="finishVenueRename"
+      @cancel-rename="cancelVenueRename"
+      @undo="undo"
+      @redo="redo"
+      @set-render="setRenderOnly"
+      @report="downloadReportImage"
+      @export="downloadScene"
+      @import="triggerImport"
+      @open-weather="openWeather"
+      @open-help="openHelp"
+      @open-multiplayer="openMultiplayer"
+      @toggle-walk="toggleWalk"
+      @view-top="viewTop"
+      @view-iso="viewIso"
+      @fit-view="fitView"
+      @presentation="enterPresentation"
+      @choose-quality="chooseQuality"
       @toggle-menu="toggleToolMenu"
       @toggle-name-submenu="toggleNameSubmenu"
       @toggle-booth-labels="toggleBoothLabels"
@@ -983,19 +1060,32 @@ onBeforeUnmount(() => {
       @toggle-areas="toggleAreas"
       @toggle-grid="toggleGrid"
       @toggle-underlay="toggleUnderlay"
-      @view-top="viewTop"
-      @view-iso="viewIso"
-      @fit-view="fitView"
-      @presentation="enterPresentation"
-      @choose-quality="chooseQuality"
-      @report="downloadReportImage"
-      @export="downloadScene"
-      @import="triggerImport"
-      @open-weather="openWeather"
-      @open-help="openHelp"
-      @open-multiplayer="openMultiplayer"
-      @toggle-walk="toggleWalk"
     />
+
+    <SceneTree
+      v-if="!isMobile"
+      :venue="venue"
+      :venue-name="venueName"
+      :booths="booths"
+      :infras="infras"
+      :selected-ids="selectedIds"
+      :selected-infra-id="selectedInfraId"
+      :venue-area="venueArea"
+      :booth-area="boothsArea"
+      :coverage="coverage"
+      :render-only="renderOnly"
+      @select="selectBoothFromPanel"
+      @select-infra="selectInfraFromPanel"
+      @select-venue="selectVenueNode"
+      @draw-venue="startVenueDraw"
+      @draw-booth="startBoothDraw"
+      @add-infra="beginInfraPlace"
+      @add-furniture="addFurniture"
+      @delete-booth="deleteBooth"
+      @delete-infra="deleteInfra"
+    />
+
+
 
     <input
       ref="importInput"
@@ -1037,16 +1127,10 @@ onBeforeUnmount(() => {
 
     <div v-if="gridOn" class="legend"><i />网格 1 格 = 1 米</div>
 
-    <Transition name="panel-slide" :css="!isMobile">
-      <div
-        v-if="!renderOnly && !showWelcome"
-        class="panel-dock"
-        :class="{ docked: mobileDocked, expanded: mobileDocked && dockExpanded }"
-      >
+    <aside v-if="!isMobile && !showWelcome" class="wb-right">
       <Inspector
-        :class="{ 'mobile-open': mobilePanelOpen }"
-      :mobile-open="mobilePanelOpen"
       :venue="venue"
+      :venue-name="venueName"
       :booths="booths"
       :underlay="underlay"
       :mode="mode"
@@ -1059,6 +1143,7 @@ onBeforeUnmount(() => {
       :skip-reveal-infra-id="skipRevealInfraId"
       :focus-add-section="addFocusSection"
       :focus-add-token="addFocusToken"
+      detail-only
       @draw-venue="startVenueDraw"
       @draw-booth="startBoothDraw"
       @underlay-file="addUnderlay"
@@ -1105,53 +1190,11 @@ onBeforeUnmount(() => {
       @infra-count="changeInfraCount"
       @rename-infra="renameInfra"
       />
-      </div>
-    </Transition>
-
-    <button
-      v-if="mobileDocked && !showWelcome && !appBooting"
-      type="button"
-      class="dock-toggle"
-      :class="{ expanded: dockExpanded }"
-      :aria-expanded="dockExpanded"
-      :aria-label="dockExpanded ? '收起结构' : '展开结构'"
-      :title="dockExpanded ? '收起结构' : '展开结构'"
-      @pointerdown.stop
-      @click="dockExpanded = !dockExpanded"
-    >
-      <svg
-        v-if="dockExpanded"
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.8"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <path d="m9 18 6-6-6-6" />
-      </svg>
-      <svg
-        v-else
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.8"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <path d="m15 18-6-6 6-6" />
-      </svg>
-    </button>
+    </aside>
 
     <div class="dock-wrap">
       <ActionDock
-        v-if="!renderOnly && mode !== 'idle' && !isPlacing"
+        v-if="!renderOnly && !isMobile && mode !== 'idle' && !isPlacing"
         :mode="mode"
         :points="draftPoints"
         :height="draftHeight"
@@ -1176,9 +1219,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div
-      v-if="showWelcome"
+      v-if="showWelcome && !isMobile"
       class="welcome"
-      :class="{ 'dock-open': mobileDocked && dockExpanded }"
     >
       <h2>用面积图生成场馆白膜</h2>
       <p>在地面网格上依次点击顶点，或按住左键拖拽拉出矩形，输入高度即可生成白膜体量。</p>
@@ -1237,6 +1279,88 @@ onBeforeUnmount(() => {
       :can-walk="!!venue && mode === 'idle'"
       @quick="runHelpQuickAction"
       @close="showHelp = false"
+    />
+
+    <SunTimeline
+      v-if="!isMobile && !renderOnly"
+      :sim-time="simTime"
+      :sun-minutes="sunMinutes"
+      :sun-percent="sunPercent"
+      :sun-is-day="sunIsDay"
+      :sun-playing="sunPlaying"
+      :speed="sunSpeed"
+      :weather="weather"
+      :weather-on="weatherOn"
+      :has-venue="!!venue"
+      :presenting="presentationOn"
+      @toggle-sun="toggleSunPlay"
+      @reset-sun="resetSunToNow"
+      @speed="setSunSpeed"
+      @sun-scrub="onSunScrub"
+      @jump-hour="jumpSunHour"
+      @open-weather="openWeather"
+      @presentation="togglePresentation"
+    />
+
+    <StatusBar
+      v-if="!isMobile && !renderOnly"
+      :mode="mode"
+      :object-count="booths.length + infras.length"
+      :selected-count="selectedCount"
+      :selected-label="selectedLabel"
+      :hover="hover"
+      :position="selectedPosition"
+      :grid-on="gridOn"
+      :render-only="renderOnly"
+      :walking="walkState !== 'off'"
+      :space-nav="spaceNavActive"
+      :save-state="saveState"
+      :saved-at="savedAt"
+    />
+
+    <MobileViewer
+      v-if="isMobile && walkState === 'off' && !presentationOn && !appBooting"
+      :venue="venue"
+      :venue-name="venueName"
+      :booths="booths"
+      :infras="infras"
+      :underlay="underlay"
+      :venue-area="venueArea"
+      :booth-area="boothsArea"
+      :coverage="coverage"
+      :quality="quality"
+      :quality-label="qualityLabel"
+      :grid-on="gridOn"
+      :dim-on="dimOn"
+      :area-on="areaOn"
+      :booth-labels-on="boothLabelsOn"
+      :infra-labels-on="infraLabelsOn"
+      :weather="weather"
+      :weather-on="weatherOn"
+      :live-weather="liveWeather"
+      :render-only="renderOnly"
+      :can-walk="!!venue && mode === 'idle'"
+      :selected-ids="selectedIds"
+      :selected-infra-id="selectedInfraId"
+      @view-top="viewTop"
+      @view-iso="viewIso"
+      @fit-view="fitView"
+      @toggle-grid="toggleGrid"
+      @toggle-dimensions="toggleDimensions"
+      @toggle-areas="toggleAreas"
+      @toggle-booth-labels="toggleBoothLabels"
+      @toggle-infra-labels="toggleInfraLabels"
+      @toggle-underlay="toggleUnderlay"
+      @choose-quality="chooseQuality"
+      @select="selectBoothFromPanel"
+      @select-infra="selectInfraFromPanel"
+      @import="triggerImport"
+      @export="downloadScene"
+      @report="downloadReportImage"
+      @open-weather="openWeather"
+      @open-help="openHelp"
+      @open-multiplayer="openMultiplayer"
+      @toggle-walk="toggleWalk"
     />
 
     <transition name="toast">

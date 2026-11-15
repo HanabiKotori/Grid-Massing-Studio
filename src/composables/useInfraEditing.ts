@@ -1,4 +1,4 @@
-import { shallowRef, type Ref, type ShallowRef } from 'vue'
+import { ref, shallowRef, type Ref, type ShallowRef } from 'vue'
 import {
   ELEVATOR_COUNT,
   ELEVATOR_DEFAULT_COUNT,
@@ -81,8 +81,13 @@ export function useInfraEditing(options: InfraEditingOptions) {
     return `${INFRA_LABELS[kind]} ${String(n).padStart(2, '0')}`
   }
 
-  function beginInfraPlace(kind: InfraKind) {
+  /** 家具放置时锁定的展台（从结构树某个展台点「+」时设置） */
+  const furnitureHostId = ref<string | null>(null)
+
+  function beginInfraPlace(kind: InfraKind, hostBoothId?: string) {
     pendingInfraCopy.value = null
+    furnitureHostId.value =
+      isFurnitureKind(kind) && hostBoothId ? hostBoothId : null
     if ((kind === 'gate' || kind === 'window') && !options.venue.value) {
       options.toast('请先绘制场馆')
       return
@@ -145,20 +150,20 @@ export function useInfraEditing(options: InfraEditingOptions) {
       options.toast('这里已有窗户，不能安装出入口')
       return
     }
-    if (
-      isFurnitureKind(kind) &&
-      !furnitureInsideBooth(
-        options.booths.value,
-        kind,
-        spot.x,
-        spot.z,
-        dims.width,
-        dims.depth,
-        rotation,
-      )
-    ) {
-      options.toast('家具只能完整放置在展台内部')
-      return
+    if (isFurnitureKind(kind)) {
+      const hostList = furnitureHostId.value
+        ? options.booths.value.filter((b) => b.id === furnitureHostId.value)
+        : options.booths.value
+      if (
+        !furnitureInsideBooth(hostList, kind, spot.x, spot.z, dims.width, dims.depth, rotation)
+      ) {
+        options.toast(
+          furnitureHostId.value
+            ? '该家具只能放在所选展台内部'
+            : '家具只能完整放置在展台内部',
+        )
+        return
+      }
     }
     if (
       kind !== 'gate' &&

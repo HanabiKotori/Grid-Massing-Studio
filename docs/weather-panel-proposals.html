@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>天气面板 · 三个方向</title>
+<style>
+:root{
+  --bg:#08090a;--s1:#0b0c0e;--s2:#101113;--s3:#15161a;--s4:#1c1e22;
+  --line:rgba(255,255,255,.07);--line-2:rgba(255,255,255,.13);
+  --tx:#ecedef;--tx-2:#b6bac1;--tx-3:#8b8f96;--tx-4:#5f636a;--tx-5:#454950;
+  --accent:#6f7ce8;--accent-2:#a8b2ff;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","HarmonyOS Sans SC","MiSans","Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto 0;height:520px;pointer-events:none;
+  background:radial-gradient(70% 100% at 50% 0%,rgba(111,124,232,.06),transparent 72%)}
+.page{position:relative;max-width:1200px;margin:0 auto;padding:66px 48px 110px}
+
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-4)}
+.eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(111,124,232,.14)}
+h1{margin:16px 0 0;font-size:34px;line-height:1.2;font-weight:600;letter-spacing:-.025em}
+h1 em{font-style:normal;color:var(--tx-4)}
+.lede{margin:14px 0 0;max-width:720px;font-size:13.5px;line-height:1.75;color:var(--tx-3)}
+.lede b{color:var(--tx);font-weight:500}
+
+/* case */
+.case{margin-top:52px}
+.case-head{display:flex;align-items:baseline;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.case-head .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--accent)}
+.case-head h2{margin:0;font-size:19px;font-weight:600;letter-spacing:-.015em}
+.case-head p{margin:0;font-size:12px;color:var(--tx-4)}
+.case-body{display:flex;gap:34px;align-items:flex-start;margin-top:24px}
+.notes{flex:1;min-width:0;padding-top:6px}
+.notes dl{margin:0}
+.notes dt{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-5);margin:0 0 6px}
+.notes dd{margin:0 0 16px;font-size:12.5px;line-height:1.7;color:var(--tx-3)}
+.notes dd b{color:var(--tx-2);font-weight:500}
+.notes ul{margin:0;padding:0;list-style:none}
+.notes li{position:relative;padding-left:14px;margin-bottom:5px;font-size:12px;line-height:1.65;color:var(--tx-3)}
+.notes li::before{content:"";position:absolute;left:1px;top:8px;width:5px;height:1px;background:var(--tx-5)}
+.notes li.plus::before{background:#5bbd8b}
+.notes li.minus::before{background:#c98059}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;margin-bottom:10px;border-radius:4px;
+  border:1px solid var(--line);background:var(--s2);font-family:var(--mono);font-size:9.5px;color:var(--tx-3)}
+
+/* panel base */
+.panel{flex:none;display:flex;flex-direction:column;background:var(--s1);border:1px solid var(--line-2);
+  border-radius:10px;overflow:hidden;box-shadow:0 40px 90px -40px rgba(0,0,0,.95)}
+.p-head{flex:none;display:flex;align-items:flex-start;gap:10px;padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.p-head .eb{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-5);margin:0 0 3px}
+.p-head h3{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--tx)}
+.p-head .ha{margin-left:auto;display:flex;align-items:center;gap:10px}
+.p-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.p-foot{flex:none;padding:9px 16px 10px;border-top:1px solid var(--line);font-size:10.5px;line-height:1.55;color:var(--tx-5)}
+.x{width:24px;height:24px;display:grid;place-items:center;border:0;border-radius:5px;background:none;color:var(--tx-3);font-size:15px;cursor:pointer}
+.x:hover{background:rgba(255,255,255,.07);color:var(--tx)}
+
+/* shared rows */
+.sw{position:relative;width:30px;height:16px;flex:none;border-radius:999px;background:#2a2c33;border:0;padding:0;cursor:pointer}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#8b8f96;transition:.16s}
+.sw.on{background:var(--accent)}
+.sw.on::after{left:16px;background:#fff}
+.switch-row{display:flex;align-items:center;gap:10px;min-height:32px}
+.switch-row .lab{font-size:11.5px;color:var(--tx-2)}
+.switch-row .hint{font-size:10px;color:var(--tx-5)}
+.switch-row .sw{margin-left:auto}
+
+.sec{display:flex;align-items:center;gap:9px;height:26px;margin-top:10px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-5)}
+.sec::after{content:"";flex:1;height:1px;background:var(--line)}
+.sec .r{margin-left:auto;font-family:var(--sans);font-size:9.5px;letter-spacing:0;text-transform:none;color:var(--tx-5)}
+
+.city{display:flex;gap:6px;margin:8px 0 10px}
+.city input{flex:1;min-width:0;height:28px;padding:0 9px;border:1px solid rgba(255,255,255,.09);border-radius:5px;
+  background:#0e0f12;color:var(--tx);font:inherit;font-size:11.5px}
+.city button{flex:none;height:28px;padding:0 12px;border:1px solid rgba(255,255,255,.09);border-radius:5px;
+  background:#16171b;color:var(--tx-2);font:inherit;font-size:11px;cursor:pointer}
+.city button:hover{border-color:var(--line-2);color:var(--tx)}
+
+.live-main{display:flex;align-items:baseline;gap:8px}
+.live-main b{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--tx)}
+.live-main strong{margin-left:auto;font-size:24px;font-weight:600;letter-spacing:-.02em;color:var(--tx)}
+.live-meta{margin:2px 0 0;font-size:10.5px;color:var(--tx-4)}
+.live-time{margin:1px 0 0;font-family:var(--mono);font-size:9.5px;color:var(--tx-5)}
+
+.sld{display:flex;align-items:center;gap:9px;height:30px}
+.sld .lab{flex:none;width:36px;font-size:10.5px;color:var(--tx-3)}
+.sld .track{position:relative;flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.1)}
+.sld .fill{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--accent);opacity:.9}
+.sld .knob{position:absolute;top:50%;width:9px;height:9px;border-radius:50%;background:#dfe2e6;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.5)}
+.sld .val{flex:none;min-width:40px;text-align:right;font-family:var(--mono);font-size:10px;color:var(--tx-2)}
+.sld .mini{padding:0;border:0;background:none;font:inherit;font-size:9.5px;color:var(--accent-2);cursor:pointer}
+.sld .mini:hover{text-decoration:underline}
+
+/* weather list rows */
+.wlist{display:flex;flex-direction:column;gap:1px;overflow-y:auto;scrollbar-width:thin}
+.wrow{display:flex;align-items:center;gap:10px;height:30px;padding:0 8px;border:0;border-radius:5px;
+  background:none;color:var(--tx-2);font:inherit;font-size:11.5px;text-align:left;cursor:pointer}
+.wrow:hover{background:rgba(255,255,255,.045);color:var(--tx)}
+.wrow b{flex:none;width:60px;display:inline-flex;align-items:center;gap:7px;font-weight:500;color:inherit}
+.wrow span{flex:1;min-width:0;font-size:10px;color:var(--tx-5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wrow.on{background:rgba(111,124,232,.12);box-shadow:inset 2px 0 0 var(--accent);color:var(--tx)}
+.wrow.on b{color:#cdd3ff}
+.wrow.on span{color:#8b93c7}
+
+/* weather grid tiles */
+.wgrid{display:grid;gap:4px;padding:2px 0 4px}
+.wtile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  height:62px;border:1px solid rgba(255,255,255,.06);border-radius:6px;background:rgba(255,255,255,.018);
+  color:var(--tx-3);font:inherit;font-size:10.5px;cursor:pointer;transition:.14s}
+.wtile:hover{border-color:rgba(255,255,255,.16);color:var(--tx-2)}
+.wtile.on{border-color:rgba(111,124,232,.5);background:rgba(111,124,232,.13);color:#cdd3ff}
+.wtile svg{width:22px!important;height:22px!important}
+
+svg.i{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+/* A */
+.pA{width:400px;height:788px}
+.pA .p-body{padding:10px 16px 6px;overflow:hidden}
+.pA .wlist{margin-top:6px;flex:1;min-height:0;overflow-y:auto}
+.pA #slidersA{flex:none}
+
+/* B */
+.pB{width:790px;height:560px}
+.pB .p-body{flex-direction:row}
+.pB .col-l{flex:none;width:308px;border-right:1px solid var(--line);padding:10px 12px;overflow-y:auto;scrollbar-width:thin}
+.pB .col-r{flex:1;min-width:0;padding:10px 16px;overflow-y:auto;scrollbar-width:thin}
+.pB .wrow b{width:64px}
+
+/* C */
+.pC{width:660px;height:486px}
+.pC .p-body{padding:10px 16px 6px;overflow-y:auto;scrollbar-width:thin}
+.pC .quick{display:flex;align-items:center;gap:10px}
+.pC .quick .live-main{flex:1}
+.pC .quick .live-main strong{font-size:22px;margin-left:6px}
+.pC .density-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
+.pC .density-3 .sld .lab{width:30px}
+
+/* footer note */
+.note{margin-top:56px;padding:24px 26px;border:1px solid var(--line);border-radius:10px;
+  background:linear-gradient(180deg,rgba(111,124,232,.05),transparent 70%),var(--s1)}
+.note h3{margin:0;font-size:16px;font-weight:600}
+.note p{margin:9px 0 0;max-width:760px;font-size:12.5px;line-height:1.75;color:var(--tx-3)}
+.note b{color:var(--tx);font-weight:500}
+.ask{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.ask code{display:inline-flex;align-items:center;height:28px;padding:0 10px;border-radius:5px;border:1px solid var(--line);
+  background:var(--s2);font-family:var(--mono);font-size:11px;color:var(--tx-3)}
+
+@media (max-width:1080px){
+  .page{padding:46px 24px 80px}
+  .case-body{flex-direction:column;gap:20px}
+  .panel{width:100%!important;max-width:100%}
+  .pB .p-body{flex-direction:column}
+  .pB .col-l{width:auto;border-right:0;border-bottom:1px solid var(--line)}
+}
+
+/* ---------- 移动端 mockup ---------- */
+.mrow3{display:flex;gap:28px;flex-wrap:wrap;margin-top:24px;align-items:flex-start}
+.mob{flex:none;width:344px}
+.mob .cap{margin-top:14px}
+.mob .cap h3{margin:0;font-size:13px;font-weight:600}
+.mob .cap p{margin:4px 0 0;font-size:11.5px;line-height:1.65;color:var(--tx-4)}
+.phone{width:344px;height:740px;padding:9px;border-radius:34px;border:1px solid rgba(255,255,255,.13);
+  background:#050608;box-shadow:0 40px 80px -44px #000;position:relative}
+.phone::after{content:"";position:absolute;left:50%;bottom:13px;width:104px;height:4px;border-radius:2px;
+  background:rgba(255,255,255,.16);transform:translateX(-50%)}
+.screen{width:100%;height:100%;border-radius:26px;overflow:hidden;background:var(--s1);display:flex;flex-direction:column}
+.statusbar{flex:none;height:34px;display:flex;align-items:center;padding:0 20px;
+  font-family:var(--mono);font-size:10px;color:var(--tx-2)}
+.statusbar .r{margin-left:auto;display:flex;align-items:center;gap:4px}
+.statusbar .r i{display:block;width:3px;height:3px;border-radius:50%;background:var(--tx-3)}
+.mhandle{flex:none;width:42px;height:4px;border-radius:2px;background:rgba(255,255,255,.16);margin:6px auto 4px}
+.mhead{flex:none;display:flex;align-items:flex-start;gap:10px;padding:2px 16px 11px;border-bottom:1px solid var(--line)}
+.mhead .eb{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-5);margin:0 0 2px}
+.mhead h4{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em;color:var(--tx)}
+.mhead .x{margin-left:auto}
+.mbody{flex:1;min-height:0;overflow-y:auto;padding:0 16px;scrollbar-width:none}
+.mbody::-webkit-scrollbar{display:none}
+.mfoot{flex:none;padding:10px 16px 16px;border-top:1px solid var(--line)}
+.done{width:100%;height:44px;border:0;border-radius:9px;background:var(--accent);color:#fff;font:inherit;
+  font-size:14px;font-weight:500;cursor:pointer}
+.msec{display:flex;align-items:center;gap:9px;height:30px;margin-top:8px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-5)}
+.msec::after{content:"";flex:1;height:1px;background:var(--line)}
+.msec .r{margin-left:auto;font-family:var(--sans);font-size:9.5px;letter-spacing:0;text-transform:none}
+.mrow-sw{display:flex;align-items:center;gap:10px;min-height:42px;font-size:12.5px;color:var(--tx-2)}
+.mrow-sw .sw{margin-left:auto}
+.mcity{display:flex;gap:8px;margin:6px 0 8px}
+.mcity input{flex:1;min-width:0;height:40px;padding:0 11px;border-radius:8px;border:1px solid rgba(255,255,255,.09);
+  background:#0e0f12;color:var(--tx);font:inherit;font-size:13px}
+.mcity button{height:40px;padding:0 15px;border-radius:8px;border:1px solid rgba(255,255,255,.09);
+  background:#16171b;color:var(--tx-2);font:inherit;font-size:12.5px;cursor:pointer}
+.mlive{display:flex;align-items:baseline;gap:8px}
+.mlive b{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:var(--tx)}
+.mlive strong{margin-left:auto;font-size:30px;font-weight:600;letter-spacing:-.02em;color:var(--tx)}
+.mmeta{margin:3px 0 0;font-size:11px;color:var(--tx-4)}
+.mrow2{display:flex;align-items:center;gap:11px;width:100%;height:46px;padding:0 2px;border:0;
+  border-bottom:1px solid rgba(255,255,255,.05);background:none;color:var(--tx-2);font:inherit;font-size:12.5px;text-align:left}
+.mrow2:last-child{border-bottom:0}
+.mrow2 b{flex:none;width:70px;display:inline-flex;align-items:center;gap:8px;font-weight:500;color:inherit}
+.mrow2 b svg{width:18px;height:18px}
+.mrow2 span{flex:1;min-width:0;font-size:10.5px;color:var(--tx-5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrow2.on b{color:#cdd3ff}
+.mrow2.on::after{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:4px 0 6px}
+.mtile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;height:66px;
+  border:1px solid rgba(255,255,255,.07);border-radius:8px;background:rgba(255,255,255,.02);
+  color:var(--tx-3);font:inherit;font-size:11.5px;cursor:pointer}
+.mtile.on{border-color:rgba(111,124,232,.55);background:rgba(111,124,232,.14);color:#cdd3ff}
+.mtile svg{width:24px!important;height:24px!important}
+.msld{display:flex;align-items:center;gap:10px;height:35px}
+.msld .lab{flex:none;width:38px;font-size:11.5px;color:var(--tx-3)}
+.msld .track{position:relative;flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1)}
+.msld .fill{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--accent)}
+.msld .knob{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;background:#dfe2e6;transform:translate(-50%,-50%)}
+.msld .val{flex:none;min-width:44px;text-align:right;font-family:var(--mono);font-size:10.5px;color:var(--tx-2)}
+.msld-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.mseg{display:flex;gap:2px;padding:3px;border-radius:8px;background:#15161a;margin:8px 16px 4px;flex:none}
+.mseg button{flex:1;height:34px;border:0;border-radius:6px;background:none;color:var(--tx-4);font:inherit;font-size:12.5px;cursor:pointer}
+.mseg button.on{background:#22242a;color:var(--tx)}</style>
+</head>
+<body>
+<div class="page">
+  <div class="eyebrow"><span class="dot"></span>Weather panel · 3 directions</div>
+  <h1>天气面板的三个方向<br /><em>同一套数据，三种组织方式</em></h1>
+  <p class="lede">
+    数据都是：贵阳 · 阴 · 13°C · 东风 3 · 湿度 91%，当前选中「阴」。三种方案都保留实时天气、12 种预设、
+    粒子浓度与能见度，差别在于<b>列表怎么排、开关放哪、面板多宽</b>。页面下半部分是三套移动端方案（344 × 740，触控目标 44 px）。
+  </p>
+
+  <!-- A -->
+  <section class="case">
+    <div class="case-head"><span class="k">A</span><h2>单列面板</h2><p>400 px · 像 Linear 的设置面板</p></div>
+    <div class="case-body">
+      <div class="panel pA">
+        <div class="p-head">
+          <div><p class="eb">环境 · 高德实时</p><h3>天气</h3></div>
+          <div class="ha"><button class="x">×</button></div>
+        </div>
+        <div class="p-body">
+          <div class="switch-row"><span class="lab">天气效果</span><button class="sw on"></button></div>
+          <div class="sec">实时天气<span class="r">高德天气</span></div>
+          <div class="city"><input value="贵阳" /><button>查询</button></div>
+          <div class="live-main"><b data-ico="overcast"></b><strong>13°C</strong></div>
+          <p class="live-meta">东风 3 · 湿度 91% · 23:01 映射为「阴」</p>
+          <div class="switch-row"><span class="lab">使用实时天气</span><span class="hint">关闭</span><button class="sw"></button></div>
+          <div class="sec">天气类型<span class="r">12 种</span></div>
+          <div class="wlist" id="listA"></div>
+          <div class="sec">粒子浓度<span class="r">拖动实时调整</span></div>
+          <div id="slidersA"></div>
+        </div>
+        <div class="p-foot">实时天气来自高德，开启后会映射到最接近的预设；封闭场馆内不会出现降水。</div>
+      </div>
+      <div class="notes">
+        <span class="tag">推荐</span>
+        <dl>
+          <dt>定位</dt>
+          <dd>窄而高的单列，一条纵向节奏走到底：<b>总开关 → 实时天气 → 预设列表 → 粒子</b>。滚动时每一段都在同一列里，视线的横向跳跃为零。</dd>
+          <dt>取舍</dt>
+          <ul>
+            <li class="plus">最接近 Linear 的设置面板，和属性栏、结构树同一套行高与分节线</li>
+            <li class="plus">窄面板不遮挡模型，右侧仍能看到天气变化</li>
+            <li class="minus">12 种预设需要滚动；无法一眼扫完</li>
+          </ul>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- B -->
+  <section class="case">
+    <div class="case-head"><span class="k">B</span><h2>双栏工作台</h2><p>790 px · 左预设右参数</p></div>
+    <div class="case-body">
+      <div class="panel pB">
+        <div class="p-head">
+          <div><p class="eb">环境 · 高德实时</p><h3>天气</h3></div>
+          <div class="ha">
+            <div class="switch-row" style="min-height:0;gap:7px"><span class="lab" style="font-size:10.5px;color:var(--tx-4)">天气效果</span><button class="sw on"></button></div>
+            <button class="x">×</button>
+          </div>
+        </div>
+        <div class="p-body">
+          <div class="col-l">
+            <div class="sec" style="margin-top:0">天气类型<span class="r">12 种</span></div>
+            <div class="wlist" id="listB"></div>
+          </div>
+          <div class="col-r">
+            <div class="sec" style="margin-top:0">实时天气<span class="r">高德天气</span></div>
+            <div class="city"><input value="贵阳" /><button>查询</button></div>
+            <div class="live-main"><b data-ico="overcast"></b><strong>13°C</strong></div>
+            <p class="live-meta">东风 3 · 湿度 91%</p>
+            <p class="live-time">2026-11-15 23:01 · 映射为「阴」</p>
+            <div class="switch-row"><span class="lab">使用实时天气</span><button class="sw"></button></div>
+            <div class="sec">粒子与能见度<span class="r">拖动实时调整</span></div>
+            <div id="slidersB"></div>
+          </div>
+        </div>
+        <div class="p-foot">实时天气来自高德；开启后查询城市会自动同步到最接近的预设。</div>
+      </div>
+      <div class="notes">
+        <dl>
+          <dt>定位</dt>
+          <dd>左边是<b>选什么天气</b>，右边是<b>天气从哪来、有多强</b>。两块各自滚动，互不干扰。</dd>
+          <dt>取舍</dt>
+          <ul>
+            <li class="plus">12 种预设与参数同时可见，切换天气不用滚动</li>
+            <li class="plus">左列表可加分组（晴 / 雨 / 雪 / 沙尘）</li>
+            <li class="minus">面板较宽，会遮住更多模型</li>
+            <li class="minus">两个滚动区，需要用户建立两条视线</li>
+          </ul>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- C -->
+  <section class="case">
+    <div class="case-head"><span class="k">C</span><h2>图标网格</h2><p>660 px · 视觉优先</p></div>
+    <div class="case-body">
+      <div class="panel pC">
+        <div class="p-head">
+          <div><p class="eb">环境 · 高德实时</p><h3>天气</h3></div>
+          <div class="ha">
+            <div class="switch-row" style="min-height:0;gap:7px"><span class="lab" style="font-size:10.5px;color:var(--tx-4)">天气效果</span><button class="sw on"></button></div>
+            <button class="x">×</button>
+          </div>
+        </div>
+        <div class="p-body">
+          <div class="quick">
+            <div class="live-main"><b data-ico="overcast"></b><strong>13°C</strong><span class="live-meta" style="margin:0">东风 3 · 湿度 91%</span></div>
+            <div class="switch-row" style="min-height:0"><span class="lab" style="font-size:10px">实时</span><button class="sw"></button></div>
+          </div>
+          <div class="city" style="margin-bottom:6px"><input value="贵阳" /><button>查询</button></div>
+          <div class="sec">天气类型</div>
+          <div class="wgrid" style="grid-template-columns:repeat(6,1fr)" id="gridC"></div>
+          <div class="sec">粒子浓度<span class="r">拖动实时调整</span></div>
+          <div class="density-3" id="slidersC"></div>
+          <div class="sld"><span class="lab">能见度</span><div class="track"><div class="fill" style="width:34%"></div><div class="knob" style="left:34%"></div></div><span class="val">≈680m</span></div>
+        </div>
+        <div class="p-foot">封闭场馆内不会出现降水；粒子与能见度可随时拖回 0 关闭。</div>
+      </div>
+      <div class="notes">
+        <dl>
+          <dt>定位</dt>
+          <dd>把 12 种天气压成<b>图标瓦片</b>，6 列两行一眼扫完。名称常显，描述交给悬停。</dd>
+          <dt>取舍</dt>
+          <ul>
+            <li class="plus">切换最快，适合反复比较天气效果</li>
+            <li class="plus">面板高度最矮，模型只被遮住底部</li>
+            <li class="minus">瓦片边框偏多，和「去卡片化」的基调不一致</li>
+            <li class="minus">描述需要悬停才能看到，触屏不友好</li>
+          </ul>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- 移动端 -->
+  <section class="case">
+    <div class="case-head"><span class="k">M</span><h2>移动端</h2><p>344 × 716 · 触屏目标 ≥ 44 px</p></div>
+
+    <div class="mrow3">
+      <!-- MA -->
+      <div class="mob">
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span class="r"><i></i><i></i><i></i></span></div>
+            <div class="mhead">
+              <div><p class="eb">环境 · 高德实时</p><h4>天气</h4></div>
+              <button class="x">×</button>
+            </div>
+            <div class="mbody">
+              <div class="mrow-sw"><span>天气效果</span><button class="sw on"></button></div>
+              <div class="msec">实时天气<span class="r">高德</span></div>
+              <div class="mcity"><input value="贵阳" /><button>查询</button></div>
+              <div class="mlive"><b data-ico="overcast">贵阳市 · 阴</b><strong>13°C</strong></div>
+              <p class="mmeta">东风 3 · 湿度 91%</p>
+              <div class="mrow-sw"><span>使用实时天气</span><button class="sw"></button></div>
+              <div class="msec">天气类型<span class="r">12 种</span></div>
+              <div id="mobA"></div>
+              <div class="msec">粒子浓度<span class="r">拖动调整</span></div>
+              <div id="mobSlidersA"></div>
+            </div>
+            <div class="mfoot"><button class="done">完成</button></div>
+          </div>
+        </div>
+        <div class="cap">
+          <h3>MA · 全屏列表</h3>
+          <p>整页铺满，天气用 46px 行高的列表，描述常显。最像桌面 A 的移动版，内容完整但需要滚动两屏。</p>
+        </div>
+      </div>
+
+      <!-- MB -->
+      <div class="mob">
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span class="r"><i></i><i></i><i></i></span></div>
+            <div class="mhandle"></div>
+            <div class="mhead">
+              <div><p class="eb">环境 · 高德实时</p><h4>天气</h4></div>
+              <button class="x">×</button>
+            </div>
+            <div class="mbody">
+              <div class="mrow-sw" style="min-height:44px">
+                <b data-ico="overcast" style="display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:var(--tx)">贵阳市 · 阴</b>
+                <strong style="font-size:22px;font-weight:600;margin-left:8px;letter-spacing:-.02em">13°C</strong>
+                <button class="sw" style="margin-left:auto"></button>
+              </div>
+              <div class="mcity"><input value="贵阳" /><button>查询</button></div>
+              <div class="msec">天气类型<span class="r">12 种</span></div>
+              <div class="mgrid" id="mobB"></div>
+              <div class="msec">粒子浓度<span class="r">拖动调整</span></div>
+              <div id="mobSlidersB" class="msld-grid"></div>
+            </div>
+            <div class="mfoot"><button class="done">完成</button></div>
+          </div>
+        </div>
+        <div class="cap">
+          <h3>MB · 抽屉 + 网格</h3>
+          <p>桌面 B 的移动版：实时天气压成一行，12 种天气用 3 列瓦片一屏扫完，粒子固定在下方。最常用的一屏。</p>
+        </div>
+      </div>
+
+      <!-- MC -->
+      <div class="mob">
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span class="r"><i></i><i></i><i></i></span></div>
+            <div class="mhead">
+              <div><p class="eb">环境 · 高德实时</p><h4>天气</h4></div>
+              <button class="x">×</button>
+            </div>
+            <div class="mseg"><button class="on">预设</button><button>实时</button><button>粒子</button></div>
+            <div class="mbody" style="padding-top:6px">
+              <div class="mlive" style="margin:4px 0 8px">
+                <b data-ico="overcast">贵阳市 · 阴</b>
+                <strong style="font-size:20px">13°C</strong>
+              </div>
+              <div class="mgrid" id="mobC"></div>
+            </div>
+            <div class="mfoot"><button class="done">完成</button></div>
+          </div>
+        </div>
+        <div class="cap">
+          <h3>MC · 分段视图</h3>
+          <p>预设 / 实时 / 粒子 三段切换，一屏只做一件事。空间最省、触控最稳，代价是要切三次才能调完。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="note">
+    <h3>建议：A 的骨架，B 的一处借用</h3>
+    <p>
+      A 的纵向节奏和属性栏完全一致，窄面板也不会挡住模型，这是最稳的。只在一点上借 B：
+      把「实时天气」收进顶部一行（城市 + 温度 + 开关），不再单独占一段；这样 12 种预设能多露出一行。
+      粒子浓度固定在面板底部，不随列表滚动。
+    </p>
+    <div class="ask">
+      <code>回复 A / B / C</code>
+      <code>或者：A，但实时天气压成一行</code>
+    </div>
+  </div>
+</div>
+
+<script>
+const ICONS = {
+  clear: '<circle cx="12" cy="12" r="4.2"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>',
+  partly: '<circle cx="9" cy="8.4" r="2.6"/><path d="M9 3.4v1.4M4.4 8.4H3M13.4 8.4H14.8M5.8 5.2 4.8 4.2"/><path d="M7.6 18.6h9a3.2 3.2 0 0 0 .3-6.4 4.6 4.6 0 0 0-8.8-1 3.6 3.6 0 0 0-.5 7.4z"/>',
+  cloudy: '<path d="M7.2 17.6h9.6a3.6 3.6 0 0 0 .3-7.2 5 5 0 0 0-9.6-1.1 4 4 0 0 0-.3 8.3z"/>',
+  overcast: '<path d="M6.4 12.8h8.6a3.1 3.1 0 0 0 .3-6.2 4.4 4.4 0 0 0-8.6-1 3.5 3.5 0 0 0-.3 7.2z"/><path d="M8.8 18.4h9.2a3.4 3.4 0 0 0 .3-6.8"/>',
+  fog: '<path d="M7 12.4h10a3.4 3.4 0 0 0 .3-6.8 4.8 4.8 0 0 0-9.2-1A3.8 3.8 0 0 0 7 12.4z"/><path d="M5 16h14M6.4 19h11.2"/>',
+  drizzle: '<path d="M7.4 13.2h9.2a3.5 3.5 0 0 0 .3-7 5 5 0 0 0-9.4-1 3.9 3.9 0 0 0-.1 8z"/><path d="M9.6 16.4v1.8M14.4 16.4v1.8"/>',
+  rain: '<path d="M7.4 12.4h9.2a3.5 3.5 0 0 0 .3-7 5 5 0 0 0-9.4-1 3.9 3.9 0 0 0-.1 8z"/><path d="M8.6 15.2 7.8 19M12 15.2 11.2 19M15.4 15.2l-.8 3.8"/>',
+  thunder: '<path d="M7.4 12h9.2a3.5 3.5 0 0 0 .3-7 5 5 0 0 0-9.4-1 3.9 3.9 0 0 0-.1 8z"/><path d="M12.8 14.4 10.4 18h2.6l-1 3.2"/>',
+  snowLight: '<path d="M7.4 12.4h9.2a3.5 3.5 0 0 0 .3-7 5 5 0 0 0-9.4-1 3.9 3.9 0 0 0-.1 8z"/><path d="M9.8 17h.01M14.2 18.4h.01"/>',
+  snow: '<path d="M12 8.6v7M8.2 10.2l7.6 3.8M15.8 10.2l-7.6 3.8"/>',
+  dust: '<path d="M6 8.2h9M5 12h11M7 15.8h9M9 19.2h7"/>',
+  wind: '<path d="M5 9.4h9.2a2.8 2.8 0 1 0-2.8-2.8"/><path d="M4.6 13.2h11a2.6 2.6 0 1 1-2.6 2.6"/>'
+}
+
+const WEATHERS = [
+  { k: 'clear', n: '晴', d: '天空通透，光照充足' },
+  { k: 'partly', n: '少云', d: '少量云层，光线柔和' },
+  { k: 'cloudy', n: '多云', d: '云层增加，阳光减弱' },
+  { k: 'overcast', n: '阴', d: '厚云遮日，环境偏灰' },
+  { k: 'fog', n: '雾', d: '近处发白，远处隐没' },
+  { k: 'drizzle', n: '小雨', d: '细雨，地面微湿感' },
+  { k: 'rain', n: '大雨', d: '密集雨幕，天空压抑' },
+  { k: 'thunder', n: '雷阵雨', d: '强降雨并伴随闪电' },
+  { k: 'snowLight', n: '小雪', d: '稀疏雪花缓慢飘落' },
+  { k: 'snow', n: '大雪', d: '密集降雪，能见度降低' },
+  { k: 'dust', n: '沙尘', d: '扬沙与浮尘，天空黄暗' },
+  { k: 'wind', n: '大风', d: '强风、扬尘与快速漂移' }
+]
+
+const CURRENT = 'overcast'
+
+const svg = (k, size) =>
+  `<svg class="i"${size ? ` style="width:${size}px;height:${size}px"` : ''} viewBox="0 0 24 24">${ICONS[k] || ICONS.clear}</svg>`
+
+function rowsHTML() {
+  return WEATHERS.map(
+    (w) => `<button class="wrow${w.k === CURRENT ? ' on' : ''}"><b>${svg(w.k)}${w.n}</b><span>${w.d}</span></button>`,
+  ).join('')
+}
+
+function tilesHTML() {
+  return WEATHERS.map(
+    (w) => `<button class="wtile${w.k === CURRENT ? ' on' : ''}" title="${w.d}">${svg(w.k, 24)}${w.n}</button>`,
+  ).join('')
+}
+
+const SLIDERS = [
+  { label: '雨', pct: 100, val: '100%' },
+  { label: '雪', pct: 100, val: '100%' },
+  { label: '沙尘', pct: 100, val: '100%' },
+]
+
+const sliderHTML = (s, extra) => `
+  <div class="sld">
+    <span class="lab">${s.label}</span>
+    <div class="track"><div class="fill" style="width:${s.pct}%"></div><div class="knob" style="left:${s.pct}%"></div></div>
+    <span class="val">${s.val}</span>${extra || ''}
+  </div>`
+
+const visibilityHTML = () => `
+  <div class="sld">
+    <span class="lab">能见度</span>
+    <div class="track"><div class="fill" style="width:34%"></div><div class="knob" style="left:34%"></div></div>
+    <span class="val">≈680m</span>
+  </div>`
+
+document.querySelectorAll('[data-ico]').forEach((el) => {
+  el.innerHTML = svg(el.dataset.ico) + (el.textContent || '')
+})
+
+document.getElementById('listA').innerHTML = rowsHTML()
+document.getElementById('listB').innerHTML = rowsHTML()
+document.getElementById('gridC').innerHTML = tilesHTML()
+
+document.querySelectorAll('.live-main b').forEach((b) => {
+  const k = b.dataset.ico
+  if (k) b.innerHTML = svg(k) + '<span>贵阳市 · 阴</span>'
+})
+
+document.getElementById('slidersA').innerHTML =
+  SLIDERS.map((s, i) => sliderHTML(s, i > 0 ? '<button class="mini">预览</button>' : '')).join('') +
+  visibilityHTML()
+
+document.getElementById('slidersB').innerHTML =
+  SLIDERS.map((s) => sliderHTML(s)).join('') + visibilityHTML()
+
+document.getElementById('slidersC').innerHTML =
+  SLIDERS.map((s) => sliderHTML(s)).join('')
+
+/* ---------- 移动端 ---------- */
+const mobRows = () =>
+  WEATHERS.map(
+    (w) =>
+      `<button class="mrow2${w.k === CURRENT ? ' on' : ''}"><b>${svg(w.k)}${w.n}</b><span>${w.d}</span></button>`,
+  ).join('')
+
+const mobTiles = () =>
+  WEATHERS.map(
+    (w) => `<button class="mtile${w.k === CURRENT ? ' on' : ''}">${svg(w.k)}${w.n}</button>`,
+  ).join('')
+
+const mobSlider = (s) => `
+  <div class="msld">
+    <span class="lab">${s.label}</span>
+    <div class="track"><div class="fill" style="width:${s.pct}%"></div><div class="knob" style="left:${s.pct}%"></div></div>
+    <span class="val">${s.val}</span>
+  </div>`
+
+const mobVis = () => `
+  <div class="msld">
+    <span class="lab">能见度</span>
+    <div class="track"><div class="fill" style="width:34%"></div><div class="knob" style="left:34%"></div></div>
+    <span class="val">≈680m</span>
+  </div>`
+
+document.getElementById('mobA').innerHTML = mobRows()
+document.getElementById('mobB').innerHTML = mobTiles()
+document.getElementById('mobC').innerHTML = mobTiles()
+document.getElementById('mobSlidersA').innerHTML = SLIDERS.map(mobSlider).join('') + mobVis()
+document.getElementById('mobSlidersB').innerHTML = SLIDERS.map(mobSlider).join('') + mobVis()
+</script>
+</body>
+</html>

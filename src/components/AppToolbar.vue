@@ -283,24 +283,19 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
         </div>
       </div>
 
-      <button
-        class="tool-btn tool-with-key"
-        :class="{ on: weatherActive }"
-        :disabled="weatherDisabled"
-        :title="weatherDisabled ? '只有房主可以修改天气' : '天气面板 (Alt+W)'"
-        @click="emit('open-weather')"
-      >
-        <span>天气</span>
-        <kbd v-if="!isMobile" class="tool-key wide">Alt+W</kbd>
-      </button>
+
       <button
         v-if="!multiplayer"
         class="tool-btn tool-with-key"
         title="帮助 (F1)"
         @click="emit('open-help')"
       >
-        <span>帮助</span>
-        <kbd v-if="!isMobile" class="tool-key">F1</kbd>
+        <svg class="tool-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.6" />
+          <path d="M9.7 9.5a2.4 2.4 0 1 1 3.4 2.2c-.7.35-1.1.9-1.1 1.7v.3" />
+          <circle cx="12" cy="16.8" r="0.85" fill="currentColor" stroke="none" />
+        </svg>
+        <span class="tool-label">帮助</span>
       </button>
       <button
         v-if="!multiplayer"
@@ -309,8 +304,13 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
         :title="hasVenue ? '多人漫游 (G)' : '请先绘制场馆'"
         @click="emit('open-multiplayer')"
       >
-        <span>多人</span>
-        <kbd v-if="!isMobile" class="tool-key">G</kbd>
+        <svg class="tool-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="9.2" cy="8.4" r="2.8" />
+          <path d="M3.8 19c0-2.9 2.4-4.6 5.4-4.6s5.4 1.7 5.4 4.6" />
+          <path d="M16.2 6.3a2.6 2.6 0 0 1 0 5" />
+          <path d="M17.6 14.7c1.9.6 3 2 3 4.3" />
+        </svg>
+        <span class="tool-label">多人</span>
       </button>
       <button
         v-if="!multiplayer"
@@ -320,8 +320,12 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
         :title="hasVenue ? '漫游 (P)' : '请先绘制场馆'"
         @click="emit('toggle-walk')"
       >
-        <span>漫游</span>
-        <kbd v-if="!isMobile" class="tool-key">P</kbd>
+        <svg class="tool-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="13.2" cy="4.9" r="1.8" />
+          <path d="M9.4 21l2.3-5.2-1.8-3.6 3-2.2 2.4 3 2.6.9" />
+          <path d="M11.7 15.8 8.6 21" />
+        </svg>
+        <span class="tool-label">漫游</span>
       </button>
     </div>
 

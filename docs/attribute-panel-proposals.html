@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>属性栏 · 三个方向 × 四类对象</title>
+<style>
+:root{
+  --bg:#08090a;--s1:#0b0c0e;--s2:#101113;--s3:#15161a;--s4:#1c1e22;
+  --line:rgba(255,255,255,.07);--line-2:rgba(255,255,255,.12);
+  --tx:#ecedef;--tx-2:#9b9fa5;--tx-3:#6a6e75;--tx-4:#484c53;
+  --accent:#6f7ce8;--accent-2:#a8b2ff;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","HarmonyOS Sans SC","MiSans","Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto 0;height:560px;pointer-events:none;
+  background:radial-gradient(70% 100% at 50% 0%,rgba(111,124,232,.07),transparent 72%)}
+.page{position:relative;max-width:1280px;margin:0 auto;padding:64px 48px 110px}
+
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-3)}
+.eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(111,124,232,.15)}
+h1{margin:16px 0 0;font-size:34px;line-height:1.2;font-weight:600;letter-spacing:-.025em}
+h1 em{font-style:normal;color:var(--tx-3)}
+.lede{margin:14px 0 0;max-width:720px;font-size:13.5px;line-height:1.75;color:var(--tx-2)}
+.lede b{color:var(--tx);font-weight:500}
+
+/* infra sub switch */
+.subswitch{display:none;align-items:center;gap:8px;margin-top:26px;flex-wrap:wrap}
+.subswitch.show{display:flex}
+.subswitch .lab{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx-4)}
+.subswitch button{
+  height:26px;padding:0 10px;border-radius:5px;border:1px solid var(--line);
+  background:var(--s1);font-family:inherit;font-size:11.5px;color:var(--tx-3);cursor:pointer;
+  transition:.14s;
+}
+.subswitch button:hover{color:var(--tx-2);border-color:var(--line-2)}
+.subswitch button.on{background:var(--s3);color:var(--tx);border-color:var(--line-2)}
+
+/* matrix */
+.matrix{margin-top:34px;display:flex;flex-direction:column;gap:34px}
+.mrow{display:grid;grid-template-columns:134px repeat(3,320px);gap:20px;align-items:start}
+.mlabel{padding-top:34px}
+.mlabel .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-4)}
+.mlabel h2{margin:4px 0 0;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.mlabel .sub{margin:4px 0 0;font-size:11px;line-height:1.6;color:var(--tx-3)}
+.mlabel .own{margin:12px 0 0;padding:0;list-style:none}
+.mlabel .own li{position:relative;padding-left:11px;margin-bottom:2px;font-size:10.5px;line-height:1.55;color:var(--tx-4)}
+.mlabel .own li::before{content:"";position:absolute;left:0;top:7px;width:3px;height:3px;border-radius:50%;background:var(--tx-4)}
+
+.chead{display:flex;align-items:baseline;gap:8px;height:22px}
+.chead .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--accent)}
+.chead h3{margin:0;font-size:12.5px;font-weight:600}
+.chead p{margin:0;font-size:10.5px;color:var(--tx-4)}
+
+.shell{height:500px;overflow:hidden;border-radius:8px;border:1px solid var(--line);background:var(--s1);
+  box-shadow:0 24px 50px -40px rgba(0,0,0,.9)}
+
+/* panel chrome */
+.p{display:flex;flex-direction:column;height:100%;font-size:12px}
+.p-head{flex:none;border-bottom:1px solid var(--line);padding:11px 13px 10px}
+.p-body{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none}
+.p-body::-webkit-scrollbar{display:none}
+.p-foot{flex:none;border-top:1px solid var(--line);padding:8px 13px}
+.crumb{display:flex;align-items:center;gap:5px;margin-bottom:4px;font-family:var(--mono);font-size:9px;letter-spacing:.03em;color:var(--tx-4)}
+.crumb i{font-style:normal;opacity:.5}
+.p-name{font-size:14px;font-weight:600;letter-spacing:-.01em;color:var(--tx)}
+.p-meta{margin-top:2px;font-family:var(--mono);font-size:9.5px;color:var(--tx-3)}
+.danger{display:flex;align-items:center;gap:6px;height:25px;padding:0 7px;border:0;border-radius:4px;background:none;
+  font-family:inherit;font-size:11px;color:#c98059;cursor:pointer}
+.danger:hover{background:rgba(201,128,89,.1);color:#e09a72}
+
+/* controls */
+.seg{display:flex;gap:2px}
+.seg span{height:22px;padding:0 8px;border-radius:4px;font-size:10.5px;line-height:22px;color:var(--tx-3);white-space:nowrap}
+.seg span.on{background:rgba(111,124,232,.16);color:var(--accent-2)}
+.seg.underline{gap:11px;border-bottom:1px solid var(--line)}
+.seg.underline span{height:24px;line-height:24px;padding:0;border-radius:0;border-bottom:1.5px solid transparent;margin-bottom:-1px;font-size:10.5px}
+.seg.underline span.on{background:none;color:var(--tx);border-bottom-color:var(--accent)}
+.seg.boxed{gap:0;border:1px solid var(--line);border-radius:5px;overflow:hidden;width:100%}
+.seg.boxed span{flex:1;text-align:center;border-radius:0;border-right:1px solid var(--line);height:23px;line-height:23px}
+.seg.boxed span:last-child{border-right:0}
+.seg.boxed span.on{background:rgba(111,124,232,.18);color:var(--accent-2)}
+
+.sld{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.sld .track{position:relative;flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.1)}
+.sld .fill{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--accent);opacity:.85}
+.sld .knob{position:absolute;top:50%;width:9px;height:9px;border-radius:50%;background:#dfe2e6;
+  transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.5)}
+.sw{width:28px;height:15px;border-radius:8px;background:#2a2c33;position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;background:#8b8f96;transition:.16s}
+.sw.on{background:rgba(111,124,232,.55)}
+.sw.on::after{left:15px;background:#fff}
+.dots{display:flex;gap:7px}
+.dots span{width:13px;height:13px;border-radius:50%;position:relative}
+.dots span.on::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:1px solid currentColor;opacity:.7}
+.sw-list{display:flex;gap:4px;flex-wrap:wrap}
+.sw-list span{width:24px;height:24px;border-radius:5px;border:1px solid var(--line)}
+.sw-list span.on{border-color:var(--accent);box-shadow:0 0 0 2px rgba(111,124,232,.2)}
+.link{font-size:10.5px;color:var(--accent-2);background:none;border:0;padding:0;cursor:pointer;font-family:inherit;white-space:nowrap}
+.link:hover{text-decoration:underline}
+.stepper{display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.stepper b{width:24px;height:22px;display:grid;place-items:center;font-weight:400;color:var(--tx-3);font-size:12px}
+.stepper span{min-width:22px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--tx)}
+
+/* A : rows */
+.pa .p-body{padding:5px 13px 9px}
+.pa .sec{margin-top:11px}
+.pa .sec-title{display:flex;align-items:center;gap:8px;height:19px;font-family:var(--mono);font-size:9px;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--tx-4)}
+.pa .sec-title::after{content:"";flex:1;height:1px;background:var(--line)}
+.pa .row{display:flex;align-items:center;gap:8px;min-height:29px;margin:0 -6px;padding:0 6px;border-radius:4px}
+.pa .row:hover{background:rgba(255,255,255,.035)}
+.pa .lab{flex:none;width:58px;font-size:11px;color:var(--tx-3)}
+.pa .val{flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:3px;
+  font-size:11.5px;color:var(--tx);text-align:right}
+.pa .val > i{font-style:normal;font-family:var(--mono);font-size:9.5px;color:var(--tx-4)}
+.pa .val .muted-txt{color:var(--tx-3)}
+.pa .val-num{display:inline-flex;align-items:baseline;gap:2px;font-size:11.5px;color:var(--tx);flex:none}
+.pa .val-num i{font-style:normal;font-family:var(--mono);font-size:9.5px;color:var(--tx-4)}
+.pa .row.wide{flex-direction:column;align-items:stretch;gap:5px;padding-top:3px;padding-bottom:5px}
+.pa .row.wide .lab{width:auto}
+.pa .row.wide .val{justify-content:flex-start}
+.pa .hint{margin-top:12px;font-size:10px;line-height:1.6;color:var(--tx-4)}
+
+/* B : grouped */
+.pb .p-body{padding:9px 10px 12px}
+.pb .head-top{display:flex;align-items:center;gap:8px}
+.pb .avatar{width:24px;height:24px;flex:none;border-radius:6px;display:grid;place-items:center;
+  background:linear-gradient(160deg,rgba(111,124,232,.35),rgba(111,124,232,.12));
+  color:#cdd3ff;font-family:var(--mono);font-size:10.5px}
+.pb .group{margin-bottom:8px;padding:8px 9px 9px;border:1px solid rgba(255,255,255,.055);
+  border-radius:6px;background:rgba(255,255,255,.022)}
+.pb .group:last-child{margin-bottom:0}
+.pb .g-head{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:9.5px;letter-spacing:.05em;color:var(--tx-4)}
+.pb .g-head .sp{flex:1}
+.pb .g-head em{font-style:normal;font-family:var(--mono);font-size:9px;opacity:.65}
+.pb .field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.pb .field + .field{margin-top:6px}
+.pb .two{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.pb .two .field + .field{margin-top:0}
+.pb .field > label{font-size:9.5px;color:var(--tx-4)}
+.pb .input{display:flex;align-items:center;justify-content:space-between;gap:4px;height:25px;padding:0 7px;
+  border-radius:5px;border:1px solid rgba(255,255,255,.075);background:#0e0f12;font-size:11px;color:var(--tx)}
+.pb .input:hover{border-color:rgba(255,255,255,.16)}
+.pb .input i{font-style:normal;font-family:var(--mono);font-size:9.5px;color:var(--tx-4)}
+.pb .input.plain{border-color:transparent;background:none;padding:0;height:auto}
+.pb .hint{margin-top:9px;font-size:10px;line-height:1.6;color:var(--tx-4)}
+
+/* C : table */
+.pc .p-head{padding:9px 13px 8px;display:flex;align-items:center;gap:8px}
+.pc .p-head .sp{flex:1}
+.pc .crumb{margin:0}
+.pc .pc-title{font-size:12px;font-weight:600;color:var(--tx)}
+.pc .p-body{padding:3px 0 6px}
+.pc .sec-title{display:flex;align-items:center;height:24px;padding:0 13px;background:rgba(255,255,255,.028);
+  border-top:1px solid rgba(255,255,255,.045);border-bottom:1px solid rgba(255,255,255,.045);
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx-3)}
+.pc .row{display:grid;grid-template-columns:74px minmax(0,1fr);align-items:center;gap:6px;
+  min-height:29px;padding:0 13px;border-bottom:1px solid rgba(255,255,255,.045)}
+.pc .row:last-child{border-bottom:0}
+.pc .row:hover{background:rgba(255,255,255,.022)}
+.pc .lab{font-size:11px;color:var(--tx-3)}
+.pc .val{display:flex;align-items:center;justify-content:flex-end;gap:3px;font-family:var(--mono);
+  font-size:11px;color:var(--tx);min-width:0}
+.pc .val > i{font-style:normal;font-size:9px;color:var(--tx-4)}
+.pc .val.wide{justify-content:flex-start;font-family:var(--sans);font-size:11px}
+.pc .val > span,.pc .val > i{flex:none}
+.pc .val .sld{flex:1;min-width:36px}
+.pa .val .link,.pc .val .link{margin-left:6px}
+.pc .row.stack{min-height:36px}
+.pc .hint{padding:9px 13px 0;font-size:10px;line-height:1.6;color:var(--tx-4)}
+
+/* footer */
+.note{margin-top:44px;padding:22px 24px;border:1px solid var(--line);border-radius:10px;
+  background:linear-gradient(180deg,rgba(111,124,232,.05),transparent 70%),var(--s1)}
+.note h3{margin:0;font-size:15px;font-weight:600}
+.note p{margin:9px 0 0;max-width:780px;font-size:12px;line-height:1.75;color:var(--tx-2)}
+.note b{color:var(--tx);font-weight:500}
+.ask{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.ask code{display:inline-flex;align-items:center;height:26px;padding:0 9px;border-radius:5px;
+  border:1px solid var(--line);background:var(--s2);font-family:var(--mono);font-size:10.5px;color:var(--tx-2)}
+
+@media (max-width:1180px){
+  .page{padding:48px 26px 80px}
+  .mrow{grid-template-columns:1fr;gap:14px}
+  .mlabel{padding-top:0}
+  .mlabel .own{display:flex;gap:12px;flex-wrap:wrap}
+  .chead{display:none}
+  .shell{height:auto;max-height:520px}
+  .matrix{gap:26px}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="eyebrow"><span class="dot"></span>Attribute panel · 3 directions × 4 objects</div>
+  <h1>属性栏 · 三个方向 × 四类对象<br /><em>场馆 / 展台 / 基础设施 / 家具 全部同一套规则</em></h1>
+  <p class="lede">
+    横向是三种组织方式，纵向是四类对象。每格都是 320 px 的实物面板，与真实右栏同宽。
+    基础设施可以在下方切换子类型，看门窗、电梯、内墙这些特殊字段怎么落进同一套结构。
+  </p>
+
+  <div class="subswitch show" id="subswitch">
+    <span class="lab">基础设施</span>
+    <button class="on" data-infra="restroom">洗手间</button>
+    <button data-infra="stairs">楼梯</button>
+    <button data-infra="gate">出入口</button>
+    <button data-infra="elevator">电梯间</button>
+    <button data-infra="window">窗户</button>
+    <button data-infra="wall">内墙</button>
+  </div>
+
+  <div class="matrix" id="matrix"></div>
+
+  <div class="note">
+    <h3>建议：A 的骨架 + C 的数值对齐</h3>
+    <p>
+      A 的留白和分节线最接近 Linear，也不会像 B 那样「框里套框」；把 A 的数值行统一改成
+      <b>右对齐 + 等宽数字</b>（C 的做法），批量比对尺寸时更顺眼。带选项的字段（类型、开启方式）
+      用 A 的下划线分段；数量、离地用 C 的步进器和单位后缀；材质色块三套保持一致。
+    </p>
+    <div class="ask">
+      <code>回复 A / B / C</code>
+      <code>或者：A，但类型切换用 C 的方框</code>
+    </div>
+  </div>
+</div>
+
+<script>
+const C = { white: '#d8d5cf', gray: '#8d8a83', dark: '#4f4c47', black: '#2a2c31', metal: '#6d7f8d', wood: '#8a6b4f' }
+const MARK = ['#c96b5e', '#d6a34a', '#8d8a83']
+
+/* ---------------- 数据 ---------------- */
+const VENUE = {
+  key: 'venue', label: '场馆', badge: '馆', name: 'W1 展馆',
+  crumb: ['场景', '场馆', 'W1 展馆'],
+  meta: '9,100.8 m² · 覆盖率 47%',
+  sections: [
+    { title: '面积', rows: [
+      { k: '占地面积', v: '9,100.8', unit: 'm²' },
+      { k: '轮廓周长', v: '400.0', unit: 'm', short: true },
+      { k: '轮廓顶点', v: '4', short: true },
+    ]},
+    { title: '体量', rows: [
+      { k: '净高', type: 'slider', v: '7', unit: 'm', pct: 58 },
+      { k: '半透明', type: 'switch', on: true, short: true },
+      { k: '去掉顶部', type: 'switch', on: false, short: true },
+    ]},
+    { title: '底图', rows: [
+      { k: '参考图', v: '未上传', muted: true, action: '上传' },
+      { k: '不透明度', type: 'slider', v: '70', unit: '%', pct: 70 },
+    ]},
+  ],
+  hint: 'Ctrl + 滚轮按 1 m 缩放底图，Ctrl + 拖动逐米移动；锁定后不再响应。',
+  danger: '删除场馆',
+  owns: ['净高滑块', '半透明 / 去顶开关', '底图上传与不透明度'],
+}
+
+const BOOTH = {
+  key: 'booth', label: '展台', badge: '标', name: 'W1E01',
+  crumb: ['场景', '展台', 'W1E01'],
+  meta: '标准展台 · 190.0 m²',
+  sections: [
+    { title: '几何', rows: [
+      { k: '类型', type: 'segment', options: ['标准', '脚手架', '光地'], cur: 0 },
+      { k: '长 × 宽', v: '19.0 × 10.0', unit: 'm', short: true },
+      { k: '旋转', v: '0', unit: '°', short: true },
+      { k: '高度', type: 'slider', v: '3.0', unit: 'm', pct: 42 },
+    ]},
+    { title: '外观', rows: [
+      { k: '顶板', type: 'switch', on: true },
+      { k: '展商', v: '示例科技有限公司' },
+      { k: 'Logo', v: '未上传', muted: true, action: '上传', short: true },
+      { k: '标记', type: 'dots', cur: 0, short: true },
+    ]},
+  ],
+  hint: '脚手架 / 光地底部均为 15 cm 微凸台板，脚手架上部架空。',
+  danger: '删除展台',
+  owns: ['类型分段', '高度滑块', 'Logo 上传', '标记色点'],
+}
+
+const INFRA = {
+  restroom: {
+    label: '洗手间', badge: '卫', name: '洗手间 01',
+    meta: '基础设施 · 2.0 × 2.0 × 3.0 m',
+    sections: [
+      { title: '尺寸', rows: [
+        { k: '长', v: '2.0', unit: 'm', short: true },
+        { k: '宽', v: '2.0', unit: 'm', short: true },
+        { k: '高', v: '3.0', unit: 'm', short: true },
+        { k: '旋转', v: '0', unit: '°', short: true },
+      ]},
+      { title: '位置', rows: [{ k: 'X / Z', v: '-31.0 / 22.5', unit: 'm' }]},
+    ],
+    hint: '设施可拖动、右键旋转 90°，逐项调整尺寸与数量。',
+    danger: '删除设施',
+    owns: ['长宽高', '旋转'],
+  },
+  stairs: {
+    label: '楼梯', badge: '梯', name: '楼梯 01',
+    meta: '基础设施 · 4.0 × 3.0 × 2.4 m',
+    sections: [
+      { title: '尺寸', rows: [
+        { k: '长', v: '4.0', unit: 'm', short: true },
+        { k: '宽', v: '3.0', unit: 'm', short: true },
+        { k: '高', v: '2.4', unit: 'm', short: true },
+        { k: '旋转', v: '90', unit: '°', short: true },
+      ]},
+      { title: '位置', rows: [{ k: 'X / Z', v: '-12.0 / 8.0', unit: 'm' }]},
+    ],
+    hint: '半截楼梯默认 4 × 3 × 2.4 m，可与相邻设施一起拖动。',
+    danger: '删除设施',
+    owns: ['长宽高', '旋转'],
+  },
+  gate: {
+    label: '出入口', badge: '门', name: '出入口 03',
+    meta: '基础设施 · 宽 5.0 m · 高 4.0 m',
+    sections: [
+      { title: '尺寸', rows: [
+        { k: '宽度', v: '5.0', unit: 'm' },
+        { k: '高度', v: '4.0', unit: 'm' },
+      ]},
+      { title: '开启', rows: [
+        { k: '方式', type: 'segment', options: ['侧开', '对开', '上卷'], cur: 1 },
+        { k: '门扇', type: 'switch', on: false },
+      ]},
+    ],
+    hint: '出入口自动吸附最近的墙体并开洞；开启带 0.46 s 缓动，可中途反向。',
+    danger: '删除设施',
+    owns: ['开启方式分段', '开合开关'],
+  },
+  elevator: {
+    label: '电梯间', badge: '梯', name: '电梯间 01',
+    meta: '基础设施 · 2.4 × 2.4 × 3.0 m',
+    sections: [
+      { title: '尺寸', rows: [
+        { k: '长', v: '2.4', unit: 'm', short: true },
+        { k: '宽', v: '2.4', unit: 'm', short: true },
+        { k: '高', v: '3.0', unit: 'm', short: true },
+        { k: '旋转', v: '0', unit: '°', short: true },
+      ]},
+      { title: '配置', rows: [{ k: '电梯数量', type: 'stepper', v: 2 }] },
+    ],
+    hint: '电梯门 1–6 部，按数量沿正面均分。',
+    danger: '删除设施',
+    owns: ['数量步进器'],
+  },
+  window: {
+    label: '窗户', badge: '窗', name: '窗户 04',
+    meta: '基础设施 · 2.0 × 2.0 m · 离地 1.0 m',
+    sections: [
+      { title: '尺寸', rows: [
+        { k: '宽度', v: '2.0', unit: 'm', short: true },
+        { k: '高度', v: '2.0', unit: 'm', short: true },
+      ]},
+      { title: '位置', rows: [
+        { k: '离地', v: '1.0', unit: 'm' },
+        { k: '所在墙', v: '北墙' },
+      ]},
+    ],
+    hint: '窗户只吸附场馆外墙，不能与出入口重叠。',
+    danger: '删除设施',
+    owns: ['离地高度', '所在墙面'],
+  },
+  wall: {
+    label: '内墙', badge: '墙', name: '内墙 02',
+    meta: '基础设施 · 长 12.4 m · 高 3.0 m',
+    sections: [
+      { title: '尺寸', rows: [
+        { k: '长度', v: '12.4', unit: 'm' },
+        { k: '高度', v: '3.0', unit: 'm' },
+      ]},
+      { title: '材质', rows: [
+        { k: '预设', type: 'swatches', cur: 1, colors: [C.white, C.gray, C.wood, C.metal, C.dark, C.black] },
+        { k: '贴图', v: '自定义', muted: true, action: '上传' },
+      ]},
+    ],
+    hint: '长度不设上限；材质支持布艺、金属、木纹、混凝土、乳胶漆与黑白饰面。',
+    danger: '删除内墙',
+    owns: ['长度无上限', '材质色块 + 贴图'],
+  },
+}
+
+const FURNITURE = {
+  key: 'furniture', label: '家具', badge: '椅', name: '圆座椅 01',
+  crumb: ['场景', '家具', 'W1E01 / 圆座椅 01'],
+  meta: '圆座椅 · 0.6 × 0.6 × 0.5 m',
+  sections: [
+    { title: '尺寸', rows: [
+      { k: '固定尺寸', v: '0.6 × 0.6 × 0.5', unit: 'm' },
+      { k: '所属展台', v: 'W1E01', short: true },
+      { k: '旋转', v: '0', unit: '°', short: true },
+    ]},
+    { title: '材质', rows: [
+      { k: '预设', type: 'swatches', cur: 0, colors: [C.white, C.gray, C.dark, C.black, C.metal, C.wood] },
+    ]},
+  ],
+  hint: '家具只能完整落在所属展台内，拖动不吸附网格，Alt 可自由旋转。',
+  danger: '删除家具',
+  owns: ['固定尺寸', '材质色块', '所属展台'],
+}
+
+/* ---------------- 控件 ---------------- */
+const seg = (o, cur, variant) =>
+  `<div class="seg ${variant}">${o.map((t, i) => `<span class="${i === cur ? 'on' : ''}">${t}</span>`).join('')}</div>`
+
+const slider = (v, unit, pct) =>
+  `<div class="sld"><div class="track"><div class="fill" style="width:${pct}%"></div><div class="knob" style="left:${pct}%"></div></div></div><span class="val-num">${v}<i>${unit || ''}</i></span>`
+
+const dots = (cur) =>
+  `<div class="dots">${MARK.map((c, i) => `<span class="${i === cur ? 'on' : ''}" style="background:${c};color:${c}"></span>`).join('')}</div>`
+
+const swatches = (cur, colors) =>
+  `<div class="sw-list">${colors.map((c, i) => `<span class="${i === cur ? 'on' : ''}" style="background:${c}"></span>`).join('')}</div>`
+
+const stepper = (n) =>
+  `<div class="stepper"><b>−</b><span>${n}</span><b>+</b></div>`
+
+/* ---------------- A ---------------- */
+function renderA(d) {
+  const body = d.sections.map((s) => {
+    const rows = s.rows.map((r) => {
+      let val = ''
+      if (r.type === 'segment') val = seg(r.options, r.cur, 'underline')
+      else if (r.type === 'slider') val = slider(r.v, r.unit, r.pct)
+      else if (r.type === 'switch') val = `<div class="sw ${r.on ? 'on' : ''}"></div>`
+      else if (r.type === 'dots') val = dots(r.cur)
+      else if (r.type === 'swatches') val = swatches(r.cur, r.colors)
+      else if (r.type === 'stepper') val = stepper(r.v)
+      else if (r.action) val = `<span class="muted-txt">${r.v}</span><button class="link">${r.action}</button>`
+      else val = `<span class="${r.muted ? 'muted-txt' : ''}">${r.v}</span>${r.unit ? `<i>${r.unit}</i>` : ''}`
+
+      const wide = r.type === 'swatches'
+      return `<div class="row${wide ? ' wide' : ''}"><span class="lab">${r.k}</span><span class="val${r.muted ? ' muted' : ''}">${val}</span></div>`
+    }).join('')
+    return `<div class="sec"><div class="sec-title">${s.title}</div>${rows}</div>`
+  }).join('')
+
+  return `
+    <div class="p-head">
+      <div class="crumb">${d.crumb.map((c, i) => (i ? '<i>/</i>' : '') + c).join('')}</div>
+      <div class="p-name">${d.name}</div>
+      <div class="p-meta">${d.meta}</div>
+    </div>
+    <div class="p-body">${body}<div class="hint">${d.hint}</div></div>
+    <div class="p-foot"><button class="danger">${d.danger}</button></div>`
+}
+
+/* ---------------- B ---------------- */
+function renderB(d) {
+  const groups = d.sections.map((s) => {
+    const items = []
+    let pair = []
+    const flush = () => {
+      if (pair.length === 2) items.push(`<div class="two">${pair.join('')}</div>`)
+      else if (pair.length === 1) items.push(pair[0])
+      pair = []
+    }
+
+    s.rows.forEach((r) => {
+      let body = ''
+      if (r.type === 'segment') body = seg(r.options, r.cur, 'boxed')
+      else if (r.type === 'slider')
+        body = `<div class="input plain"><div class="sld"><div class="track"><div class="fill" style="width:${r.pct}%"></div><div class="knob" style="left:${r.pct}%"></div></div></div><span>${r.v}<i> ${r.unit}</i></span></div>`
+      else if (r.type === 'switch')
+        body = `<div class="input plain"><div class="sw ${r.on ? 'on' : ''}"></div></div>`
+      else if (r.type === 'dots') body = dots(r.cur)
+      else if (r.type === 'swatches') body = swatches(r.cur, r.colors)
+      else if (r.type === 'stepper') body = stepper(r.v)
+      else if (r.action) body = `<div class="input"><span>${r.v}</span><button class="link">${r.action}</button></div>`
+      else body = `<div class="input"><span>${r.v}</span>${r.unit ? `<i>${r.unit}</i>` : ''}</div>`
+
+      const field = `<div class="field"><label>${r.k}</label>${body}</div>`
+      if (r.short) {
+        pair.push(field)
+        if (pair.length === 2) flush()
+      } else {
+        flush()
+        items.push(field)
+      }
+    })
+    flush()
+
+    return `<div class="group"><div class="g-head">${s.title}<span class="sp"></span><em>${s.rows.length}</em></div>${items.join('')}</div>`
+  }).join('')
+
+  return `
+    <div class="p-head">
+      <div class="head-top">
+        <div class="avatar">${d.badge}</div>
+        <div style="min-width:0">
+          <div class="p-name" style="font-size:13px">${d.name}</div>
+          <div class="p-meta">${d.meta}</div>
+        </div>
+      </div>
+    </div>
+    <div class="p-body">${groups}<div class="hint">${d.hint}</div></div>
+    <div class="p-foot"><button class="danger">${d.danger}</button></div>`
+}
+
+/* ---------------- C ---------------- */
+function renderC(d) {
+  const body = d.sections.map((s) => {
+    const rows = s.rows.map((r) => {
+      let val = ''
+      if (r.type === 'segment') val = seg(r.options, r.cur, 'boxed')
+      else if (r.type === 'slider')
+        val = `<div class="sld"><div class="track"><div class="fill" style="width:${r.pct}%"></div><div class="knob" style="left:${r.pct}%"></div></div></div><span>${r.v}</span><i>${r.unit}</i>`
+      else if (r.type === 'switch') val = `<div class="sw ${r.on ? 'on' : ''}"></div>`
+      else if (r.type === 'dots') val = dots(r.cur)
+      else if (r.type === 'swatches') val = swatches(r.cur, r.colors)
+      else if (r.type === 'stepper') val = stepper(r.v)
+      else if (r.action) val = `<span>${r.v}</span><button class="link">${r.action}</button>`
+      else val = `<span>${r.v}</span>${r.unit ? `<i>${r.unit}</i>` : ''}`
+
+      const stack = r.type === 'segment' || r.type === 'swatches'
+      return `<div class="row${stack ? ' stack' : ''}"><span class="lab">${r.k}</span><span class="val${stack ? ' wide' : ''}">${val}</span></div>`
+    }).join('')
+    return `<div class="sec-title">${s.title}</div>${rows}`
+  }).join('')
+
+  return `
+    <div class="p-head">
+      <span class="crumb">${d.crumb.slice(0, 2).join(' / ')}</span><span class="sp"></span>
+      <span class="pc-title">${d.name}</span>
+    </div>
+    <div class="p-body">${body}<div class="hint">${d.hint}</div></div>
+    <div class="p-foot"><button class="danger">${d.danger}</button></div>`
+}
+
+/* ---------------- 渲染 ---------------- */
+const VARIANTS = [
+  { k: 'A', t: '行式', d: '留白 + 分节线' },
+  { k: 'B', t: '分组卡片', d: '每组一块浅底' },
+  { k: 'C', t: '双列表格', d: '标签列 + 值列' },
+]
+
+let infraKey = 'restroom'
+
+function rowData(key) {
+  if (key === 'infra') {
+    const it = INFRA[infraKey]
+    return {
+      ...it,
+      crumb: ['场景', '基础设施', it.name],
+    }
+  }
+  if (key === 'venue') return VENUE
+  if (key === 'booth') return BOOTH
+  return FURNITURE
+}
+
+function renderRow(key) {
+  const d = rowData(key)
+  const label = key === 'infra' ? INFRA[infraKey].label : d.label
+  return `
+    <section class="mrow" data-row="${key}">
+      <div class="mlabel">
+        <div class="k">${key === 'infra' ? 'Infrastructure' : key === 'venue' ? 'Venue' : key === 'booth' ? 'Booth' : 'Furniture'}</div>
+        <h2>${label}</h2>
+        <p class="sub">${d.meta.split(' · ')[0]}</p>
+        <ul class="own">${d.owns.map((o) => `<li>${o}</li>`).join('')}</ul>
+      </div>
+      ${VARIANTS.map((v) => `
+        <div class="cell">
+          <div class="chead"><span class="k">${v.k}</span><h3>${v.t}</h3><p>${v.d}</p></div>
+          <div class="shell"><div class="p pa" style="display:${v.k === 'A' ? 'flex' : 'none'}">${v.k === 'A' ? renderA(d) : ''}</div><div class="p pb" style="display:${v.k === 'B' ? 'flex' : 'none'}">${v.k === 'B' ? renderB(d) : ''}</div><div class="p pc" style="display:${v.k === 'C' ? 'flex' : 'none'}">${v.k === 'C' ? renderC(d) : ''}</div></div>
+        </div>`).join('')}
+    </section>`
+}
+
+function mount() {
+  const keys = ['venue', 'booth', 'infra', 'furniture']
+  document.getElementById('matrix').innerHTML = keys.map(renderRow).join('')
+}
+
+document.getElementById('subswitch').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-infra]')
+  if (!btn) return
+  infraKey = btn.dataset.infra
+  document.querySelectorAll('#subswitch button').forEach((b) => b.classList.toggle('on', b === btn))
+  const old = document.querySelector('[data-row="infra"]')
+  if (old) {
+    const tmp = document.createElement('div')
+    tmp.innerHTML = renderRow('infra')
+    old.replaceWith(tmp.firstElementChild)
+  }
+})
+
+mount()
+</script>
+</body>
+</html>

@@ -243,6 +243,8 @@ const SKY_DAY_TO_TMP = new THREE.Color()
 const SKY_NIGHT_TMP = new THREE.Color()
 const SKY_NIGHT_TO_TMP = new THREE.Color()
 const SKY_MIX_TMP = new THREE.Color()
+/** 建模视图背景：编辑时不显示真实天空，用中性灰让白膜与界面区分开 */
+const STUDIO_BG = new THREE.Color(0xd5d3ce)
 
 interface WeatherEnvironment {
   skyDay: number
@@ -563,6 +565,8 @@ export class Stage {
   /** 太阳/昼夜进度：0 = 午夜，0.5 = 正午 */
   private sunProgress = currentSunProgress()
   private sunPaused = false
+  /** 时间推进倍率：1 = 实时，100 = 最快 */
+  private sunSpeed = 1
   private sunRadius = 160
   private lastSunMinute = -1
   private weather: WeatherKind = 'clear'
@@ -921,8 +925,8 @@ export class Stage {
     host.appendChild(labelDom)
 
     this.scene = new THREE.Scene()
-    this.scene.background = new THREE.Color(0xf1f0ec)
-    this.scene.fog = new THREE.Fog(0xf1f0ec, 220, 620)
+    this.scene.background = STUDIO_BG.clone()
+    this.scene.fog = new THREE.Fog(0xd5d3ce, 220, 620)
 
     this.camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 2000)
     this.camera.position.set(34, 28, 38)
@@ -6459,6 +6463,11 @@ export class Stage {
     }
   }
 
+  /** 设置时间推进倍率，范围 1–100 */
+  setSunSpeed(speed: number) {
+    this.sunSpeed = Math.min(100, Math.max(1, Number(speed) || 1))
+  }
+
   /** 暂停或继续太阳时间推进 */
   setSunPaused(on: boolean) {
     this.sunPaused = on
@@ -6479,7 +6488,7 @@ export class Stage {
     }
 
     if (this.sunPaused) return
-    this.sunProgress = (this.sunProgress + dt / DAY_SECONDS) % 1
+    this.sunProgress = (this.sunProgress + (dt * this.sunSpeed) / DAY_SECONDS) % 1
     this.updateSun()
 
     const minutes = Math.floor(this.sunProgress * 1440)
@@ -6537,13 +6546,23 @@ export class Stage {
     SKY_NIGHT_TO_TMP.setHex(to.skyNight)
     SKY_NIGHT_TMP.lerp(SKY_NIGHT_TO_TMP, mix)
     SKY_MIX_TMP.copy(SKY_DAY_TMP).lerp(SKY_NIGHT_TMP, nightFactor)
-    if (this.scene.background instanceof THREE.Color) this.scene.background.copy(SKY_MIX_TMP)
+    // 背景始终跟随天空：晴 / 少云偏蓝，阴天转灰，夜间压深；建模视图只额外拉远雾距
+    const studio = this.walkState === 'off' && !this.presentation
+    if (this.cloudShadow) this.cloudShadow.group.visible = !studio
+    if (this.scene.background instanceof THREE.Color) {
+      this.scene.background.copy(SKY_MIX_TMP)
+    }
     if (this.scene.fog instanceof THREE.Fog) {
       this.scene.fog.color.copy(SKY_MIX_TMP)
       const fogNear = from.fogNear + (to.fogNear - from.fogNear) * mix
       const fogFar = from.fogFar + (to.fogFar - from.fogFar) * mix
       this.scene.fog.near = Math.max(4, fogNear * this.weatherVisibility)
       this.scene.fog.far = Math.max(18, fogFar * this.weatherVisibility)
+      // 建模视图不套天气雾，否则竖屏缩到很远的相机会把模型整片吃掉
+      if (studio) {
+        this.scene.fog.near = 900
+        this.scene.fog.far = 2400
+      }
     }
 
     // 夜间照明：常规画质为灯泡 + 烘焙光池；极致画质为向下发光的实时聚光灯

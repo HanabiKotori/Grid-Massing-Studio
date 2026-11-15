@@ -143,29 +143,26 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <div
-      class="weather-mask"
-      :class="{ previewing: !!previewSlider }"
-      @click.self="onMaskClick"
-    >
+    <div class="wm" :class="{ previewing: !!previewSlider }" @click.self="onMaskClick">
       <section
-        class="weather-panel"
+        class="wp"
         :class="{ previewing: !!previewSlider }"
         role="dialog"
         aria-modal="true"
         aria-labelledby="weather-title"
       >
-        <header class="weather-head">
-          <div>
-            <p>环境 · 高德实时</p>
+        <header class="wp-head">
+          <div class="wp-title">
+            <p class="wp-eb">环境 · 高德实时</p>
             <h2 id="weather-title">天气</h2>
           </div>
-          <div class="weather-head-actions">
-            <div class="weather-toggle">
+          <div class="wp-ha">
+            <div class="wp-toggle">
               <span>天气效果</span>
               <button
                 type="button"
-                class="weather-switch"
+                class="sw"
+                :class="{ on: enabled }"
                 role="switch"
                 :aria-checked="enabled"
                 :aria-label="enabled ? '关闭天气效果' : '开启天气效果'"
@@ -176,9 +173,9 @@ onBeforeUnmount(() => {
             </div>
             <button
               ref="closeEl"
-              class="weather-close"
+              class="wp-x"
               type="button"
-              aria-label="关闭天气选择"
+              aria-label="关闭天气面板"
               @click="emit('close')"
             >
               ×
@@ -186,54 +183,50 @@ onBeforeUnmount(() => {
           </div>
         </header>
 
-        <div class="weather-body">
-          <div class="weather-settings">
-            <p v-if="!enabled" class="weather-off-tip">
-              天气效果已关闭，当前为晴天。开启开关或选择任意天气即可恢复。
-            </p>
+        <div class="wp-body">
+          <!-- 实时天气 -->
+          <section class="wp-live">
+            <div class="sec">实时天气<span class="r">高德天气</span></div>
+            <form class="wp-city" @submit.prevent="loadLive(true)">
+              <input
+                v-model="city"
+                type="text"
+                aria-label="天气城市"
+                placeholder="城市名或 adcode，如 贵阳 / 520100"
+                maxlength="20"
+              />
+              <button type="submit" :disabled="loading">
+                {{ loading ? '查询中' : '查询' }}
+              </button>
+            </form>
 
-        <section class="weather-live" aria-live="polite">
-          <div class="weather-live-head">
-            <b>实时天气</b>
-            <span>高德天气</span>
-          </div>
-
-          <form class="weather-city-form" @submit.prevent="loadLive(true)">
-            <input
-              v-model="city"
-              type="text"
-              aria-label="天气城市"
-              placeholder="城市名或 adcode，如 贵阳 / 520100"
-              maxlength="20"
-            />
-            <button type="submit" :disabled="loading">
-              {{ loading ? '查询中' : '查询' }}
-            </button>
-          </form>
-
-          <p v-if="error" class="weather-live-error">{{ error }}</p>
-          <div v-else-if="live" class="weather-live-info">
-            <div class="weather-live-main">
-              <b>
-                <WeatherIcon :kind="live.kind" :size="15" />
-                {{ live.city }} · {{ live.weather }}
-              </b>
-              <strong>{{ live.temperature }}°C</strong>
+            <p v-if="error" class="wp-error">{{ error }}</p>
+            <div v-else-if="live" class="wp-live-info">
+              <div class="wp-live-main">
+                <b>
+                  <WeatherIcon :kind="live.kind" :size="15" />
+                  {{ live.city }} · {{ live.weather }}
+                </b>
+                <strong>{{ live.temperature }}°C</strong>
+              </div>
+              <p class="wp-meta">
+                {{ live.winddirection }}风 {{ live.windpower }} · 湿度 {{ live.humidity }}%
+              </p>
+              <p class="wp-time">
+                {{ live.reporttime }} · 映射为「{{ WEATHER_LABELS[live.kind] }}」
+              </p>
             </div>
-            <p>
-              {{ live.winddirection }}风 {{ live.windpower }} · 湿度 {{ live.humidity }}%
-            </p>
-            <p class="weather-live-time">
-              {{ live.reporttime }} · 映射为「{{ WEATHER_LABELS[live.kind] }}」
-            </p>
-            <div class="weather-live-toggle">
-              <div>
+            <p v-else-if="loading" class="wp-loading">正在查询 {{ city }} 实时天气…</p>
+
+            <div class="wp-live-sw">
+              <div class="txt">
                 <b>使用实时天气</b>
-                <span>{{ liveEnabled ? '已开启，查询城市后自动同步' : '开启后使用高德实时天气' }}</span>
+                <span>{{ liveEnabled ? '查询城市后自动同步' : '开启后使用高德实时天气' }}</span>
               </div>
               <button
                 type="button"
-                class="weather-switch"
+                class="sw"
+                :class="{ on: liveEnabled }"
                 role="switch"
                 :aria-checked="liveEnabled"
                 :aria-label="liveEnabled ? '关闭实时天气' : '开启实时天气'"
@@ -243,713 +236,839 @@ onBeforeUnmount(() => {
                 <i />
               </button>
             </div>
-          </div>
-          <p v-else-if="loading" class="weather-live-loading">正在查询 {{ city }} 实时天气…</p>
-        </section>
+          </section>
 
-        <section class="weather-density">
-          <div class="weather-density-head">
-            <b>粒子与能见度</b>
-            <span>拖动实时调整</span>
-          </div>
-          <p class="weather-density-status">{{ particleStatus }}</p>
-          <label
-            v-for="row in densityRows"
-            :key="row.key"
-            class="weather-density-row"
-            :class="{ 'is-previewing': previewSlider === row.key }"
-          >
-            <span>{{ row.label }}</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              :value="densityPercent(row.key)"
-              :style="{ '--fill': `${densityPercent(row.key)}%` }"
-              @pointerdown="beginParticlePreview(row.key)"
-              @input="onDensity(row.key, $event)"
-            />
-            <b>{{ densityPercent(row.key) }}%</b>
-            <button
-              v-if="!hasParticles(row.key)"
-              type="button"
-              class="weather-density-preview"
-              :title="`预览${row.label}粒子`"
-              @click="emit('preview-particle', row.key)"
+          <!-- 天气列表 -->
+          <section class="wp-list">
+            <div class="sec">天气类型<span class="r">{{ WEATHER_OPTIONS.length }} 种</span></div>
+            <div class="wp-rows">
+              <button
+                v-for="item in WEATHER_OPTIONS"
+                :key="item.kind"
+                type="button"
+                class="wrow"
+                :class="{ on: current === item.kind }"
+                :aria-pressed="current === item.kind"
+                @click="emit('select', item.kind)"
+              >
+                <b>
+                  <WeatherIcon :kind="item.kind" :size="16" />
+                  {{ item.label }}
+                </b>
+                <span>{{ item.description }}</span>
+              </button>
+            </div>
+          </section>
+
+          <!-- 粒子与能见度 -->
+          <section class="wp-density">
+            <div class="sec">粒子与能见度<span class="r">拖动实时调整</span></div>
+            <p class="wp-status">{{ particleStatus }}</p>
+
+            <label
+              v-for="row in densityRows"
+              :key="row.key"
+              class="wp-sld"
+              :class="{ 'is-previewing': previewSlider === row.key }"
             >
-              预览
-            </button>
-            <span v-else />
-          </label>
+              <span class="lab">{{ row.label }}</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                :value="densityPercent(row.key)"
+                :style="{ '--fill': densityPercent(row.key) + '%' }"
+                @pointerdown="beginParticlePreview(row.key)"
+                @input="onDensity(row.key, $event)"
+              />
+              <b>{{ densityPercent(row.key) }}%</b>
+              <button
+                v-if="!hasParticles(row.key)"
+                type="button"
+                class="wp-preview"
+                :title="`预览${row.label}粒子`"
+                @click="emit('preview-particle', row.key)"
+              >
+                预览
+              </button>
+              <span v-else class="wp-preview-ghost" />
+            </label>
 
-          <div
-            class="weather-visibility-row"
-            :class="{ 'is-previewing': previewSlider === 'visibility' }"
-          >
-            <span>能见度</span>
-            <input
-              type="range"
-              min="0"
-              max="200"
-              step="5"
-              :value="visibility"
-              :style="{ '--fill': `${visibility / 2}%` }"
-              @pointerdown="startSliderPreview('visibility')"
-              @input="onVisibility($event)"
-            />
-            <b>≈{{ visibilityMeters }}m</b>
-          </div>
-        </section>
-          </div>
-
-          <div class="weather-grid">
-          <button
-            v-for="item in WEATHER_OPTIONS"
-            :key="item.kind"
-            type="button"
-            class="weather-option"
-            :class="{ active: current === item.kind }"
-            @click="emit('select', item.kind)"
-          >
-            <b>
-              <WeatherIcon :kind="item.kind" :size="16" />
-              {{ item.label }}
-            </b>
-            <span>{{ item.description }}</span>
-          </button>
-          </div>
+            <div class="wp-sld" :class="{ 'is-previewing': previewSlider === 'visibility' }">
+              <span class="lab">能见度</span>
+              <input
+                type="range"
+                min="0"
+                max="200"
+                step="5"
+                :value="visibility"
+                :style="{ '--fill': visibility / 2 + '%' }"
+                @pointerdown="startSliderPreview('visibility')"
+                @input="onVisibility($event)"
+              />
+              <b>≈{{ visibilityMeters }}m</b>
+            </div>
+          </section>
         </div>
 
-        <footer class="weather-foot">
+        <footer class="wp-foot">
           实时天气来自高德，开启后会映射到最接近的场景预设；也可以直接选择手动天气。封闭场馆内不会出现降水。
         </footer>
+
+        <div class="wp-done-wrap">
+          <button type="button" class="wp-done" @click="emit('close')">完成</button>
+        </div>
       </section>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-.weather-mask {
+/* ---------- 遮罩 ---------- */
+.wm {
+  --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
   position: fixed;
   inset: 0;
   z-index: 85;
   display: grid;
   place-items: center;
   padding: 20px;
-  background-color: rgba(18, 20, 24, 0.4);
-  backdrop-filter: blur(4px);
-  transition:
-    background-color 0.24s ease,
-    backdrop-filter 0.24s ease;
+  background: rgba(4, 5, 6, 0.66);
+  backdrop-filter: blur(3px);
 }
 
-.weather-mask.previewing {
-  background-color: transparent;
+/* ---------- 面板 ---------- */
+.wp {
+  width: min(790px, 100%);
+  max-height: min(90vh, 620px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: #0b0c0e;
+  box-shadow: 0 40px 90px -30px #000;
+  color: #b6bac1;
+}
+
+/* ---------- 头部 ---------- */
+.wp-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.wp-eb {
+  margin: 0 0 3px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #5f636a;
+}
+
+.wp-title h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #ecedef;
+}
+
+.wp-ha {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wp-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: #8b8f96;
+}
+
+.wp-x {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: #8b8f96;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.wp-x:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #ecedef;
+}
+
+/* ---------- 开关 ---------- */
+.sw {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #2a2c33;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.sw i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #8b8f96;
+  transition: transform 0.16s ease, background 0.16s ease;
+}
+
+.sw.on {
+  background: #6f7ce8;
+}
+
+.sw.on i {
+  transform: translateX(14px);
+  background: #fff;
+}
+
+.sw:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------- 主体：左列表 / 右参数 ---------- */
+.wp-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 306px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'list live'
+    'list density';
+  overflow: hidden;
+}
+
+.wp-live {
+  grid-area: live;
+  min-height: 0;
+  padding: 10px 18px 2px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.wp-list {
+  grid-area: list;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.wp-density {
+  grid-area: density;
+  min-height: 0;
+  padding: 2px 18px 14px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* ---------- 分节标题 ---------- */
+.sec {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 26px;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #5f636a;
+}
+
+.sec::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.sec .r {
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 9.5px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #454950;
+}
+
+/* ---------- 实时天气 ---------- */
+.wp-city {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+
+.wp-city input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 5px;
+  background: #0e0f12;
+  color: #ecedef;
+  font-family: inherit;
+  font-size: 11.5px;
+}
+
+.wp-city input::placeholder {
+  color: #454950;
+}
+
+.wp-city input:focus {
+  outline: none;
+  border-color: rgba(111, 124, 232, 0.65);
+}
+
+.wp-city button {
+  flex: none;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 5px;
+  background: #16171b;
+  color: #b6bac1;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.wp-city button:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ecedef;
+}
+
+.wp-city button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.wp-live-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.wp-live-main b {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #ecedef;
+}
+
+.wp-live-main strong {
+  margin-left: auto;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #ecedef;
+}
+
+.wp-meta {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  color: #6a6e75;
+}
+
+.wp-time {
+  margin: 1px 0 0;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: #454950;
+}
+
+.wp-error {
+  margin: 6px 0 0;
+  font-size: 10.5px;
+  color: #c98059;
+}
+
+.wp-loading {
+  margin: 6px 0 0;
+  font-size: 10.5px;
+  color: #6a6e75;
+}
+
+.wp-live-sw {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.wp-live-sw .txt {
+  min-width: 0;
+}
+
+.wp-live-sw b {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #b6bac1;
+}
+
+.wp-live-sw span {
+  display: block;
+  margin-top: 1px;
+  font-size: 9.5px;
+  color: #454950;
+}
+
+.wp-live-sw .sw {
+  margin-left: auto;
+}
+
+/* ---------- 天气列表（MA 选中样式：紫字 + 右侧圆点） ---------- */
+.wp-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 2px;
+}
+
+.wrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #b6bac1;
+  font-family: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.wrow:hover {
+  background: rgba(255, 255, 255, 0.045);
+  color: #ecedef;
+}
+
+.wrow b {
+  flex: none;
+  width: 62px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 500;
+  color: inherit;
+}
+
+.wrow span {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  color: #5f636a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wrow.on {
+  color: #ecedef;
+}
+
+.wrow.on b {
+  color: #cdd3ff;
+}
+
+.wrow.on::after {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6f7ce8;
+}
+
+/* ---------- 粒子与能见度 ---------- */
+.wp-status {
+  margin: 2px 0 6px;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: #454950;
+}
+
+.wp-sld {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 30px;
+}
+
+.wp-sld .lab {
+  flex: none;
+  width: 36px;
+  font-size: 10.5px;
+  color: #8b8f96;
+}
+
+.wp-sld input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  height: 3px;
+  border-radius: 2px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(
+    90deg,
+    #6f7ce8 0 var(--fill, 50%),
+    rgba(255, 255, 255, 0.1) var(--fill, 50%) 100%
+  );
+  cursor: pointer;
+}
+
+.wp-sld input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #dfe2e6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.wp-sld input[type='range']::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: #dfe2e6;
+}
+
+.wp-sld > b {
+  flex: none;
+  min-width: 40px;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  color: #b6bac1;
+}
+
+.wp-preview {
+  flex: none;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background: none;
+  color: #8b8f96;
+  font-family: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.wp-preview:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ecedef;
+}
+
+.wp-preview-ghost {
+  flex: none;
+  width: 33px;
+}
+
+/* ---------- 页脚 ---------- */
+.wp-foot {
+  flex: 0 0 auto;
+  padding: 9px 18px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: #5f636a;
+}
+
+.wp-done-wrap {
+  display: none;
+  flex: 0 0 auto;
+  padding: 10px 16px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.wp-done {
+  width: 100%;
+  height: 44px;
+  border: 0;
+  border-radius: 9px;
+  background: #6f7ce8;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* ---------- 拖动预览 ---------- */
+.wm.previewing {
+  background: transparent;
   backdrop-filter: none;
 }
 
-.weather-panel.previewing {
-  background-color: transparent;
+.wp.previewing {
+  background: transparent;
   border-color: transparent;
   box-shadow: none;
 }
 
-.weather-head,
-.weather-foot,
-.weather-off-tip,
-.weather-live,
-.weather-density-head,
-.weather-density-status,
-.weather-grid,
-.weather-density-preview,
-.weather-density-row,
-.weather-visibility-row {
-  transition: opacity 0.2s ease;
-}
-
-.weather-panel.previewing .weather-head,
-.weather-panel.previewing .weather-foot,
-.weather-panel.previewing .weather-off-tip,
-.weather-panel.previewing .weather-live,
-.weather-panel.previewing .weather-density-head,
-.weather-panel.previewing .weather-density-status,
-.weather-panel.previewing .weather-grid,
-.weather-panel.previewing .weather-density-preview,
-.weather-panel.previewing .weather-density-row:not(.is-previewing),
-.weather-panel.previewing .weather-visibility-row:not(.is-previewing) {
+.wp.previewing .wp-head,
+.wp.previewing .wp-live,
+.wp.previewing .wp-list,
+.wp.previewing .wp-density .sec,
+.wp.previewing .wp-status,
+.wp.previewing .wp-foot,
+.wp.previewing .wp-done-wrap,
+.wp.previewing .wp-sld:not(.is-previewing) {
   opacity: 0;
   pointer-events: none;
 }
 
-.weather-panel.previewing .weather-settings {
-  border-right-color: transparent;
-}
-
-.weather-panel.previewing .weather-density {
-  border-color: transparent;
-  background-color: transparent;
-}
-
-.weather-settings,
-.weather-density {
-  transition:
-    border-color 0.24s ease,
-    background-color 0.24s ease;
-}
-
-.weather-density-row.is-previewing,
-.weather-visibility-row.is-previewing {
+.wp.previewing .wp-sld.is-previewing {
   position: relative;
   z-index: 2;
-}
-
-.weather-density-row.is-previewing::before,
-.weather-visibility-row.is-previewing::before {
-  content: '';
-  position: absolute;
-  inset: -7px -9px;
-  z-index: -1;
-  border-radius: 10px;
-  background: rgba(24, 27, 33, 0.88);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
-  backdrop-filter: blur(12px);
-}
-
-.weather-panel.previewing .weather-density-row.is-previewing > span,
-.weather-panel.previewing .weather-density-row.is-previewing > b,
-.weather-panel.previewing .weather-visibility-row.is-previewing > span,
-.weather-panel.previewing .weather-visibility-row.is-previewing > b {
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.weather-panel {
-  width: min(940px, 100%);
-  max-height: min(780px, calc(100vh - 24px));
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 0 28px 70px -26px rgba(20, 22, 28, 0.55);
-  animation: weather-in 0.2s cubic-bezier(0.2, 0.8, 0.3, 1);
-  transition:
-    background-color 0.24s ease,
-    border-color 0.24s ease,
-    box-shadow 0.24s ease;
-}
-
-.weather-head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 17px;
-  border-bottom: 1px solid var(--line);
-}
-
-.weather-head p {
-  margin: 0 0 2px;
-  color: var(--ink-3);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.weather-head h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.weather-head-actions {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.weather-toggle {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--ink-2);
-  font-size: 10.5px;
-}
-
-.weather-switch {
-  position: relative;
-  width: 34px;
-  height: 20px;
-  padding: 0;
-  flex: none;
-  border-radius: 20px;
-  background: #d8d4ca;
-  transition: background 0.18s ease;
-}
-
-.weather-switch i {
-  position: absolute;
-  left: 2px;
-  top: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(20, 22, 28, 0.25);
-  transition: transform 0.18s ease;
-}
-
-.weather-switch[aria-checked='true'] {
-  background: var(--accent);
-}
-
-.weather-switch[aria-checked='true'] i {
-  transform: translateX(14px);
-}
-
-.weather-off-tip {
-  flex: none;
-  margin: 10px 14px 0;
-  padding: 8px 10px;
-  border: 1px solid #eadfbf;
+  padding: 6px 10px;
   border-radius: 8px;
-  background: #fff9ea;
-  color: #80662b;
-  font-size: 10.5px;
-  line-height: 1.55;
+  background: rgba(16, 17, 19, 0.92);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(10px);
 }
 
-.weather-close {
-  width: 32px;
-  height: 32px;
-  flex: none;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  color: var(--ink-2);
-  font-size: 21px;
-  line-height: 1;
-}
-
-.weather-close:hover {
-  background: var(--surface-2);
-  color: var(--ink);
-}
-
-.weather-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(300px, 350px) minmax(0, 1fr);
-}
-
-.weather-settings {
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 14px;
-  border-right: 1px solid var(--line);
-}
-
-.weather-live {
-  flex: none;
-  margin: 12px 14px 0;
-  padding: 10px 11px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: linear-gradient(135deg, #f7f9fc, #fbfaf7);
-}
-
-.weather-live-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.weather-live-head b {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.weather-live-head span {
-  color: var(--ink-3);
-  font-size: 9.5px;
-}
-
-.weather-city-form {
-  display: flex;
-  gap: 6px;
-}
-
-.weather-city-form input {
-  min-width: 0;
-  flex: 1;
-  height: 30px;
-  padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 11.5px;
-}
-
-.weather-city-form input:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-
-.weather-city-form button {
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fff;
-  color: var(--ink-2);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.weather-city-form button:disabled {
-  opacity: 0.55;
-}
-
-.weather-live-info {
-  margin-top: 8px;
-}
-
-.weather-live-main {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.weather-live-main b {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.weather-live-main b .weather-icon {
-  color: var(--accent-ink);
-}
-
-.weather-live-main strong {
-  color: var(--accent-ink);
-  font-size: 19px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.weather-live-info p {
-  margin: 4px 0 0;
-  color: var(--ink-2);
-  font-size: 10.5px;
-  line-height: 1.5;
-}
-
-.weather-live-info .weather-live-time {
-  color: var(--ink-3);
-}
-
-.weather-live-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-
-.weather-live-toggle > div {
-  min-width: 0;
-}
-
-.weather-live-toggle b {
-  display: block;
-  font-size: 10.5px;
-  font-weight: 600;
-}
-
-.weather-live-toggle span {
-  display: block;
-  margin-top: 2px;
-  color: var(--ink-3);
-  font-size: 9.5px;
-  line-height: 1.4;
-}
-
-.weather-switch:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.weather-live-error,
-.weather-live-loading {
-  margin: 8px 0 0;
-  color: var(--ink-3);
-  font-size: 10.5px;
-  line-height: 1.5;
-}
-
-.weather-live-error {
-  color: #a74730;
-}
-
-.weather-density {
-  flex: none;
-  margin: 10px 14px 0;
-  padding: 9px 11px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fbfaf7;
-}
-
-.weather-density-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 7px;
-}
-
-.weather-density-head b {
-  font-size: 11.5px;
-  font-weight: 600;
-}
-
-.weather-density-head span {
-  color: var(--ink-3);
-  font-size: 9.5px;
-}
-
-.weather-density-status {
-  margin: 0 0 6px;
-  color: var(--ink-3);
-  font-size: 9.5px;
-  line-height: 1.5;
-}
-
-.weather-density-row {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 38px 34px;
-  align-items: center;
-  gap: 8px;
-  min-height: 24px;
-}
-
-.weather-density-row > span {
-  color: var(--ink-2);
-  font-size: 10.5px;
-}
-
-.weather-density-row input {
-  width: 100%;
-  height: 18px;
-  margin: 0;
-}
-
-.weather-density-row > b {
-  color: var(--ink-2);
-  font-size: 10px;
-  font-weight: 600;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.weather-density-preview {
-  height: 22px;
-  padding: 0 5px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: #fff;
-  color: var(--ink-2);
-  font-size: 9px;
-}
-
-.weather-density-preview:hover {
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-
-.weather-visibility-row {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 58px;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-
-.weather-visibility-row > span {
-  color: var(--ink-2);
-  font-size: 10.5px;
-}
-
-.weather-visibility-row input {
-  width: 100%;
-  height: 18px;
-  margin: 0;
-}
-
-.weather-visibility-row > b {
-  color: var(--ink-2);
-  font-size: 10px;
-  font-weight: 600;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.weather-grid {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding: 12px 14px 14px;
-}
-
-.weather-option {
-  min-height: 70px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fbfaf7;
-  text-align: left;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease,
-    color 0.15s ease;
-}
-
-.weather-option:hover {
-  border-color: var(--line-strong);
-  background: var(--surface-2);
-}
-
-.weather-option.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-
-.weather-option b {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.weather-option b .weather-icon {
-  color: var(--ink-3);
-}
-
-.weather-option.active b .weather-icon {
-  color: var(--accent-ink);
-}
-
-.weather-option span {
-  color: var(--ink-3);
-  font-size: 10.5px;
-  line-height: 1.45;
-}
-
-.weather-option.active span {
-  color: var(--accent-ink);
-  opacity: 0.72;
-}
-
-.weather-foot {
-  flex: none;
-  padding: 11px 16px;
-  border-top: 1px solid var(--line);
-  color: var(--ink-3);
-  font-size: 10.5px;
-  line-height: 1.6;
-}
-
-@keyframes weather-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.99);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@media (max-width: 820px), (max-height: 560px) {
-  .weather-mask {
-    padding: 10px;
-  }
-
-  .weather-panel {
-    width: 100%;
-    max-height: calc(100dvh - 20px);
-    border-radius: 14px;
-  }
-
-  .weather-body {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-y;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(118, 122, 130, 0.42) transparent;
-  }
-
-  .weather-body::-webkit-scrollbar {
-    width: 5px;
-  }
-
-  .weather-body::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .weather-body::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: rgba(118, 122, 130, 0.42);
-  }
-
-  .weather-settings {
-    padding-bottom: 14px;
-    flex: none;
-    overflow: visible;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .weather-grid {
-    flex: none;
-    overflow: visible;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
-    margin: 14px 14px;
+/* ---------- 移动端：MA 全屏列表 ---------- */
+@media (max-width: 820px) {
+  .wm {
     padding: 0;
+    background: #0b0c0e;
+    backdrop-filter: none;
   }
 
-  .weather-option {
-    min-height: 64px;
+  .wp {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .wp-head {
+    padding: 16px 16px 12px;
+  }
+
+  .wp-title h2 {
+    font-size: 17px;
+  }
+
+  .wp-ha {
+    gap: 14px;
+  }
+
+  .wp-toggle {
+    font-size: 12.5px;
+    color: #b6bac1;
+  }
+
+  .sw {
+    width: 34px;
+    height: 18px;
+  }
+
+  .sw i {
+    width: 14px;
+    height: 14px;
+  }
+
+  .sw.on i {
+    transform: translateX(16px);
+  }
+
+  .wp-body {
+    display: block;
+    padding: 0 16px;
+    overflow-y: auto;
+  }
+
+  .wp-live,
+  .wp-list,
+  .wp-density {
+    padding: 0;
+    border: 0;
+    overflow: visible;
+  }
+
+  .sec {
+    height: 30px;
+    margin-top: 6px;
+  }
+
+  .wp-city {
+    margin: 8px 0 10px;
+  }
+
+  .wp-city input {
+    height: 40px;
+    padding: 0 11px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+
+  .wp-city button {
+    height: 40px;
+    padding: 0 15px;
+    border-radius: 8px;
+    font-size: 12.5px;
+  }
+
+  .wp-live-main b {
+    font-size: 13px;
+  }
+
+  .wp-live-main strong {
+    font-size: 30px;
+  }
+
+  .wp-meta {
+    font-size: 11px;
+  }
+
+  .wp-time {
+    font-size: 10px;
+  }
+
+  .wp-live-sw {
+    margin-top: 12px;
+    padding-top: 12px;
+    min-height: 42px;
+  }
+
+  .wp-live-sw b {
+    font-size: 12.5px;
+  }
+
+  .wp-live-sw span {
+    font-size: 10px;
+  }
+
+  /* MA 列表：46px 行高、底部分隔线 */
+  .wp-rows {
+    gap: 0;
+    margin-top: 2px;
+  }
+
+  .wrow {
+    height: 46px;
+    padding: 0 2px;
+    border-radius: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 12.5px;
+  }
+
+  .wrow:last-child {
+    border-bottom: 0;
+  }
+
+  .wrow:hover {
+    background: none;
+  }
+
+  .wrow b {
+    width: 72px;
+    gap: 8px;
+  }
+
+  .wrow span {
+    font-size: 10.5px;
+  }
+
+  .wrow.on::after {
+    width: 7px;
+    height: 7px;
+  }
+
+  .wp-status {
+    font-size: 10.5px;
+  }
+
+  .wp-sld {
+    height: 38px;
+    gap: 10px;
+  }
+
+  .wp-sld .lab {
+    width: 40px;
+    font-size: 11.5px;
+  }
+
+  .wp-sld input[type='range'] {
+    height: 4px;
+  }
+
+  .wp-sld input[type='range']::-webkit-slider-thumb {
+    width: 14px;
+    height: 14px;
+  }
+
+  .wp-sld > b {
+    min-width: 44px;
+    font-size: 10.5px;
+  }
+
+  .wp-preview {
+    height: 24px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
+  .wp-preview-ghost {
+    width: 37px;
+  }
+
+  .wp-density {
+    padding-bottom: 20px;
+  }
+
+  .wp-foot {
+    padding: 10px 16px 12px;
+    font-size: 10.5px;
+  }
+
+  .wp-done-wrap {
+    display: block;
   }
 }
 </style>

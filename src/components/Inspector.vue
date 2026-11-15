@@ -34,6 +34,8 @@ import type {
 
 const props = defineProps<{
   venue: Venue | null
+  /** 数据里的场馆名称，作为属性面板的对象标题 */
+  venueName?: string
   booths: Booth[]
   infras: Infra[]
   underlay: Underlay | null
@@ -55,6 +57,8 @@ const props = defineProps<{
   skipRevealInfraId?: string | null
   focusAddSection?: 'booth' | 'infra' | 'furniture' | null
   focusAddToken?: number
+  /** 属性模式：只显示当前选中对象的详情，不重复左侧的场景列表 */
+  detailOnly?: boolean
 }>()
 
 /** 三个结构卡片的展开状态 */
@@ -135,6 +139,33 @@ const venueSlider = computed(() => props.venue?.height ?? 6)
 const venuePerimeter = computed(() => (props.venue ? perimeter(props.venue.points) : 0))
 const activeId = computed(() => props.selectedIds[props.selectedIds.length - 1] ?? null)
 const canEdit = computed(() => props.mode === 'idle')
+
+/** 属性模式下列表只保留选中项，避免与左侧结构树重复 */
+const detailBooths = computed(() =>
+  props.detailOnly
+    ? props.booths.filter((b) => props.selectedIds.includes(b.id))
+    : props.booths,
+)
+
+watch(
+  () => [props.detailOnly, props.selectedIds.length, props.selectedInfraId],
+  () => {
+    if (!props.detailOnly) return
+    const hasBooth = props.selectedIds.length > 0
+    const hasInfra = !!props.selectedInfraId
+    venueOpen.value = !hasBooth && !hasInfra
+    boothOpen.value = hasBooth
+    infraOpen.value = hasInfra
+  },
+  { immediate: true },
+)
+
+/** 属性模式下设施列表同样只保留选中项 */
+const detailInfraRows = computed(() =>
+  props.detailOnly
+    ? infraRows.value.filter((r) => r.item && r.item.id === props.selectedInfraId)
+    : infraRows.value,
+)
 
 const MARK_OPTIONS: { value: BoothMark; label: string }[] = [
   { value: 'red', label: '红色标记' },
@@ -787,20 +818,28 @@ function onLogoChange(id: string, e: Event) {
 </script>
 
 <template>
-  <aside ref="panelEl" class="panel">
+  <aside ref="panelEl" class="panel ap" :class="{ 'detail-only': detailOnly }">
     <div class="panel-head">
-      <span class="eyebrow">场景结构</span>
+      <span class="eyebrow">属性</span>
       <span class="state-badge" :class="{ live: mode !== 'idle' || spaceNav }">
         {{ stateLabel }}
       </span>
     </div>
 
-    <div class="stats">
+    <div v-if="!detailOnly || (!selectedIds.length && !selectedInfraId)" class="stats">
       <div><span>场馆面积</span><b>{{ fmt(venueArea) }} m²</b></div>
       <div><span>展台覆盖率</span><b>{{ coverage }}%</b></div>
     </div>
 
-    <section class="card" :class="{ collapsed: !venueOpen }">
+    <div v-if="detailOnly && !selectedIds.length && !selectedInfraId" class="detail-title">
+      {{ venueName || '场馆' }}
+    </div>
+
+    <section
+      v-if="!detailOnly || (!selectedIds.length && !selectedInfraId)"
+      class="card"
+      :class="{ collapsed: !venueOpen }"
+    >
       <div class="card-head" @click="venueOpen = !venueOpen">
         <span class="swatch solid" />
         <h2>场馆</h2>
@@ -832,9 +871,11 @@ function onLogoChange(id: string, e: Event) {
           :aria-hidden="!venueOpen || undefined"
         >
           <template v-if="venue">
+        <div class="sec-title">面积</div>
         <div class="kv"><span>占地面积</span><b>{{ fmt(venueArea) }}<em>m²</em></b></div>
         <div class="kv"><span>轮廓周长</span><b>{{ fmt(venuePerimeter) }}<em>m</em></b></div>
         <div class="kv"><span>轮廓顶点</span><b>{{ venue.points.length }}</b></div>
+        <div class="sec-title">体量</div>
         <label class="field">
           <div class="field-label"><span>净高</span><b>{{ venue.height }} m</b></div>
           <input
@@ -847,13 +888,28 @@ function onLogoChange(id: string, e: Event) {
             @input="onVenueHeight"
           />
         </label>
-        <div class="venue-view">
-          <button class="vtoggle" :class="{ on: xray }" @click="emit('toggle-xray')">半透明</button>
-          <button class="vtoggle" :class="{ on: noTop }" @click="emit('toggle-top')">去掉顶部</button>
+        <div class="switch-row">
+          <span>半透明</span>
+          <button
+            class="switch"
+            :class="{ on: xray }"
+            role="switch"
+            :aria-checked="xray"
+            title="半透明查看馆内"
+            @click="emit('toggle-xray')"
+          />
         </div>
-        <button class="btn w-full" style="margin-top: 8px" @click="emit('draw-venue')">
-          重新绘制场馆
-        </button>
+        <div class="switch-row">
+          <span>去掉顶部</span>
+          <button
+            class="switch"
+            :class="{ on: noTop }"
+            role="switch"
+            :aria-checked="noTop"
+            title="去掉顶部，便于俯视"
+            @click="emit('toggle-top')"
+          />
+        </div>
       </template>
 
       <div v-else class="empty">
@@ -861,6 +917,7 @@ function onLogoChange(id: string, e: Event) {
         <button class="btn primary w-full" @click="emit('draw-venue')">绘制场地面积</button>
       </div>
 
+      <div class="sec-title">参考底图</div>
       <div class="underlay-block">
         <div class="underlay-head">
           <span class="underlay-title">底图</span>
@@ -935,7 +992,7 @@ function onLogoChange(id: string, e: Event) {
       </div>
     </section>
 
-    <section class="card" :class="{ collapsed: !boothOpen }">
+    <section v-if="!detailOnly || selectedIds.length" class="card" :class="{ collapsed: !boothOpen }">
       <div class="card-head" @click="boothOpen = !boothOpen">
         <span class="swatch" />
         <h2>展台</h2>
@@ -969,9 +1026,9 @@ function onLogoChange(id: string, e: Event) {
         </div>
       </div>
 
-      <ul v-if="booths.length" class="list">
+      <ul v-if="detailBooths.length" class="list">
         <li
-          v-for="(b, i) in booths"
+          v-for="(b, i) in detailBooths"
           :key="b.id"
           :data-booth-id="b.id"
           :class="{
@@ -1029,6 +1086,7 @@ function onLogoChange(id: string, e: Event) {
           </div>
 
           <template v-if="b.id === activeId && venue && canEdit">
+            <div class="sec-title">几何</div>
             <div class="row-kind">
               <span>类型</span>
               <div class="kind-switch">
@@ -1043,22 +1101,9 @@ function onLogoChange(id: string, e: Event) {
                   {{ BOOTH_KIND_LABELS[k] }}
                 </button>
               </div>
-              <span v-if="boothKindOf(b) !== 'openfloor'" class="mini-hint">
-                转光地会清除高度
-              </span>
+
             </div>
             <div class="row-size">
-              <label class="infra-field exhibitor-field">
-                <span>展商</span>
-                <input
-                  type="text"
-                  maxlength="60"
-                  placeholder="可选，输入展商名称"
-                  :value="b.exhibitor ?? ''"
-                  @click.stop
-                  @change="onExhibitorChange(b.id, $event)"
-                />
-              </label>
               <label class="infra-field">
                 <span>长</span>
                 <input
@@ -1085,6 +1130,7 @@ function onLogoChange(id: string, e: Event) {
               </label>
             </div>
             <div v-if="boothKindOf(b) !== 'openfloor'" class="row-edit">
+              <span class="row-lab">高度</span>
               <input
                 type="range"
                 min="1"
@@ -1097,7 +1143,8 @@ function onLogoChange(id: string, e: Event) {
               <span class="edit-val">{{ heightText(b) }} m</span>
             </div>
             <div v-else class="row-edit">
-              <span class="edit-val">光地平台 · 高 {{ heightText(b) }} m</span>
+              <span class="row-lab">高度</span>
+              <span class="edit-val">光地平台 {{ heightText(b) }} m</span>
             </div>
             <div v-if="boothKindOf(b) === 'massing'" class="switch-row">
               <span>顶板</span>
@@ -1128,20 +1175,33 @@ function onLogoChange(id: string, e: Event) {
               <span class="switch-state">{{ b.canopy !== false ? '开启' : '关闭' }}</span>
             </div>
             <div class="row-tools">
+              <span class="row-lab">旋转</span>
               <button class="mini" title="逆时针旋转 90°" @click.stop="emit('rotate', -1)">↺ 90°</button>
               <button class="mini" title="顺时针旋转 90°" @click.stop="emit('rotate', 1)">↻ 90°</button>
-              <span class="mini-hint">拖动可移动 · Alt+拖动旋转</span>
             </div>
+            <div class="sec-title">外观</div>
+            <label class="infra-field exhibitor-field">
+              <span>展商</span>
+              <input
+                type="text"
+                maxlength="60"
+                placeholder="可选"
+                :value="b.exhibitor ?? ''"
+                @click.stop
+                @change="onExhibitorChange(b.id, $event)"
+              />
+            </label>
             <div class="row-logo">
+              <span class="row-lab">Logo</span>
               <label class="mini logo-upload">
-                {{ b.logo ? '更换 Logo' : '上传 Logo' }}
+                {{ b.logo ? '更换' : '上传' }}
                 <input type="file" accept="image/png" @change="onLogoChange(b.id, $event)" />
               </label>
               <button v-if="b.logo" class="mini" @click.stop="emit('remove-logo', b.id)">
-                移除 Logo
+                移除
               </button>
-              <span class="mini-hint">PNG · 正面左下角</span>
             </div>
+            <div class="sec-title">标记</div>
             <div class="row-mark">
               <span class="mark-label">标记</span>
               <button
@@ -1158,13 +1218,14 @@ function onLogoChange(id: string, e: Event) {
               />
               <span class="mini-hint">红 / 黄 / 灰分组</span>
             </div>
+            <p class="row-hint">拖动可移动，Alt + 拖动旋转，Ctrl + C 复制。</p>
           </template>
         </li>
       </ul>
 
       <p v-else class="empty-line">在馆内画出展台轮廓并设置高度，即可生成展台白膜。</p>
 
-      <div class="booth-add" data-add-section="booth">
+      <div v-if="!detailOnly" class="booth-add" data-add-section="booth">
         <button
           class="btn sm"
           :class="{ primary: !!venue && !booths.length }"
@@ -1196,7 +1257,7 @@ function onLogoChange(id: string, e: Event) {
       </div>
     </section>
 
-    <section class="card" :class="{ collapsed: !infraOpen }">
+    <section v-if="!detailOnly || selectedInfraId" class="card" :class="{ collapsed: !infraOpen }">
       <div class="card-head" @click="infraOpen = !infraOpen">
         <span class="swatch infra" />
         <h2>基础设施</h2>
@@ -1220,7 +1281,7 @@ function onLogoChange(id: string, e: Event) {
           :inert="!infraOpen || undefined"
           :aria-hidden="!infraOpen || undefined"
         >
-          <div class="infra-add" data-add-section="infra">
+          <div v-if="!detailOnly" class="infra-add" data-add-section="infra">
         <button class="btn sm" :disabled="mode !== 'idle'" @click="emit('add-infra', 'stairs')">
           + 楼梯
         </button>
@@ -1250,7 +1311,7 @@ function onLogoChange(id: string, e: Event) {
       </div>
 
       <p class="infra-subhead">家具 · 仅限展台内部</p>
-      <div class="infra-add" data-add-section="furniture">
+      <div v-if="!detailOnly" class="infra-add" data-add-section="furniture">
         <button
           class="btn sm"
           :disabled="mode !== 'idle' || !booths.length"
@@ -1292,7 +1353,7 @@ function onLogoChange(id: string, e: Event) {
       </p>
 
       <ul v-if="infras.length" class="list infra-tree">
-        <template v-for="row in infraRows" :key="row.key">
+        <template v-for="row in detailInfraRows" :key="row.key">
           <li
             v-if="row.type === 'group'"
             class="infra-group-li"
@@ -1353,6 +1414,7 @@ function onLogoChange(id: string, e: Event) {
                 <button class="icon-btn" title="删除" @click.stop="emit('delete-infra', it.id)">×</button>
               </div>
               <div v-if="it.id === selectedInfraId" class="infra-edit">
+                <div class="sec-title">几何</div>
                 <div v-if="it.kind === 'gate'" class="row-kind infra-mode-row">
                   <span>开启</span>
                   <div class="kind-switch">
@@ -1386,6 +1448,7 @@ function onLogoChange(id: string, e: Event) {
                   <i>m</i>
                 </label>
 
+                <div v-if="materialScope(it.kind)" class="sec-title">材质</div>
                 <div v-if="materialScope(it.kind)" class="infra-material">
                   <div class="infra-material-head">
                     <span>材质</span>
@@ -1450,6 +1513,7 @@ function onLogoChange(id: string, e: Event) {
                   </div>
                 </div>
 
+                <div class="sec-title">变换</div>
                 <div class="infra-tools">
                   <template v-if="it.kind !== 'gate' && it.kind !== 'window'">
                     <button class="mini" title="逆时针旋转 90°" @click.stop="emit('rotate-infra', it.id, -1)">
