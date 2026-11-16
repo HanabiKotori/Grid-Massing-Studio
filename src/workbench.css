@@ -65,8 +65,13 @@ body {
   display: block;
 }
 
-/* 移动端：3D 区保持接近方形的可视比例，下方留给结构面板 */
+/* 移动端：面板打开时 3D 区占 64vh，面板关闭时铺满，避免下方留空 */
 .app.wb.mobile .viewport {
+  height: 100%;
+  align-self: stretch;
+}
+
+.app.wb.mobile:has(.mv-panel) .viewport {
   height: 64vh;
   align-self: start;
 }
@@ -74,6 +79,10 @@ body {
 @media (orientation: landscape) {
   .app.wb.mobile .viewport {
     height: 100vh;
+  }
+
+  .app.wb.mobile:has(.mv-panel) .viewport {
+    height: 64vh;
   }
 }
 
@@ -2157,7 +2166,7 @@ body {
   min-width: max-content;
 }
 
-@media (max-width: 1500px) {
+@media (max-width: 1280px) {
   .wb-top .tool-with-key .tool-label {
     display: none;
   }
@@ -3433,6 +3442,17 @@ body {
   background: rgba(255, 255, 255, 0.028);
 }
 
+/* 数值输入不铺满整行，靠右对齐，避免值离标签过远 */
+.wb-right .ap .infra-field > input {
+  max-width: 168px;
+  margin-left: auto;
+}
+
+.wb-right .ap .row-size .infra-field > input {
+  max-width: none;
+  margin-left: 0;
+}
+
 .wb-right .ap .infra-field:hover > input,
 .wb-right .ap .infra-field > input:focus {
   background: #0e0f12;
@@ -3455,4 +3475,40 @@ body {
   gap: 6px;
   padding: 0;
   background: none;
+}
+/* 顶栏图标按钮的激活态（展示模式 / 预览模式），hover 时保持紫色 */
+.wb-iconbtn.on,
+.wb-iconbtn.on:hover:not(:disabled) {
+  background: rgba(111, 124, 232, 0.16);
+  color: #cdd3ff;
+}
+
+/* 家具树里 0 件的展台弱化显示 */
+.wb-grp .cnt.zero {
+  opacity: 0.42;
+}
+/* 移动端面板：顶部把手，可拖动调整高度 */
+.mv-panel.resized {
+  max-height: none;
+}
+
+.mv-grab {
+  flex: none;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.mv-grab::before {
+  content: '';
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.mv-grab:active {
+  cursor: grabbing;
 }

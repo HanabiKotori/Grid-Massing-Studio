@@ -105,6 +105,31 @@ async function toggleFullscreen() {
 function pick(t: Tab) {
   tab.value = tab.value === t ? null : t
 }
+
+/** 面板高度：拖动顶部把手调整，0 表示使用默认高度 */
+const panelHeight = ref(0)
+
+function onGrabDown(e: PointerEvent) {
+  const panel = (e.currentTarget as HTMLElement).parentElement
+  if (!panel) return
+  const startY = e.clientY
+  const startH = panel.getBoundingClientRect().height
+
+  const move = (ev: PointerEvent) => {
+    const next = startH + (startY - ev.clientY)
+    const min = 200
+    const max = Math.round(window.innerHeight * 0.78)
+    panelHeight.value = Math.round(Math.min(max, Math.max(min, next)))
+  }
+  const up = () => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+    window.removeEventListener('pointercancel', up)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+  window.addEventListener('pointercancel', up)
+}
 </script>
 
 <template>
@@ -123,7 +148,13 @@ function pick(t: Tab) {
 
     <div class="mv-spacer" />
 
-    <div v-if="tab" class="mv-panel">
+    <div
+      v-if="tab"
+      class="mv-panel"
+      :class="{ resized: panelHeight > 0 }"
+      :style="panelHeight ? { height: panelHeight + 'px' } : undefined"
+    >
+      <div class="mv-grab" title="拖动调整高度" @pointerdown="onGrabDown" />
       <div class="mv-panel-head">
         <b v-if="tab === 'view'">视图与显示</b>
         <b v-else-if="tab === 'tree'">场景结构</b>

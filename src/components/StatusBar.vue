@@ -83,7 +83,7 @@ const saveText = computed(() => {
     <span class="sp" />
     <span class="wb-save" :class="saveState">{{ saveText }}</span>
     <span class="vsep" />
-    <span>{{ gridOn ? '1 m 网格' : '网格关闭' }} · 吸附 0.5 m</span>
+    <span>{{ gridOn ? '1 m 网格 · 吸附 0.5 m' : '网格关闭' }}</span>
     <span class="vsep" />
     <span>对象 <b>{{ objectCount }}</b></span>
   </footer>

@@ -148,15 +148,5 @@ function blurTarget(event: Event) {
       现在
     </button>
 
-    <button
-      type="button"
-      class="wb-tl-wx"
-      :class="{ on: presenting }"
-      :disabled="!hasVenue"
-      :title="presenting ? '退出展示模式 (Esc)' : '展示模式 (S)'"
-      @click="emit('presentation')"
-    >
-      {{ presenting ? '退出展示' : '展示模式' }}
-    </button>
   </footer>
 </template>

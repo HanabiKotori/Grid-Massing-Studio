@@ -18,6 +18,7 @@ const props = defineProps<{
   canRedo: boolean
   renderOnly: boolean
   hasVenue: boolean
+  presenting: boolean
   quality: QualityLevel
   qualityLabel: string
   boothLabelsOn: boolean
@@ -216,6 +217,21 @@ function cancelName() {
     <button
       type="button"
       class="wb-iconbtn"
+      :class="{ on: presenting }"
+      :disabled="!hasVenue"
+      :title="presenting ? '退出展示模式 (Esc)' : '展示模式 (S)'"
+      @click="emit('presentation')"
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="4.4" width="18" height="11.6" rx="1.6" />
+        <path d="M12 16v3.4M8.8 19.4h6.4" />
+        <path d="M10.5 8.3l4.2 2.1-4.2 2.1z" fill="currentColor" stroke="none" />
+      </svg>
+    </button>
+    <button
+      type="button"
+      class="wb-iconbtn"
+      :class="{ on: renderOnly }"
       :title="renderOnly ? '退出预览' : '预览模式（隐藏编辑）'"
       @click="emit('set-render', !renderOnly)"
     >

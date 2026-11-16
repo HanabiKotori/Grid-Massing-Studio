@@ -483,7 +483,7 @@ onMounted(() => closeEl.value?.focus())
                   :aria-pressed="gridOn"
                   @click="runQuick('grid')"
                 >
-                  网格<span>{{ gridOn ? '开' : '关' }}</span>
+                  网格<span>{{ gridOn ? '已开启' : '已关闭' }}</span>
                 </button>
                 <button
                   type="button"
@@ -491,7 +491,7 @@ onMounted(() => closeEl.value?.focus())
                   :aria-pressed="labelsOn"
                   @click="runQuick('labels')"
                 >
-                  名称<span>{{ labelsOn ? '开' : '关' }}</span>
+                  名称<span>{{ labelsOn ? '已开启' : '已关闭' }}</span>
                 </button>
                 <button
                   type="button"
@@ -499,7 +499,7 @@ onMounted(() => closeEl.value?.focus())
                   :aria-pressed="areasOn"
                   @click="runQuick('areas')"
                 >
-                  面积<span>{{ areasOn ? '开' : '关' }}</span>
+                  面积<span>{{ areasOn ? '已开启' : '已关闭' }}</span>
                 </button>
                 <button type="button" @click="runQuick('weather')">
                   天气面板

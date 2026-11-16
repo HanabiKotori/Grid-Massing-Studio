@@ -432,7 +432,9 @@ watch(
       <button type="button" class="wb-grp" @click="toggle('furniture')">
         <span class="tri" :class="{ open: isOpen('furniture') }" />
         <b>家具</b>
-        <span class="cnt">{{ furnitureAll.length }}</span>
+        <span class="cnt" :title="`${booths.length} 个展台 · ${furnitureAll.length} 件家具`">
+          {{ booths.length }} 展台
+        </span>
       </button>
       <template v-if="isOpen('furniture')">
         <div v-if="!booths.length" class="wb-empty sub">家具需要放在展台内部</div>
@@ -440,7 +442,9 @@ watch(
           <div class="wb-grp sub" :style="{ '--lv': 1 }" @click="toggle('fb-' + b.id, false)">
             <span class="tri" :class="{ open: isOpen('fb-' + b.id, false) }" />
             <b>{{ b.name }}</b>
-            <span class="cnt">{{ furnitureOf(b.id).length }}</span>
+            <span class="cnt" :class="{ zero: !furnitureOf(b.id).length }">
+              {{ furnitureOf(b.id).length }}
+            </span>
           </div>
           <template v-if="isOpen('fb-' + b.id, false)">
             <template v-for="fk in FURNITURE_GROUPS" :key="fk">

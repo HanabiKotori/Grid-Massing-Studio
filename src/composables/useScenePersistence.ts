@@ -114,7 +114,8 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
     }
   }
 
-  function scheduleAutosave() {
+  /** delay 可由调用方指定：时间/天气这类连续变化的参数用更长的静默期 */
+  function scheduleAutosave(delay = 500) {
     if (
       !autosaveReady ||
       options.restoringProject.value ||
@@ -123,7 +124,7 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
       return
     }
     window.clearTimeout(autosaveTimer)
-    autosaveTimer = window.setTimeout(() => void saveProjectNow(), 500)
+    autosaveTimer = window.setTimeout(() => void saveProjectNow(), delay)
   }
 
   async function restoreStoredProject() {

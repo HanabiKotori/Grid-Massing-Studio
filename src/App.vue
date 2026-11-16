@@ -144,7 +144,7 @@ const {
   isRestoring: () => restoringProject.value,
   toast,
   onChoose: () => {
-    showWeather.value = false
+    // 面板保持打开，方便连续对比不同天气；关闭交给 × 或 Esc
     if (walkState.value === 'walk') stage?.resumeWalkFromUi()
   },
 })
@@ -409,6 +409,20 @@ function selectVenueNode() {
   fitView()
 }
 
+/** 结构树删除展台：走统一确认弹窗，避免误删连带家具与落地设施 */
+function confirmDeleteBooth(id: string) {
+  const target = booths.value.find((b) => b.id === id)
+  const name = target?.name ?? '该展台'
+  pendingConfirm.value = {
+    kind: 'delete-booth',
+    title: `删除展台 ${name}`,
+    message: '展台内的家具和落地设施会一起移除，且不可撤销。确定删除？',
+    confirmLabel: '删除',
+    danger: true,
+    payload: id,
+  }
+}
+
 const {
   getPasteClipboard,
   startVenueDraw,
@@ -504,10 +518,20 @@ const {
 })
 
 // IndexedDB 自动保存：名称、场景、底图、天气和太阳时间一起保留
-watch(
-  [venue, booths, infras, underlay, venueName, weather, weatherOn, sunProgress],
-  () => scheduleAutosave(),
+watch([venue, booths, infras, underlay, venueName, weather, weatherOn], () =>
+  scheduleAutosave(),
 )
+
+// 只有用户拖动时间轴时才落盘：播放推进不写盘，拖动结束 1.2s 后保存一次
+watch(sunProgress, () => {
+  if (!sunScrubbing.value) return
+  scheduleAutosave(1200)
+})
+
+// 暂停播放时补一次保存，确保最后的时刻被记住
+watch(sunPlaying, (on) => {
+  if (!on) scheduleAutosave()
+})
 
 // ---------- JSON 导入 / 导出 ----------
 
@@ -711,11 +735,13 @@ function closeMergeDialog() {
 }
 
 type PendingConfirm = {
-  kind: 'clear-data' | 'redraw-venue'
+  kind: 'clear-data' | 'redraw-venue' | 'delete-booth'
   title: string
   message: string
   confirmLabel: string
   danger: boolean
+  /** 删除展台时携带目标 id */
+  payload?: string
 }
 const pendingConfirm = ref<PendingConfirm | null>(null)
 
@@ -758,6 +784,10 @@ function confirmPendingAction() {
   if (!action) return
   if (action.kind === 'redraw-venue') {
     startVenueDraw()
+    return
+  }
+  if (action.kind === 'delete-booth') {
+    if (action.payload) deleteBooth(action.payload)
     return
   }
   deleteVenue()
@@ -901,6 +931,9 @@ onMounted(() => {
     },
   })
   stage.setMode('idle')
+  stage.setSunSpeed(sunSpeed.value)
+  // 与 UI 的播放状态保持一致（默认实时推进）
+  stage.setSunPaused(!sunPlaying.value)
   stage.setWalkAutoSpeed(walkAutoSpeed.value)
   stage.setWalkAutoLoop(walkAutoLoop.value)
   stage.setSunProgress(sunProgress.value)
@@ -935,6 +968,7 @@ onMounted(() => {
     w.__stage = stage
     w.__app = {
       venue,
+      venueName,
       booths,
       infras,
       selectedIds,
@@ -943,6 +977,13 @@ onMounted(() => {
       venueXray,
       venueNoTop,
       areaOn,
+      sunProgress,
+      sunSpeed,
+      walkState,
+      weather,
+      weatherOn,
+      underlay,
+      quality,
     }
   }
 })
@@ -963,7 +1004,18 @@ function changeWalkAutoLoop(value: boolean) {
 }
 
 /** 时间轴推进倍率：1× 为实时，最高 100× */
-const sunSpeed = ref(1)
+const sunSpeed = ref(50)
+
+/** 用户正在拖动时间轴：用于区分手动调整与自动推进，避免每格都触发保存 */
+const sunScrubbing = ref(false)
+let sunScrubTimer = 0
+
+function handleSunScrub(ev: Event) {
+  sunScrubbing.value = true
+  window.clearTimeout(sunScrubTimer)
+  sunScrubTimer = window.setTimeout(() => (sunScrubbing.value = false), 500)
+  onSunScrub(ev)
+}
 
 function setSunSpeed(value: number) {
   sunSpeed.value = value
@@ -1083,6 +1135,7 @@ onBeforeUnmount(() => {
       :can-redo="canRedo"
       :render-only="renderOnly"
       :has-venue="!!venue"
+      :presenting="presentationOn"
       :quality="quality"
       :quality-label="qualityLabel"
       :booth-labels-on="boothLabelsOn"
@@ -1114,7 +1167,7 @@ onBeforeUnmount(() => {
       @view-top="viewTop"
       @view-iso="viewIso"
       @fit-view="fitView"
-      @presentation="enterPresentation"
+      @presentation="togglePresentation"
       @choose-quality="chooseQuality"
       @toggle-menu="toggleToolMenu"
       @toggle-name-submenu="toggleNameSubmenu"
@@ -1146,7 +1199,7 @@ onBeforeUnmount(() => {
       @draw-booth="startBoothDraw"
       @add-infra="beginInfraPlace"
       @add-furniture="addFurniture"
-      @delete-booth="deleteBooth"
+      @delete-booth="confirmDeleteBooth"
       @delete-infra="deleteInfra"
     />
 
@@ -1365,10 +1418,9 @@ onBeforeUnmount(() => {
       @toggle-sun="toggleSunPlay"
       @reset-sun="resetSunToNow"
       @speed="setSunSpeed"
-      @sun-scrub="onSunScrub"
+      @sun-scrub="handleSunScrub"
       @jump-hour="jumpSunHour"
       @open-weather="openWeather"
-      @presentation="togglePresentation"
     />
 
     <StatusBar
