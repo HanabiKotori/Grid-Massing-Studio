@@ -5,6 +5,7 @@ import { pointInPolygon } from '../core/polygon'
 import { loadStoredProject, saveStoredProject } from '../core/projectStore'
 import {
   buildSceneFile,
+  normalizeRules,
   normalizeUnderlay,
   readBooth,
   readInfra,
@@ -20,6 +21,7 @@ import type {
   Pt,
   Underlay,
   Venue,
+  VenueRules,
 } from '../core/types'
 import { WEATHER_LABELS, type WeatherKind } from '../core/weather'
 
@@ -32,6 +34,8 @@ interface ScenePersistenceOptions {
   weather: Ref<WeatherKind>
   weatherOn: Ref<boolean>
   sunProgress: Ref<number>
+  /** 规范校验参数，随场景一起保存 */
+  rules: Ref<VenueRules>
   liveWeatherOn: Ref<boolean>
   liveWeather: Ref<LiveWeather | null>
   venueNoTop: Ref<boolean>
@@ -93,6 +97,7 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
       booths: options.booths.value,
       infras: options.infras.value,
       underlay: options.underlay.value,
+      rules: options.rules.value,
     })
   }
 
@@ -298,6 +303,7 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
     options.booths.value = nextBooths
     options.infras.value = validInfras
     options.underlay.value = nextUnderlay
+    options.rules.value = normalizeRules(obj.rules)
     options.selectedIds.value = []
     options.clearInfraSelection()
     options.mode.value = 'idle'

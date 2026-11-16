@@ -25,6 +25,7 @@ const props = defineProps<{
   infraLabelsOn: boolean
   dimOn: boolean
   areaOn: boolean
+  aisleOn?: boolean
   gridOn: boolean
   hasUnderlay: boolean
   underlayVisible: boolean
@@ -44,6 +45,7 @@ const emit = defineEmits<{
   (e: 'set-render', on: boolean): void
   (e: 'report'): void
   (e: 'export'): void
+  (e: 'export-csv'): void
   (e: 'import'): void
   (e: 'clear-data'): void
   (e: 'open-weather'): void
@@ -61,6 +63,7 @@ const emit = defineEmits<{
   (e: 'toggle-infra-labels'): void
   (e: 'toggle-dimensions'): void
   (e: 'toggle-areas'): void
+  (e: 'toggle-aisle'): void
   (e: 'toggle-grid'): void
   (e: 'toggle-underlay'): void
 }>()
@@ -158,6 +161,7 @@ function cancelName() {
       :infra-labels-on="infraLabelsOn"
       :dim-on="dimOn"
       :area-on="areaOn"
+      :aisle-on="aisleOn"
       :grid-on="gridOn"
       :has-underlay="hasUnderlay"
       :underlay-visible="underlayVisible"
@@ -170,6 +174,7 @@ function cancelName() {
       @toggle-infra-labels="emit('toggle-infra-labels')"
       @toggle-dimensions="emit('toggle-dimensions')"
       @toggle-areas="emit('toggle-areas')"
+      @toggle-aisle="emit('toggle-aisle')"
       @toggle-grid="emit('toggle-grid')"
       @toggle-underlay="emit('toggle-underlay')"
       @view-top="emit('view-top')"
@@ -179,6 +184,7 @@ function cancelName() {
       @choose-quality="(l) => emit('choose-quality', l)"
       @report="emit('report')"
       @export="emit('export')"
+      @export-csv="emit('export-csv')"
       @import="emit('import')"
       @clear-data="emit('clear-data')"
       @open-weather="emit('open-weather')"

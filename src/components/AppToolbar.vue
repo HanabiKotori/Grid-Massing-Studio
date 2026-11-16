@@ -16,6 +16,7 @@ defineProps<{
   infraLabelsOn: boolean
   dimOn: boolean
   areaOn: boolean
+  aisleOn?: boolean
   gridOn: boolean
   hasUnderlay: boolean
   underlayVisible: boolean
@@ -35,6 +36,7 @@ const emit = defineEmits<{
   (e: 'toggle-infra-labels'): void
   (e: 'toggle-dimensions'): void
   (e: 'toggle-areas'): void
+  (e: 'toggle-aisle'): void
   (e: 'toggle-grid'): void
   (e: 'toggle-underlay'): void
   (e: 'view-top'): void
@@ -44,6 +46,7 @@ const emit = defineEmits<{
   (e: 'choose-quality', level: QualityLevel): void
   (e: 'report'): void
   (e: 'export'): void
+  (e: 'export-csv'): void
   (e: 'import'): void
   (e: 'clear-data'): void
   (e: 'open-weather'): void
@@ -204,6 +207,14 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
           </button>
           <button
             class="tool-btn"
+            :class="{ on: aisleOn }"
+            role="menuitem"
+            @click="emit('toggle-aisle')"
+          >
+            过道
+          </button>
+          <button
+            class="tool-btn"
             :class="{ on: gridOn }"
             role="menuitem"
             @click="emit('toggle-grid')"
@@ -270,16 +281,19 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
         </button>
         <div v-if="!isMobile && toolMenu === 'data'" class="tool-menu" role="menu">
           <button class="tool-btn" role="menuitem" @click="emit('report')">
-            汇报图
+            导出平面图
           </button>
-          <button class="tool-btn" role="menuitem" @click="emit('export')">导出</button>
+          <button class="tool-btn" role="menuitem" @click="emit('export-csv')">
+            导出清单
+          </button>
+          <button class="tool-btn" role="menuitem" @click="emit('export')">导出场景</button>
           <button
             v-if="!renderOnly"
             class="tool-btn"
             role="menuitem"
             @click="emit('import')"
           >
-            导入
+            导入场景
           </button>
           <button
             v-if="!renderOnly"
@@ -287,7 +301,7 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
             role="menuitem"
             @click="emit('clear-data')"
           >
-            清空
+            清空场景
           </button>
         </div>
       </div>
@@ -410,6 +424,14 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
         </button>
         <button
           class="tool-btn"
+          :class="{ on: aisleOn }"
+          role="menuitem"
+          @click="emit('toggle-aisle')"
+        >
+          过道
+        </button>
+        <button
+          class="tool-btn"
           :class="{ on: gridOn }"
           role="menuitem"
           @click="emit('toggle-grid')"
@@ -446,16 +468,19 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
       </template>
       <template v-else-if="toolMenu === 'data'">
         <button class="tool-btn" role="menuitem" @click="emit('report')">
-          汇报图
+          导出平面图
         </button>
-        <button class="tool-btn" role="menuitem" @click="emit('export')">导出</button>
+        <button class="tool-btn" role="menuitem" @click="emit('export-csv')">
+          导出清单
+        </button>
+        <button class="tool-btn" role="menuitem" @click="emit('export')">导出场景</button>
         <button
           v-if="!renderOnly"
           class="tool-btn"
           role="menuitem"
           @click="emit('import')"
         >
-          导入
+          导入场景
         </button>
         <button
           v-if="!renderOnly"
@@ -463,7 +488,7 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
           role="menuitem"
           @click="emit('clear-data')"
         >
-          清空
+          清空场景
         </button>
       </template>
     </div>

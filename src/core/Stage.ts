@@ -121,12 +121,45 @@ export interface BoothPastePayload {
   center: Pt
 }
 
+/** 汇报图 / 图纸的内容开关：导出时由弹窗决定，不依赖画布当前显示状态 */
+export interface ReportLayers {
+  /** 展台名称 */
+  boothNames: boolean
+  /** 展商名称 */
+  exhibitors: boolean
+  /** 展台面积 */
+  areas: boolean
+  /** 刻度尺寸线 */
+  dimensions: boolean
+  /** 展台 Logo */
+  logos: boolean
+  /** 过道净宽标注 */
+  aisles: boolean
+  /** 基础设施名称 */
+  infraNames: boolean
+  /** 参考底图 */
+  underlay: boolean
+}
+
+export const DEFAULT_REPORT_LAYERS: ReportLayers = {
+  boothNames: true,
+  exhibitors: true,
+  areas: true,
+  dimensions: true,
+  logos: true,
+  aisles: false,
+  infraNames: false,
+  underlay: true,
+}
+
 export interface ReportImageOptions {
   title: string
   subtitle?: string
   stats?: { label: string; value: string }[]
   width?: number
   height?: number
+  /** 不传则沿用画布当前的显示开关 */
+  layers?: Partial<ReportLayers>
 }
 
 export interface StageOptions {
@@ -484,6 +517,40 @@ function boothLogoDataUrl(logo: string): string {
   return logo.startsWith('data:') ? logo : `data:image/png;base64,${logo}`
 }
 
+/** 线段上距离 p 最近的点 */
+function closestOnSeg(p: Pt, a: Pt, b: Pt): Pt {
+  const dx = b.x - a.x
+  const dz = b.z - a.z
+  const len2 = dx * dx + dz * dz
+  if (len2 < 1e-9) return { x: a.x, z: a.z }
+  let t = ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2
+  t = Math.max(0, Math.min(1, t))
+  return { x: a.x + t * dx, z: a.z + t * dz }
+}
+
+/** 两个多边形的最近点对与净距，用于过道宽度标注 */
+function nearestPair(a: Pt[], b: Pt[]): { d: number; pa: Pt; pb: Pt } | null {
+  if (a.length < 3 || b.length < 3) return null
+  let best: { d: number; pa: Pt; pb: Pt } | null = null
+  const consider = (pa: Pt, pb: Pt) => {
+    const d = Math.hypot(pa.x - pb.x, pa.z - pb.z)
+    if (!best || d < best.d) best = { d, pa, pb }
+  }
+  for (let i = 0; i < a.length; i++) {
+    const a1 = a[i]
+    const a2 = a[(i + 1) % a.length]
+    for (let j = 0; j < b.length; j++) {
+      const b1 = b[j]
+      const b2 = b[(j + 1) % b.length]
+      consider(a1, closestOnSeg(a1, b1, b2))
+      consider(a2, closestOnSeg(a2, b1, b2))
+      consider(closestOnSeg(b1, a1, a2), b1)
+      consider(closestOnSeg(b2, a1, a2), b2)
+    }
+  }
+  return best
+}
+
 /** 展台正面标识：Logo 在左、名称在右，合成到一张透明画布 */
 function boothSignTexture(b: Booth): { texture: THREE.CanvasTexture; aspect: number } | null {
   if (!b.logo) return null
@@ -698,6 +765,20 @@ export class Stage {
   private presentation = false
   private labelsBeforePresentation = { booth: true, infra: true }
   private areaLabels: CSS2DObject[] = []
+  /** 过道净宽标注：独立分组，便于整体开关 */
+  /** 视口尺寸突变时的过渡快照层 */
+  private resizeGhost: HTMLDivElement | null = null
+  private aisleRoot = new THREE.Group()
+  private aisleLabels: { obj: CSS2DObject; line: THREE.LineSegments }[] = []
+  private aisleVisible = false
+  private aisleSignature = ''
+  /** 过道尺寸线材质：所有标注共用，避免逐个创建 */
+  private aisleLineMaterial = new THREE.LineBasicMaterial({
+    color: 0x6f7ce8,
+    transparent: true,
+    opacity: 0.9,
+    depthTest: false,
+  })
   private areasVisible = false
   private selectedIds: string[] = []
   private drag: DragState | null = null
@@ -881,6 +962,8 @@ export class Stage {
       antialias: true,
       powerPreference: 'high-performance',
       stencil: false,
+      // 视口尺寸突变时用上一帧做过渡快照，需要保留绘制缓冲
+      preserveDrawingBuffer: true,
     })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(w, h)
@@ -1009,7 +1092,14 @@ export class Stage {
     this.scene.add(ground)
 
     this.buildGrid()
-    this.scene.add(this.underlayGroup, this.gridGroup, this.modelRoot, this.previewRoot, this.draftRoot)
+    this.scene.add(
+      this.underlayGroup,
+      this.gridGroup,
+      this.modelRoot,
+      this.previewRoot,
+      this.draftRoot,
+      this.aisleRoot,
+    )
     this.modelRoot.add(this.boothLogoRoot)
     this.scene.add(this.dimensionRoot)
     this.draftRoot.add(this.draftContent)
@@ -1828,11 +1918,124 @@ export class Stage {
     })
   }
 
+  /** 视口一次性变宽 / 变窄前调用：用上一帧画面盖住，等新尺寸首帧就绪再淡出 */
+  captureResizeGhost() {
+    const canvas = this.renderer.domElement
+    const host = canvas.parentElement
+    if (!host) return
+    let url = ''
+    try {
+      url = canvas.toDataURL('image/png')
+    } catch {
+      return
+    }
+    if (!url || url.length < 64) return
+
+    this.resizeGhost?.remove()
+    const ghost = document.createElement('div')
+    ghost.className = 'resize-ghost'
+    ghost.style.backgroundImage = `url(${url})`
+    host.appendChild(ghost)
+    this.resizeGhost = ghost
+
+    // 等两帧让新尺寸的画面渲染完成，再淡出快照
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        ghost.classList.add('fade')
+        window.setTimeout(() => {
+          ghost.remove()
+          if (this.resizeGhost === ghost) this.resizeGhost = null
+        }, 260)
+      })
+    })
+  }
+
   /** 展台面积标注开关 */
   setBoothAreasVisible(visible: boolean) {
     this.areasVisible = visible
     for (const obj of this.areaLabels) obj.visible = visible
     if (visible) this.updateAreaLabels()
+  }
+
+  /** 过道净宽标注开关 */
+  setAisleVisible(visible: boolean) {
+    this.aisleVisible = visible
+    this.aisleRoot.visible = visible
+    if (visible) {
+      this.aisleSignature = ''
+      this.updateAisleLabels()
+    } else {
+      this.clearAisleLabels()
+    }
+  }
+
+  private clearAisleLabels() {
+    for (const item of this.aisleLabels) {
+      item.obj.element.remove()
+      item.obj.removeFromParent()
+      item.line.geometry.dispose()
+      item.line.removeFromParent()
+    }
+    this.aisleLabels = []
+  }
+
+  /** 仅在展台位置变化时重建，避免每帧重算 */
+  private syncAisleLabels() {
+    if (!this.aisleVisible) return
+    const sig = [...this.boothSpecs.values()]
+      .map(
+        (b) =>
+          `${b.id}:${b.points.map((p) => `${p.x.toFixed(1)},${p.z.toFixed(1)}`).join(';')}`,
+      )
+      .join('|')
+    if (sig === this.aisleSignature) return
+    this.aisleSignature = sig
+    this.updateAisleLabels()
+  }
+
+  private updateAisleLabels() {
+    this.clearAisleLabels()
+    if (!this.aisleVisible) return
+    const list = [...this.boothSpecs.values()].filter((b) => b.points.length >= 3)
+    const used: { x: number; z: number }[] = []
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const pair = nearestPair(list[i].points, list[j].points)
+        if (!pair) continue
+        const { d, pa, pb } = pair
+        if (d < 0.2 || d > 8) continue
+        const mx = (pa.x + pb.x) / 2
+        const mz = (pa.z + pb.z) / 2
+        if (used.some((u) => Math.abs(u.x - mx) < 2.5 && Math.abs(u.z - mz) < 2.5)) continue
+        used.push({ x: mx, z: mz })
+
+        // 尺寸线：主线 + 两端短横线，像图纸上的净距标注
+        const dirX = pb.x - pa.x
+        const dirZ = pb.z - pa.z
+        const len = Math.hypot(dirX, dirZ) || 1
+        const nx = (-dirZ / len) * 0.35
+        const nz = (dirX / len) * 0.35
+        const seg = [
+          pa.x, 0.5, pa.z, pb.x, 0.5, pb.z,
+          pa.x - nx, 0.5, pa.z - nz, pa.x + nx, 0.5, pa.z + nz,
+          pb.x - nx, 0.5, pb.z - nz, pb.x + nx, 0.5, pb.z + nz,
+        ]
+        const geo = new THREE.BufferGeometry()
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3))
+        const line = new THREE.LineSegments(geo, this.aisleLineMaterial)
+        line.renderOrder = 5
+        this.aisleRoot.add(line)
+
+        const el = document.createElement('div')
+        el.className = 'aisle-label'
+        el.textContent = `${d.toFixed(1)} m`
+        const obj = new CSS2DObject(el)
+        obj.position.set(mx, 0.55, mz)
+        obj.center.set(0.5, 0.5)
+        this.aisleRoot.add(obj)
+        this.aisleLabels.push({ obj, line })
+      }
+    }
   }
 
   private clearAreaLabels() {
@@ -1893,12 +2096,14 @@ export class Stage {
     pts: Pt[],
     height: number,
     exhibitor?: string,
+    boothId?: string,
   ) {
     const c = centroid(pts)
     const el = document.createElement('div')
     el.className = 'booth-label'
     el.dataset.boothName = name
     el.dataset.exhibitor = exhibitor ?? ''
+    if (boothId) el.dataset.boothId = boothId
     if (exhibitor) {
       el.classList.add('has-exhibitor')
       const primary = document.createElement('span')
@@ -1913,7 +2118,8 @@ export class Stage {
     }
 
     const obj = new CSS2DObject(el)
-    obj.position.set(c.x, height + 1.62, c.z)
+    // 抬高标签，避免与展台正面的 Logo 立牌在视觉上叠在一起
+    obj.position.set(c.x, height + 2.4, c.z)
     obj.visible = this.boothLabelsVisible
     obj.center.set(0.5, 1)
     parent.add(obj)
@@ -2015,7 +2221,7 @@ export class Stage {
         this.groupMeshes.set(gid, mesh)
         this.modelRoot.add(mesh)
         for (const b of list) {
-          this.addLabel(mesh, b.name, b.points, boothVisibleHeight(b), b.exhibitor)
+          this.addLabel(mesh, b.name, b.points, boothVisibleHeight(b), b.exhibitor, b.id)
           this.addAreaLabel(mesh, b)
         }
       } else {
@@ -2140,7 +2346,7 @@ export class Stage {
     g.userData.boothId = b.id
     this.boothGroups.set(b.id, g)
     this.modelRoot.add(g)
-    this.addLabel(g, b.name, b.points, boothVisibleHeight(b), b.exhibitor)
+    this.addLabel(g, b.name, b.points, boothVisibleHeight(b), b.exhibitor, b.id)
     this.addAreaLabel(g, b)
   }
 
@@ -5826,11 +6032,59 @@ export class Stage {
   /** 生成一张高质量俯视汇报图，返回 data URL */
   async captureReportImage(options: ReportImageOptions): Promise<string | null> {
     if (!this.venue) return null
+
+    // 导出内容以弹窗勾选为准：临时打开对应标签，让主循环先生成这些对象
+    const wantLayers = options.layers ?? {}
+    const prevLabelFlags = {
+      booth: this.boothLabelsVisible,
+      infra: this.infraLabelsVisible,
+      area: this.areasVisible,
+      dim: this.dimensionVisible,
+    }
+    let toggledLabels = false
+    if (wantLayers.boothNames && !prevLabelFlags.booth) {
+      this.setBoothLabelsVisible(true)
+      toggledLabels = true
+    }
+    if (wantLayers.infraNames && !prevLabelFlags.infra) {
+      this.setInfraLabelsVisible(true)
+      toggledLabels = true
+    }
+    if (wantLayers.areas && !prevLabelFlags.area) {
+      this.setBoothAreasVisible(true)
+      toggledLabels = true
+    }
+    if (wantLayers.dimensions && !prevLabelFlags.dim) {
+      this.setDimensionsVisible(true)
+      toggledLabels = true
+    }
+    if (toggledLabels) {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      )
+    }
+
+    // 底图是否出场同样由勾选项决定
+    const underlayWasVisible = this.underlayGroup.visible
+    if (wantLayers.underlay === true) this.underlayGroup.visible = true
+    else if (wantLayers.underlay === false) this.underlayGroup.visible = false
+
     const reportLogos = await this.loadReportLogos()
     const width = Math.max(1600, Math.min(3200, options.width ?? 2400))
     const height = Math.max(1000, Math.min(2200, options.height ?? 1500))
     const content = this.contentPoints()
-    const b = boundsOf(content.points)
+    // 勾选底图时把它也纳入取景，避免参考图纸被裁掉边角
+    const framePoints = [...content.points]
+    const underlaySpec = this.underlaySpec
+    if (wantLayers.underlay !== false && underlaySpec) {
+      const hw = underlaySpec.width / 2
+      const hd = underlaySpec.height / 2
+      framePoints.push(
+        { x: underlaySpec.x - hw, z: underlaySpec.z - hd },
+        { x: underlaySpec.x + hw, z: underlaySpec.z + hd },
+      )
+    }
+    const b = boundsOf(framePoints)
     const cx = (b.minX + b.maxX) / 2
     const cz = (b.minZ + b.maxZ) / 2
     const aspect = width / height
@@ -5911,6 +6165,13 @@ export class Stage {
       console.warn('汇报图生成失败', err)
       return null
     } finally {
+      if (toggledLabels) {
+        this.setBoothLabelsVisible(prevLabelFlags.booth)
+        this.setInfraLabelsVisible(prevLabelFlags.infra)
+        this.setBoothAreasVisible(prevLabelFlags.area)
+        this.setDimensionsVisible(prevLabelFlags.dim)
+      }
+      this.underlayGroup.visible = underlayWasVisible
       this.gridGroup.visible = gridWas
       this.dimensionRoot.visible = dimWas
       this.scene.background = backgroundWas
@@ -5940,6 +6201,16 @@ export class Stage {
   ) {
     const v = new THREE.Vector3()
     const scale = width / 2400
+    // 导出内容以弹窗勾选为准；未传时沿用画布当前开关
+    const L = options.layers ?? {}
+    const showNames = L.boothNames ?? this.boothLabelsVisible
+    const showExhibitors = L.exhibitors ?? true
+    const showAreas = L.areas ?? this.areasVisible
+    const showDimensions = L.dimensions ?? this.dimensionVisible
+    const showLogos = L.logos ?? true
+    const showAisles = L.aisles ?? false
+    const showInfraNames = L.infraNames ?? false
+    const showUnderlay = L.underlay ?? false
     const project = (x: number, z: number) => {
       v.set(x, 0.05, z).project(camera)
       return { x: (v.x * 0.5 + 0.5) * width, y: (-v.y * 0.5 + 0.5) * height }
@@ -5970,7 +6241,8 @@ export class Stage {
         else ctx.lineTo(q.x, q.y)
       })
       ctx.closePath()
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.24)'
+      // 含底图时降低白色蒙版，让参考图纸露出来
+      ctx.fillStyle = showUnderlay ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.24)'
       ctx.fill()
       ctx.strokeStyle = 'rgba(35, 43, 54, 0.62)'
       ctx.lineWidth = Math.max(2, 2.5 * scale)
@@ -5993,7 +6265,7 @@ export class Stage {
     }
 
     // 汇报图用 2D 重绘刻度线，保证比 WebGL 细线更清楚
-    if (this.dimensionVisible) {
+    if (showDimensions) {
       this.dimensionRoot.updateMatrixWorld(true)
       ctx.save()
       ctx.beginPath()
@@ -6022,7 +6294,7 @@ export class Stage {
       ctx.restore()
     }
 
-    if (this.boothLabelsVisible) {
+    if (showNames) {
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
       ctx.font = `600 ${Math.round(20 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
@@ -6034,36 +6306,56 @@ export class Stage {
         const y = (-v.y * 0.5 + 0.5) * height
         const el = label.obj.element
         const name = el.dataset.boothName || el.textContent || ''
-        const exhibitor = el.dataset.exhibitor || ''
+        const exhibitor = showExhibitors ? el.dataset.exhibitor || '' : ''
         if (!name && !exhibitor) continue
         ctx.font = `600 ${Math.round(20 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
         const nameWidth = ctx.measureText(name).width
         ctx.font = `500 ${Math.round(13 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
         const exhibitorWidth = exhibitor ? ctx.measureText(exhibitor).width : 0
         const padX = 8 * scale
-        const boxW = Math.max(nameWidth, exhibitorWidth) + padX * 2
+        const boothId = el.dataset.boothId || ''
+        const logoImg = showLogos && boothId ? logos.get(boothId) : undefined
+        const iconSize = logoImg ? 18 * scale : 0
+        const iconGap = logoImg ? 6 * scale : 0
+        const textBlockW = Math.max(nameWidth, exhibitorWidth)
+        const boxW = textBlockW + padX * 2 + iconSize + iconGap
         const boxH = (exhibitor ? 46 : 28) * scale
+        const boxLeft = x - boxW / 2
+        const textCenter = boxLeft + padX + iconSize + iconGap + textBlockW / 2
         ctx.fillStyle = 'rgba(255, 255, 255, 0.94)'
-        this.roundRect(ctx, x - boxW / 2, y - boxH / 2, boxW, boxH, 5 * scale)
+        this.roundRect(ctx, boxLeft, y - boxH / 2, boxW, boxH, 5 * scale)
         ctx.fill()
         ctx.strokeStyle = 'rgba(35, 42, 52, 0.22)'
         ctx.lineWidth = Math.max(1, scale)
-        this.roundRect(ctx, x - boxW / 2, y - boxH / 2, boxW, boxH, 5 * scale)
+        this.roundRect(ctx, boxLeft, y - boxH / 2, boxW, boxH, 5 * scale)
         ctx.stroke()
+
+        // Logo 内嵌在名称框左侧，避免与文字互相遮挡
+        if (logoImg) {
+          const ix = boxLeft + padX
+          const iy = y - iconSize / 2
+          ctx.save()
+          ctx.beginPath()
+          ctx.rect(ix, iy, iconSize, iconSize)
+          ctx.clip()
+          ctx.drawImage(logoImg, ix, iy, iconSize, iconSize)
+          ctx.restore()
+        }
+
         ctx.fillStyle = '#20252d'
         ctx.font = `600 ${Math.round(20 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
-        ctx.fillText(name, x - nameWidth / 2, y - (exhibitor ? 9 * scale : 0))
+        ctx.fillText(name, textCenter - nameWidth / 2, y - (exhibitor ? 9 * scale : 0))
         if (exhibitor) {
           ctx.fillStyle = '#6e7784'
           ctx.font = `500 ${Math.round(13 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
-          ctx.fillText(exhibitor, x - exhibitorWidth / 2, y + 11 * scale)
+          ctx.fillText(exhibitor, textCenter - exhibitorWidth / 2, y + 11 * scale)
         }
         reserve(x, y, boxW, boxH)
       }
     }
 
-    // 面积标签：仅在显示菜单中打开时绘制
-    if (this.areasVisible) {
+    // 面积标签
+    if (showAreas) {
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
       ctx.font = `600 ${Math.round(12 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
@@ -6088,68 +6380,9 @@ export class Stage {
       }
     }
 
-    // 展台 Logo：绘制在俯视包围盒左下角，使用白底卡片保证可读
-    for (const booth of this.boothSpecs.values()) {
-      const img = logos.get(booth.id)
-      if (!img || booth.points.length < 3) continue
-      const projected = booth.points.map((p) => project(p.x, p.z))
-      const minX = Math.min(...projected.map((p) => p.x))
-      const maxX = Math.max(...projected.map((p) => p.x))
-      const minY = Math.min(...projected.map((p) => p.y))
-      const maxY = Math.max(...projected.map((p) => p.y))
-      const bw = maxX - minX
-      const bh = maxY - minY
-      if (bw < 24 * scale || bh < 18 * scale) continue
-
-      const inset = Math.max(3 * scale, Math.min(bw, bh) * 0.035)
-      const pad = Math.max(3 * scale, 2.5 * scale)
-      const maxCardW = Math.min(bw - inset * 2, 210 * scale)
-      const maxCardH = Math.min(bh - inset * 2, 76 * scale)
-      if (maxCardW < 30 * scale || maxCardH < 20 * scale) continue
-
-      const innerMaxW = maxCardW - pad * 2
-      const innerMaxH = maxCardH - pad * 2
-      const ratio = img.naturalWidth / Math.max(1, img.naturalHeight)
-      let logoH = innerMaxH
-      let logoW = logoH * ratio
-      if (logoW > innerMaxW) {
-        logoW = innerMaxW
-        logoH = logoW / ratio
-      }
-      if (logoW < 18 * scale || logoH < 10 * scale) continue
-
-      const cardW = logoW + pad * 2
-      const cardH = logoH + pad * 2
-      const x = minX + inset
-      const y = maxY - inset - cardH
-
-      ctx.save()
-      ctx.shadowColor = 'rgba(20, 28, 38, 0.22)'
-      ctx.shadowBlur = 6 * scale
-      ctx.shadowOffsetY = 2 * scale
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.97)'
-      this.roundRect(ctx, x, y, cardW, cardH, 4 * scale)
-      ctx.fill()
-      ctx.shadowColor = 'transparent'
-      ctx.strokeStyle = 'rgba(35, 42, 52, 0.24)'
-      ctx.lineWidth = Math.max(1, scale)
-      this.roundRect(ctx, x, y, cardW, cardH, 4 * scale)
-      ctx.stroke()
-      ctx.imageSmoothingEnabled = true
-      ctx.imageSmoothingQuality = 'high'
-      ctx.drawImage(
-        img,
-        x + (cardW - logoW) / 2,
-        y + (cardH - logoH) / 2,
-        logoW,
-        logoH,
-      )
-      ctx.restore()
-      reserve(x + cardW / 2, y + cardH / 2, cardW, cardH)
-    }
 
     // 刻度标签：只绘制不重叠的数字，避免汇报图上数字互相遮挡
-    if (this.dimensionVisible) {
+    if (showDimensions) {
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
       ctx.font = `600 ${Math.round(12 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
@@ -6176,6 +6409,102 @@ export class Stage {
         ctx.fillStyle = '#39414c'
         ctx.fillText(text, x - textWidth / 2, y)
         reserve(x, y, boxW, boxH)
+      }
+    }
+
+    // 基础设施名称
+    if (showInfraNames) {
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.font = `500 ${Math.round(12 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+      for (const label of this.infraLabels) {
+        const text = label.obj.element.textContent || ''
+        if (!text) continue
+        label.obj.getWorldPosition(v)
+        v.project(camera)
+        if (v.z < -1 || v.z > 1) continue
+        const x = (v.x * 0.5 + 0.5) * width
+        const y = (-v.y * 0.5 + 0.5) * height
+        const textWidth = ctx.measureText(text).width
+        const boxW = textWidth + 12 * scale
+        const boxH = 19 * scale
+        if (!isFree(x, y, boxW, boxH)) continue
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.94)'
+        this.roundRect(ctx, x - boxW / 2, y - boxH / 2, boxW, boxH, 4 * scale)
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(35, 42, 52, 0.24)'
+        ctx.lineWidth = Math.max(1, scale)
+        this.roundRect(ctx, x - boxW / 2, y - boxH / 2, boxW, boxH, 4 * scale)
+        ctx.stroke()
+        ctx.fillStyle = '#3c4149'
+        ctx.fillText(text, x - textWidth / 2, y)
+        reserve(x, y, boxW, boxH)
+      }
+    }
+
+    // 过道净宽：相邻展台之间标注最近距离
+    if (showAisles) {
+      const list = [...this.boothSpecs.values()].filter((b) => b.points.length >= 3)
+      const used: { x: number; z: number }[] = []
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.font = `600 ${Math.round(11 * scale)}px "PingFang SC", "Microsoft YaHei", sans-serif`
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const pair = nearestPair(list[i].points, list[j].points)
+          if (!pair) continue
+          const { d, pa, pb } = pair
+          if (d < 0.2 || d > 8) continue
+          const mx = (pa.x + pb.x) / 2
+          const mz = (pa.z + pb.z) / 2
+          if (used.some((u) => Math.abs(u.x - mx) < 2.5 && Math.abs(u.z - mz) < 2.5)) continue
+          const p1 = project(pa.x, pa.z)
+          const p2 = project(pb.x, pb.z)
+          const mid = project(mx, mz)
+          const text = `${d.toFixed(1)} m`
+          const tw = ctx.measureText(text).width
+          const bw = tw + 10 * scale
+          const bh = 18 * scale
+          if (!isFree(mid.x, mid.y, bw, bh)) continue
+          used.push({ x: mx, z: mz })
+
+          // 虚线主线 + 两端短横线，形成完整的净距标注
+          const dxs = p2.x - p1.x
+          const dys = p2.y - p1.y
+          const segLen = Math.hypot(dxs, dys) || 1
+          const tick = 4 * scale
+          const nx = (-dys / segLen) * tick
+          const ny = (dxs / segLen) * tick
+
+          ctx.save()
+          ctx.strokeStyle = 'rgba(111, 124, 232, 0.85)'
+          ctx.lineWidth = Math.max(1, scale)
+          ctx.setLineDash([4 * scale, 3 * scale])
+          ctx.beginPath()
+          ctx.moveTo(p1.x, p1.y)
+          ctx.lineTo(p2.x, p2.y)
+          ctx.stroke()
+
+          ctx.setLineDash([])
+          ctx.beginPath()
+          ctx.moveTo(p1.x - nx, p1.y - ny)
+          ctx.lineTo(p1.x + nx, p1.y + ny)
+          ctx.moveTo(p2.x - nx, p2.y - ny)
+          ctx.lineTo(p2.x + nx, p2.y + ny)
+          ctx.stroke()
+          ctx.restore()
+
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+          this.roundRect(ctx, mid.x - bw / 2, mid.y - bh / 2, bw, bh, 3 * scale)
+          ctx.fill()
+          ctx.strokeStyle = 'rgba(111, 124, 232, 0.45)'
+          ctx.lineWidth = Math.max(1, scale)
+          this.roundRect(ctx, mid.x - bw / 2, mid.y - bh / 2, bw, bh, 3 * scale)
+          ctx.stroke()
+          ctx.fillStyle = '#4a55b8'
+          ctx.fillText(text, mid.x, mid.y)
+          reserve(mid.x, mid.y, bw, bh)
+        }
       }
     }
 
@@ -6918,6 +7247,7 @@ export class Stage {
     if (cameraChanged || now - this.lastLabelAt >= 33) {
       this.lastLabelAt = now
       this.updateAreaLabels()
+      this.syncAisleLabels()
       this.labelRenderer.render(this.scene, this.camera)
     }
 

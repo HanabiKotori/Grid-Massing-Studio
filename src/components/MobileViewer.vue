@@ -322,7 +322,7 @@ function onGrabDown(e: PointerEvent) {
 
           <div class="mv-actions">
             <button type="button" class="mv-action" @click="emit('report')">
-              <b>汇报图</b><span>导出 PNG</span>
+              <b>平面图</b><span>导出 PNG</span>
             </button>
             <button type="button" class="mv-action" @click="emit('export')">
               <b>导出场景</b><span>JSON</span>
@@ -339,7 +339,7 @@ function onGrabDown(e: PointerEvent) {
           </div>
 
           <div class="mv-tip">
-            移动端为只读查看：可以切换视图、查看结构与天气、导出汇报图。编辑请在桌面端完成。
+            移动端为只读查看：可以切换视图、查看结构与天气、导出平面图。编辑请在桌面端完成。
           </div>
         </template>
       </div>

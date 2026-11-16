@@ -12,6 +12,31 @@ export interface Venue {
   ceiling?: boolean
 }
 
+/** 规范校验参数：在场馆属性里自定义，随场景保存 */
+export interface VenueRules {
+  /** 是否启用校验 */
+  enabled: boolean
+  /** 展台之间、展台与墙的最小净距（m） */
+  minGap: number
+  /** 展台最大高度（m） */
+  maxBoothHeight: number
+  /** 主通道参考宽度（m），用于提示偏窄 */
+  aisleWidth: number
+  /** 出入口最小净宽（m） */
+  minGateWidth: number
+  /** 出入口最少数量 */
+  minGates: number
+}
+
+export const DEFAULT_VENUE_RULES: VenueRules = {
+  enabled: true,
+  minGap: 0.6,
+  maxBoothHeight: 6,
+  aisleWidth: 3,
+  minGateWidth: 1.2,
+  minGates: 2,
+}
+
 /** 底图：铺在场馆地面上的参考图片，随场景保存 */
 export interface Underlay {
   /** 图片 data URL（jpg / png） */

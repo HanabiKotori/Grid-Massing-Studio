@@ -12,6 +12,7 @@ import {
   normalizeMaterialTexture,
 } from './materials'
 import { UNDERLAY_DEFAULT_OPACITY, clampUnderlaySpec } from './underlay'
+import { DEFAULT_VENUE_RULES } from './types'
 import type {
   Booth,
   BoothKind,
@@ -22,6 +23,7 @@ import type {
   Pt,
   Underlay,
   Venue,
+  VenueRules,
 } from './types'
 import type { WeatherKind } from './weather'
 
@@ -35,6 +37,8 @@ export interface SceneJson {
   booths: Booth[]
   infras: Infra[]
   underlay?: Underlay | null
+  /** 规范校验参数 */
+  rules?: VenueRules
 }
 
 export interface SceneFileInput {
@@ -46,6 +50,7 @@ export interface SceneFileInput {
   booths: Booth[]
   infras: Infra[]
   underlay: Underlay | null
+  rules: VenueRules
 }
 
 const INFRA_KIND_SET = new Set<InfraKind>([
@@ -273,6 +278,7 @@ export function buildSceneFile(input: SceneFileInput): SceneJson {
     booths: exportBoothList(input.booths),
     infras: input.infras.map((it) => ({ ...it })),
     underlay: input.underlay ? { ...input.underlay } : null,
+    rules: { ...input.rules },
   }
 }
 
@@ -303,4 +309,21 @@ export function normalizeUnderlay(raw: unknown): Underlay | null {
     visible: o.visible !== false,
     locked: o.locked === true,
   })
+}
+
+/** 导入时收敛规范参数，缺省用默认值 */
+export function normalizeRules(raw: unknown): VenueRules {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const num = (key: keyof VenueRules, def: number, min: number, max: number) => {
+    const n = Number(r[key])
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def
+  }
+  return {
+    enabled: r.enabled === undefined ? DEFAULT_VENUE_RULES.enabled : !!r.enabled,
+    minGap: num('minGap', DEFAULT_VENUE_RULES.minGap, 0, 5),
+    maxBoothHeight: num('maxBoothHeight', DEFAULT_VENUE_RULES.maxBoothHeight, 1, 24),
+    aisleWidth: num('aisleWidth', DEFAULT_VENUE_RULES.aisleWidth, 0, 12),
+    minGateWidth: num('minGateWidth', DEFAULT_VENUE_RULES.minGateWidth, 0.6, 6),
+    minGates: num('minGates', DEFAULT_VENUE_RULES.minGates, 0, 20),
+  }
 }

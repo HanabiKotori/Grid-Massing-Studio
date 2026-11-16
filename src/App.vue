@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ActionDock from './components/ActionDock.vue'
 import AppTopBar from './components/AppTopBar.vue'
+import ExportDialog from './components/ExportDialog.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import HelpMobilePanel from './components/HelpMobilePanel.vue'
 import HelpPanel from './components/HelpPanel.vue'
@@ -18,8 +19,10 @@ import {
   insetPolygon,
   pointInPolygon,
   polygonArea,
+  polygonInsidePolygon,
+  polygonsOverlap,
 } from './core/polygon'
-import { Stage } from './core/Stage'
+import { Stage, type ReportLayers } from './core/Stage'
 import { saveStoredProject } from './core/projectStore'
 import sampleSceneJson from './data/sample-scene.json'
 import { exportBoothList, type SceneJson } from './core/sceneFile'
@@ -42,7 +45,11 @@ import {
   QUALITY_LABELS,
   useEditorState,
 } from './composables/useEditorState'
-import type { InfraKind, Pt } from './core/types'
+import { BOOTH_KIND_LABELS, boothKindOf } from './core/booth'
+import { downloadPlanPdf as buildPlanPdf } from './core/planPdf'
+import type { Booth, InfraKind, Pt, VenueRules } from './core/types'
+import { DEFAULT_VENUE_RULES } from './core/types'
+import { checkCompliance } from './core/compliance'
 
 const {
   hostEl,
@@ -240,6 +247,36 @@ const {
   venueInner,
 })
 
+/** 规范校验参数：在场馆属性里编辑，随场景保存 */
+const venueRules = ref<VenueRules>({ ...DEFAULT_VENUE_RULES })
+
+/** 实时校验结果：场馆 / 展台 / 设施或参数变化时重算 */
+const complianceIssues = computed(() =>
+  checkCompliance(venue.value, booths.value, infras.value, venueRules.value),
+)
+
+function setVenueRule(key: keyof VenueRules, value: number | boolean) {
+  if (key === 'enabled') {
+    venueRules.value = { ...venueRules.value, enabled: !!value }
+    return
+  }
+  const n = Number(value)
+  if (!Number.isFinite(n)) return
+  const ranges: Record<Exclude<keyof VenueRules, 'enabled'>, [number, number]> = {
+    minGap: [0, 5],
+    maxBoothHeight: [1, 24],
+    aisleWidth: [0, 12],
+    minGateWidth: [0.6, 6],
+    minGates: [0, 20],
+  }
+  const [min, max] = ranges[key as Exclude<keyof VenueRules, 'enabled'>]
+  const next = key === 'minGates' ? Math.round(n) : Math.round(n * 10) / 10
+  venueRules.value = {
+    ...venueRules.value,
+    [key]: Math.min(max, Math.max(min, next)),
+  }
+}
+
 const {
   buildSceneJson,
   downloadScene,
@@ -260,6 +297,7 @@ const {
   weather,
   weatherOn,
   sunProgress,
+  rules: venueRules,
   liveWeatherOn,
   liveWeather,
   venueNoTop,
@@ -533,9 +571,152 @@ watch(sunPlaying, (on) => {
   if (!on) scheduleAutosave()
 })
 
+// 预览 / 展示 / 漫游会一次性改变视口宽度：先用上一帧盖住，避免黑屏
+watch(
+  [renderOnly, presentationOn, () => walkState.value !== 'off'],
+  () => stage?.captureResizeGhost(),
+)
+
 // ---------- JSON 导入 / 导出 ----------
 
-async function downloadReportImage() {
+const MARK_LABELS: Record<string, string> = { red: '红', yellow: '黄', gray: '灰' }
+
+/** 导出展位清单 CSV：Excel / Numbers 可直接打开 */
+function downloadBoothCsv() {
+  if (!booths.value.length) {
+    toast('还没有展台可导出')
+    return
+  }
+  const header = ['编号', '名称', '类型', '面积(m²)', '高度(m)', '展商', '标记', 'Logo']
+  const rows = booths.value.map((b) => [
+    b.name,
+    b.name,
+    BOOTH_KIND_LABELS[boothKindOf(b)] ?? '标准',
+    polygonArea(b.points).toFixed(1),
+    b.height.toFixed(2),
+    b.exhibitor ?? '',
+    MARK_LABELS[b.mark ?? (b.marked ? 'red' : '')] ?? '',
+    b.logo ? '有' : '',
+  ])
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
+  const csv = [header, ...rows].map((r) => r.map(escape).join(',')).join('\r\n')
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${(venueName.value || '场馆').replace(/[\\/:*?"<>|]/g, '_')}-展位清单.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  toast(`已导出 ${rows.length} 条展位清单`)
+}
+
+/** 阵列复制：沿 X 或 Z 方向按间距复制 N 个，保留展商、Logo、标记等属性 */
+function arrayBooth(id: string, count: number, gap: number, axis: 'x' | 'z') {
+  const src = booths.value.find((b) => b.id === id)
+  if (!src) return
+  const n = Math.min(20, Math.max(1, Math.round(count)))
+  const d = Number.isFinite(gap) ? gap : 10
+  if (d <= 0) {
+    toast('阵列间距需要大于 0')
+    return
+  }
+
+  const hall = venue.value
+  const created: Booth[] = []
+  for (let i = 1; i <= n; i++) {
+    const points = src.points.map((p) => ({
+      x: p.x + (axis === 'x' ? d * i : 0),
+      z: p.z + (axis === 'z' ? d * i : 0),
+    }))
+
+    // 与已有展台相交（含源展台自身）：整体取消，避免出现压在一起的体量
+    const hit = booths.value.find((b) => polygonsOverlap(b.points, points))
+    if (hit) {
+      toast(`第 ${i} 个位置与「${hit.name}」重叠，已取消阵列`)
+      return
+    }
+
+    // 同批新位置之间也不能互相重叠
+    const hitSelf = created.find((b) => polygonsOverlap(b.points, points))
+    if (hitSelf) {
+      toast(`第 ${i} 个位置与「${hitSelf.name}」重叠，请加大间距`)
+      return
+    }
+
+    // 不能超出场馆轮廓
+    if (hall && hall.points.length >= 3 && !polygonInsidePolygon(points, hall.points)) {
+      toast(`第 ${i} 个位置超出场馆范围，已取消阵列`)
+      return
+    }
+
+    created.push({
+      ...src,
+      id: `b${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+      name: `${src.name}-${i + 1}`,
+      points,
+    })
+  }
+  booths.value = [...booths.value, ...created]
+  toast(`已阵列复制 ${created.length} 个展台`)
+}
+
+/** 过道净宽标注：画布与导出共用同一套计算结果 */
+const aisleOn = ref(false)
+
+function toggleAisle() {
+  aisleOn.value = !aisleOn.value
+  stage?.setAisleVisible(aisleOn.value)
+}
+
+/** 导出弹窗：勾选内容后再决定输出 PNG 还是 PDF */
+const showExportDialog = ref(false)
+const exportBusy = ref(false)
+
+/** 顶栏「汇报图」与场馆属性里的「平面图 PDF」都先打开弹窗 */
+function openExportDialog() {
+  if (!venue.value) {
+    toast('请先绘制场馆')
+    return
+  }
+  showExportDialog.value = true
+}
+
+/** 导出 A3 平面图纸 PDF（含图框、标题栏、图例、指北针与品牌标记） */
+async function downloadPlanPdf(layers?: ReportLayers) {
+  if (!venue.value) {
+    toast('请先绘制场馆')
+    return
+  }
+  const area = polygonArea(venue.value.points).toFixed(1)
+  const imageDataUrl = await stage?.captureReportImage({
+    title: venueName.value.trim() || '场馆白膜',
+    subtitle: `${area} m² · ${booths.value.length} 个展台 · ${infras.value.length} 个设施`,
+    stats: [
+      { label: '场馆面积', value: `${area} m²` },
+      { label: '展台覆盖率', value: `${coverage.value}%` },
+      { label: '展台', value: `${booths.value.length}` },
+    ],
+    layers,
+  })
+  if (!imageDataUrl) {
+    toast('平面图生成失败，请稍后重试')
+    return
+  }
+  try {
+    await buildPlanPdf({
+      projectName: venueName.value.trim() || '场馆白膜',
+      summary: `${area} m² · ${booths.value.length} 个展台 · 覆盖率 ${coverage.value}%`,
+      issueCount: complianceIssues.value.length,
+      imageDataUrl,
+      fileName: `${(venueName.value || '场馆').replace(/[\\/:*?"<>|]/g, '_')}-平面图`,
+    })
+    toast('平面图 PDF 已生成')
+  } catch {
+    toast('PDF 生成失败，请稍后重试')
+  }
+}
+
+async function downloadReportImage(layers?: ReportLayers) {
   if (!venue.value) {
     toast('请先绘制场馆')
     return
@@ -548,9 +729,10 @@ async function downloadReportImage() {
       { label: '展台覆盖率', value: `${coverage.value}%` },
       { label: '展台', value: `${booths.value.length}` },
     ],
+    layers,
   })
   if (!dataUrl) {
-    toast('汇报图生成失败，请稍后重试')
+    toast('平面图生成失败，请稍后重试')
     return
   }
   const a = document.createElement('a')
@@ -559,7 +741,19 @@ async function downloadReportImage() {
   document.body.appendChild(a)
   a.click()
   a.remove()
-  toast('高质量俯视汇报图已生成')
+  toast('平面图 PNG 已生成')
+}
+
+/** 弹窗里确认导出：按选中的图层生成，完成后关闭 */
+async function runExport(kind: 'png' | 'pdf', layers: ReportLayers) {
+  exportBusy.value = true
+  try {
+    if (kind === 'pdf') await downloadPlanPdf(layers)
+    else await downloadReportImage(layers)
+    showExportDialog.value = false
+  } finally {
+    exportBusy.value = false
+  }
 }
 
 function triggerImport() {
@@ -945,6 +1139,7 @@ onMounted(() => {
   stage.setBoothLabelsVisible(boothLabelsOn.value)
   stage.setInfraLabelsVisible(infraLabelsOn.value)
   stage.setBoothAreasVisible(areaOn.value)
+  stage.setAisleVisible(aisleOn.value)
   stage.setDimensionsVisible(dimOn.value)
   stage.setReadOnly(renderOnly.value || isMobile.value)
   window.addEventListener('keydown', onKey)
@@ -1142,6 +1337,7 @@ onBeforeUnmount(() => {
       :infra-labels-on="infraLabelsOn"
       :dim-on="dimOn"
       :area-on="areaOn"
+      :aisle-on="aisleOn"
       :grid-on="gridOn"
       :has-underlay="!!underlay"
       :underlay-visible="!!underlay?.visible"
@@ -1156,8 +1352,9 @@ onBeforeUnmount(() => {
       @undo="undo"
       @redo="redo"
       @set-render="setRenderOnly"
-      @report="downloadReportImage"
+      @report="openExportDialog"
       @export="downloadScene"
+      @export-csv="downloadBoothCsv"
       @import="triggerImport"
       @clear-data="requestClearData"
       @open-weather="openWeather"
@@ -1175,6 +1372,7 @@ onBeforeUnmount(() => {
       @toggle-infra-labels="toggleInfraLabels"
       @toggle-dimensions="toggleDimensions"
       @toggle-areas="toggleAreas"
+      @toggle-aisle="toggleAisle"
       @toggle-grid="toggleGrid"
       @toggle-underlay="toggleUnderlay"
     />
@@ -1252,7 +1450,11 @@ onBeforeUnmount(() => {
       :skip-reveal-infra-id="skipRevealInfraId"
       :focus-add-section="addFocusSection"
       :focus-add-token="addFocusToken"
+      :rules="venueRules"
+      :issues="complianceIssues"
       detail-only
+      @update-rule="setVenueRule"
+      @array-booth="arrayBooth"
       @draw-venue="startVenueDraw"
       @draw-booth="startBoothDraw"
       @underlay-file="addUnderlay"
@@ -1366,42 +1568,57 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <ConfirmDialog
-      v-if="pendingConfirm"
-      :title="pendingConfirm.title"
-      :message="pendingConfirm.message"
-      :confirm-label="pendingConfirm.confirmLabel"
-      :danger="pendingConfirm.danger"
-      @confirm="confirmPendingAction"
-      @cancel="closeConfirmDialog"
-    />
+    <Transition name="dialog">
+      <ExportDialog
+        v-if="showExportDialog"
+        :busy="exportBusy"
+        @cancel="showExportDialog = false"
+        @export="runExport"
+      />
+    </Transition>
 
-    <WeatherPanel
-      v-if="showWeather"
-      :current="weather"
-      :enabled="weatherOn"
-      :densities="particleDensities"
-      :visibility="weatherVisibility"
-      :live-enabled="liveWeatherOn"
-      @select="chooseWeather"
-      @live-toggle="toggleLiveWeather"
-      @density="setParticleDensity"
-      @visibility="setWeatherVisibility"
-      @preview-particle="previewParticleWeather"
-      @toggle="toggleWeatherEnabled"
-      @close="closeWeather()"
-    />
+    <Transition name="dialog">
+      <ConfirmDialog
+        v-if="pendingConfirm"
+        :title="pendingConfirm.title"
+        :message="pendingConfirm.message"
+        :confirm-label="pendingConfirm.confirmLabel"
+        :danger="pendingConfirm.danger"
+        @confirm="confirmPendingAction"
+        @cancel="closeConfirmDialog"
+      />
+    </Transition>
+
+    <Transition name="dialog">
+      <WeatherPanel
+        v-if="showWeather"
+        :current="weather"
+        :enabled="weatherOn"
+        :densities="particleDensities"
+        :visibility="weatherVisibility"
+        :live-enabled="liveWeatherOn"
+        @select="chooseWeather"
+        @live-toggle="toggleLiveWeather"
+        @density="setParticleDensity"
+        @visibility="setWeatherVisibility"
+        @preview-particle="previewParticleWeather"
+        @toggle="toggleWeatherEnabled"
+        @close="closeWeather()"
+      />
+    </Transition>
 
     <HelpMobilePanel v-if="showHelp && isMobile" @close="showHelp = false" />
-    <HelpPanel
-      v-else-if="showHelp"
-      :grid-on="gridOn"
-      :labels-on="labelsOn"
-      :areas-on="areaOn"
-      :can-walk="!!venue && mode === 'idle'"
-      @quick="runHelpQuickAction"
-      @close="showHelp = false"
-    />
+    <Transition name="dialog">
+      <HelpPanel
+        v-if="showHelp && !isMobile"
+        :grid-on="gridOn"
+        :labels-on="labelsOn"
+        :areas-on="areaOn"
+        :can-walk="!!venue && mode === 'idle'"
+        @quick="runHelpQuickAction"
+        @close="showHelp = false"
+      />
+    </Transition>
 
     <SunTimeline
       v-if="!isMobile && !renderOnly"
@@ -1479,7 +1696,7 @@ onBeforeUnmount(() => {
       @select-infra="selectInfraFromPanel"
       @import="triggerImport"
       @export="downloadScene"
-      @report="downloadReportImage"
+      @report="openExportDialog"
       @clear-data="requestClearData"
       @open-weather="openWeather"
       @open-help="openHelp"

@@ -30,7 +30,9 @@ import type {
   InfraKind,
   Underlay,
   Venue,
+  VenueRules,
 } from '../core/types'
+import type { ComplianceIssue } from '../core/compliance'
 
 const props = defineProps<{
   venue: Venue | null
@@ -59,6 +61,9 @@ const props = defineProps<{
   focusAddToken?: number
   /** 属性模式：只显示当前选中对象的详情，不重复左侧的场景列表 */
   detailOnly?: boolean
+  /** 规范校验参数与实时结果 */
+  rules: VenueRules
+  issues: ComplianceIssue[]
 }>()
 
 /** 三个结构卡片的展开状态 */
@@ -66,6 +71,20 @@ const venueOpen = ref(true)
 const boothOpen = ref(true)
 const infraOpen = ref(true)
 const materialUploadingId = ref<string | null>(null)
+
+/** 阵列复制参数：数量与间距（米） */
+const arrayCount = ref(2)
+const arrayGap = ref(10)
+
+function clampInt(e: Event, min: number, max: number) {
+  const v = Math.round(Number((e.target as HTMLInputElement).value))
+  return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : min
+}
+
+function clampNum(e: Event, min: number, max: number) {
+  const v = Number((e.target as HTMLInputElement).value)
+  return Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : min
+}
 
 const emit = defineEmits<{
   (e: 'draw-venue'): void
@@ -80,6 +99,8 @@ const emit = defineEmits<{
   (e: 'booth-kind', id: string, kind: BoothKind): void
   (e: 'booth-size', id: string, patch: { width?: number; depth?: number }): void
   (e: 'set-mark', id: string, mark: BoothMark | null): void
+  (e: 'update-rule', key: keyof VenueRules, value: number | boolean): void
+  (e: 'array-booth', id: string, count: number, gap: number, axis: 'x' | 'z'): void
   (e: 'rotate', dir: 1 | -1): void
   (e: 'merge'): void
   (e: 'unmerge'): void
@@ -211,6 +232,12 @@ function onBoothHeight(id: string, min: number, max: number, e: Event) {
   if (Number.isFinite(v)) {
     emit('booth-height', id, Math.round(Math.min(max, Math.max(min, v))))
   }
+}
+
+/** 规范数值输入：交给父层收敛范围 */
+function onRuleNum(key: keyof VenueRules, e: Event) {
+  const v = Number((e.target as HTMLInputElement).value)
+  if (Number.isFinite(v)) emit('update-rule', key, v)
 }
 
 function onSelect(id: string, e: MouseEvent) {
@@ -910,6 +937,94 @@ function onLogoChange(id: string, e: Event) {
             @click="emit('toggle-top')"
           />
         </div>
+
+        <div class="sec-title">规范</div>
+        <div class="switch-row">
+          <span>启用校验</span>
+          <span class="switch-state">{{ rules.enabled ? '已开启' : '已关闭' }}</span>
+          <button
+            class="switch"
+            :class="{ on: rules.enabled }"
+            role="switch"
+            :aria-checked="rules.enabled"
+            title="按下方参数检查排布是否合规"
+            @click="emit('update-rule', 'enabled', !rules.enabled)"
+          />
+        </div>
+        <label class="infra-field">
+          <span>最小净距</span>
+          <input
+            type="number"
+            min="0"
+            max="5"
+            step="0.1"
+            :value="rules.minGap"
+            :disabled="!rules.enabled"
+            @change="onRuleNum('minGap', $event)"
+          />
+          <i>m</i>
+        </label>
+        <label class="infra-field">
+          <span>展台限高</span>
+          <input
+            type="number"
+            min="1"
+            max="24"
+            step="0.5"
+            :value="rules.maxBoothHeight"
+            :disabled="!rules.enabled"
+            @change="onRuleNum('maxBoothHeight', $event)"
+          />
+          <i>m</i>
+        </label>
+        <label class="infra-field">
+          <span>主通道</span>
+          <input
+            type="number"
+            min="0"
+            max="12"
+            step="0.5"
+            :value="rules.aisleWidth"
+            :disabled="!rules.enabled"
+            @change="onRuleNum('aisleWidth', $event)"
+          />
+          <i>m</i>
+        </label>
+        <label class="infra-field">
+          <span>出入口净宽</span>
+          <input
+            type="number"
+            min="0.6"
+            max="6"
+            step="0.1"
+            :value="rules.minGateWidth"
+            :disabled="!rules.enabled"
+            @change="onRuleNum('minGateWidth', $event)"
+          />
+          <i>m</i>
+        </label>
+        <label class="infra-field">
+          <span>出入口数量</span>
+          <input
+            type="number"
+            min="0"
+            max="20"
+            step="1"
+            :value="rules.minGates"
+            :disabled="!rules.enabled"
+            @change="onRuleNum('minGates', $event)"
+          />
+          <i>个</i>
+        </label>
+
+        <template v-if="rules.enabled">
+          <div v-if="issues.length" class="rule-issues">
+            <p v-for="(it, i) in issues" :key="i" :class="it.level">{{ it.message }}</p>
+          </div>
+          <p v-else class="rule-ok">符合当前规范</p>
+        </template>
+
+
       </template>
 
       <div v-else class="empty">
@@ -1178,6 +1293,31 @@ function onLogoChange(id: string, e: Event) {
               <span class="row-lab">旋转</span>
               <button class="mini" title="逆时针旋转 90°" @click.stop="emit('rotate', -1)">↺ 90°</button>
               <button class="mini" title="顺时针旋转 90°" @click.stop="emit('rotate', 1)">↻ 90°</button>
+            </div>
+            <div class="row-tools">
+              <span class="row-lab">阵列</span>
+              <input
+                class="mini-num"
+                type="number"
+                min="1"
+                max="20"
+                step="1"
+                :value="arrayCount"
+                title="复制数量"
+                @change="arrayCount = clampInt($event, 1, 20)"
+              />
+              <input
+                class="mini-num"
+                type="number"
+                min="0.5"
+                max="50"
+                step="0.5"
+                :value="arrayGap"
+                title="间距（米）"
+                @change="arrayGap = clampNum($event, 0.5, 50)"
+              />
+              <button class="mini" title="沿 X 轴阵列复制" @click.stop="emit('array-booth', b.id, arrayCount, arrayGap, 'x')">→</button>
+              <button class="mini" title="沿 Z 轴阵列复制" @click.stop="emit('array-booth', b.id, arrayCount, arrayGap, 'z')">↓</button>
             </div>
             <div class="sec-title">外观</div>
             <label class="infra-field exhibitor-field">

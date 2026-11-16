@@ -1,6 +1,7 @@
 import { loadStoredProject } from '../core/projectStore'
 import {
   buildSceneFile,
+  normalizeRules,
   normalizeUnderlay,
   readBooth,
   readInfra,
@@ -81,6 +82,7 @@ export function parseMultiplayerScene(raw: unknown): LoadedMultiplayerScene {
     weather,
     weatherOn,
     sunProgress,
+    rules: normalizeRules(scene.rules),
     booths,
     infras,
     underlay,

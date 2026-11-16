@@ -3512,3 +3512,311 @@ body {
 .mv-grab:active {
   cursor: grabbing;
 }
+/* 规范校验：问题列表与通过提示 */
+.wb-right .ap .rule-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 8px 0 4px;
+}
+
+.wb-right .ap .rule-issues p {
+  position: relative;
+  margin: 0;
+  padding-left: 11px;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+
+.wb-right .ap .rule-issues p::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #d9b23c;
+}
+
+.wb-right .ap .rule-issues p.error {
+  color: #e08a76;
+}
+
+.wb-right .ap .rule-issues p.error::before {
+  background: #d95252;
+}
+
+.wb-right .ap .rule-ok {
+  margin: 8px 0 4px;
+  font-size: 10.5px;
+  color: #5bbd8b;
+}
+/* 属性栏里的小号数字输入（阵列数量 / 间距） */
+.wb-right .ap .mini-num {
+  width: 46px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.028);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-align: right;
+  appearance: textfield;
+}
+
+.wb-right .ap .mini-num::-webkit-outer-spin-button,
+.wb-right .ap .mini-num::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.wb-right .ap .mini-num:focus {
+  border-color: rgba(111, 124, 232, 0.6);
+  outline: none;
+  background: #0e0f12;
+}
+/* 过道净宽标签：白底药丸 + 紫色描边，与尺寸线呼应 */
+.aisle-label {
+  padding: 1.5px 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(111, 124, 232, 0.5);
+  background: rgba(255, 255, 255, 0.94);
+  color: #4a55b8;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* ================= 动效规范 =================
+   统一 token：所有过渡只从这里取值，不再散落 0.12s / 0.26s 之类的数字。
+   三条曲线：emphasized 进入、standard 通用与退出、spring 小元素回弹。 */
+
+.app.wb {
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --t-micro: 110ms;
+  --t-small: 160ms;
+  --t-med: 220ms;
+  --t-large: 300ms;
+  --stagger: 40ms;
+}
+
+/* 视口一次性变宽 / 变窄时的过渡快照，盖住 canvas 重建缓冲的那一帧 */
+.resize-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 200ms var(--ease-standard, ease);
+}
+
+.resize-ghost.fade {
+  opacity: 0;
+}
+
+/* ---------- 弹窗：遮罩先到位，卡片延迟抬起 ---------- */
+.dialog-enter-active {
+  transition:
+    opacity 200ms var(--ease-standard),
+    backdrop-filter 200ms var(--ease-standard);
+}
+
+.dialog-leave-active {
+  transition:
+    opacity 180ms var(--ease-standard),
+    backdrop-filter 180ms var(--ease-standard);
+}
+
+.dialog-enter-from,
+.dialog-leave-to {
+  opacity: 0;
+  /* 模糊也要一起渐入，否则遮罩会「瞬间变糊」像是直接跳出来 */
+  backdrop-filter: blur(0);
+}
+
+.dialog-enter-active .modal,
+.dialog-enter-active .export-dialog,
+.dialog-enter-active .wp,
+.dialog-enter-active .help-panel {
+  transition:
+    opacity 320ms var(--ease-emphasized) 60ms,
+    transform 320ms var(--ease-emphasized) 60ms;
+}
+
+.dialog-enter-from .modal,
+.dialog-enter-from .export-dialog,
+.dialog-enter-from .wp,
+.dialog-enter-from .help-panel {
+  opacity: 0;
+  transform: translateY(20px) scale(0.94);
+}
+
+/* 退出时卡片不再位移，只随遮罩一起淡出，避免「飞走」 */
+.dialog-leave-active .modal,
+.dialog-leave-active .export-dialog,
+.dialog-leave-active .wp,
+.dialog-leave-active .help-panel {
+  transition: opacity 180ms var(--ease-standard);
+}
+
+/* ---------- 下拉菜单：从触发按钮下缘生长 ---------- */
+.menu-enter-active {
+  transition:
+    opacity var(--t-small) var(--ease-emphasized),
+    transform var(--t-small) var(--ease-emphasized);
+  transform-origin: top center;
+}
+
+.menu-leave-active {
+  transition:
+    opacity 100ms var(--ease-standard),
+    transform 100ms var(--ease-standard);
+  transform-origin: top center;
+}
+
+.menu-enter-from,
+.menu-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scaleY(0.96);
+}
+
+/* ---------- 内容切换：旧的先退，新的再进 ---------- */
+.fade-enter-active {
+  transition:
+    opacity var(--t-small) var(--ease-emphasized),
+    transform var(--t-small) var(--ease-emphasized);
+}
+
+.fade-leave-active {
+  transition:
+    opacity 120ms var(--ease-standard),
+    transform 120ms var(--ease-standard);
+}
+
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* ---------- 结构树分组展开 ---------- */
+.tree-kids-enter-active {
+  transition: grid-template-rows var(--t-med) var(--ease-standard);
+}
+
+.tree-kids-leave-active {
+  transition: grid-template-rows var(--t-small) var(--ease-standard);
+}
+/* Toast：进入 220ms 强调曲线，退出 160ms 只淡出 */
+.app.wb .toast-enter-active {
+  transition:
+    opacity var(--t-med) var(--ease-emphasized),
+    transform var(--t-med) var(--ease-emphasized);
+}
+
+.app.wb .toast-leave-active {
+  transition:
+    opacity var(--t-small) var(--ease-standard),
+    transform var(--t-small) var(--ease-standard);
+}
+
+.app.wb .toast-enter-from,
+.app.wb .toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -8px);
+}
+
+/* 树节点选中圆点：轻微回弹，与天气预设一致 */
+.wb-node.on::after {
+  animation: dot-in var(--t-small) var(--ease-spring) both;
+}
+
+@keyframes dot-in {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+/* 顶栏菜单：挂载即播放进入动画（v-if 直接插入，无需 Transition 包裹） */
+.wb-top .tool-menu,
+.tool-menu {
+  transform-origin: top center;
+  animation: menu-in var(--t-small) var(--ease-emphasized, ease);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+/* 结构树：展开时子节点轻微下落淡入（首屏也会播一次，作为入场） */
+.wb-left .wb-grp.sub,
+.wb-left .wb-node {
+  animation: node-in var(--t-small) var(--ease-emphasized);
+}
+
+@keyframes node-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 移动端底部面板：从底部升起 */
+.mv-panel {
+  animation: sheet-in var(--t-large) var(--ease-emphasized);
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 多人页：房间内容淡入 */
+.mp-room-card,
+.mp-room-hero {
+  animation: fade-up var(--t-med) var(--ease-emphasized);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
