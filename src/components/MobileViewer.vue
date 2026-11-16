@@ -49,6 +49,7 @@ const emit = defineEmits<{
   (e: 'import'): void
   (e: 'export'): void
   (e: 'report'): void
+  (e: 'clear-data'): void
   (e: 'open-weather'): void
   (e: 'open-help'): void
   (e: 'open-multiplayer'): void
@@ -278,6 +279,14 @@ function pick(t: Tab) {
             </svg>
             导入 JSON 场景
             <span class="num">替换当前</span>
+          </button>
+
+          <button type="button" class="mv-row danger" @click="emit('clear-data')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4.5 7h15M9.5 7V4.8h5V7M7 7l.8 12.2h8.4L17 7M10 10.5v5M14 10.5v5" />
+            </svg>
+            清空场景数据
+            <span class="num">需确认</span>
           </button>
 
           <div class="mv-actions">

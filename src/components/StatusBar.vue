@@ -10,6 +10,10 @@ const props = defineProps<{
   hover: Pt | null
   /** 选中对象在网格坐标系中的位置，未选中时为 null */
   position: Pt | null
+  /** 画布中心的世界坐标 */
+  viewCenter: { x: number; y: number; z: number } | null
+  /** 相机方位角，正北为 0°，顺时针 */
+  viewAzimuth: number
   gridOn: boolean
   renderOnly: boolean
   walking: boolean
@@ -56,10 +60,25 @@ const saveText = computed(() => {
     <span class="vsep" />
     <span>{{ selectionText }}</span>
     <span class="vsep" />
-    <span class="wb-coord" :title="position ? '选中对象在网格中的位置' : '鼠标在网格中的位置'">
+    <span
+      class="wb-coord wb-object-coord"
+      :title="position ? '选中对象在网格中的位置' : '鼠标在网格中的位置'"
+    >
+      <span class="wb-coord-label">{{ position ? '对象' : '鼠标' }}</span>
       <span>X <b>{{ coord ? coord.x.toFixed(1) : '—' }}</b></span>
       <span>Z <b>{{ coord ? coord.z.toFixed(1) : '—' }}</b></span>
       <span class="wb-coord-unit">m</span>
+    </span>
+    <span class="vsep" />
+    <span class="wb-coord" title="画布中心的世界坐标与相机方位角（正北为 0°）">
+      <span class="wb-coord-label">中心</span>
+      <span>X <b>{{ viewCenter ? viewCenter.x.toFixed(1) : '—' }}</b></span>
+      <span>Y <b>{{ viewCenter ? viewCenter.y.toFixed(1) : '—' }}</b></span>
+      <span>Z <b>{{ viewCenter ? viewCenter.z.toFixed(1) : '—' }}</b></span>
+      <span class="wb-coord-unit">m</span>
+      <span class="wb-coord-sep" />
+      <span>方位 <b>{{ viewAzimuth.toFixed(1) }}</b></span>
+      <span class="wb-coord-unit">°</span>
     </span>
     <span class="sp" />
     <span class="wb-save" :class="saveState">{{ saveText }}</span>

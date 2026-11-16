@@ -190,9 +190,8 @@ export function useEditorState() {
     toastTimer = window.setTimeout(() => (toastMsg.value = ''), 2800)
   }
 
-  /** 只有绘制时才需要坐标提示，避免浏览 / 拖拽时每个 pointermove 都触发渲染 */
+  /** 绘制和常态浏览都需要鼠标坐标；值变化时才写入响应式状态 */
   function handleStageHover(p: Pt | null) {
-    if (!isDrawing.value) return
     if (!p) {
       if (hover.value) hover.value = null
       return

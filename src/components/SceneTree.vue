@@ -23,6 +23,7 @@ const emit = defineEmits<{
   (e: 'select-infra', id: string): void
   (e: 'select-venue'): void
   (e: 'draw-venue'): void
+  (e: 'request-redraw'): void
   (e: 'draw-booth', kind: BoothKind): void
   (e: 'add-infra', kind: InfraKind): void
   (e: 'add-furniture', kind: InfraKind, boothId: string): void
@@ -93,6 +94,77 @@ function toggleAll() {
 
 const treeEl = ref<HTMLElement | null>(null)
 
+/** 当前画布选中的对象：优先设施 / 家具，其次展台 */
+const locateTargetId = computed(() => {
+  if (props.selectedInfraId) {
+    const infra = props.infras.find((item) => item.id === props.selectedInfraId)
+    if (infra) return infra.id
+  }
+  for (let i = props.selectedIds.length - 1; i >= 0; i -= 1) {
+    const id = props.selectedIds[i]
+    if (props.booths.some((booth) => booth.id === id)) return id
+  }
+  return null
+})
+const canLocate = computed(() => !!locateTargetId.value)
+
+function scrollToNode(id: string, center: boolean) {
+  const root = treeEl.value
+  if (!root) return
+  const el = [...root.querySelectorAll<HTMLElement>('.wb-node')].find(
+    (node) => node.dataset.nodeId === id,
+  )
+  if (!el) return
+  if (center) {
+    const r = el.getBoundingClientRect()
+    const rr = root.getBoundingClientRect()
+    root.scrollTo({
+      top: Math.max(
+        0,
+        root.scrollTop + r.top - rr.top - root.clientHeight / 2 + r.height / 2,
+      ),
+      behavior: 'smooth',
+    })
+    return
+  }
+  const r = el.getBoundingClientRect()
+  const rr = root.getBoundingClientRect()
+  if (r.top < rr.top + 8) root.scrollTop -= rr.top + 8 - r.top
+  else if (r.bottom > rr.bottom - 8) root.scrollTop += r.bottom - (rr.bottom - 8)
+}
+
+/** 展开选中对象所在的树分组并滚动到对应节点 */
+async function locateSelected() {
+  const targetId = locateTargetId.value
+  if (!targetId) return
+
+  const infra = props.infras.find((item) => item.id === targetId)
+  if (infra) {
+    if (isFurnitureKind(infra.kind)) {
+      open.value.furniture = true
+      const owner = props.booths.find(
+        (b) =>
+          b.points.length >= 3 && pointInPolygon({ x: infra.x, z: infra.z }, b.points),
+      )
+      if (owner) {
+        open.value['fb-' + owner.id] = true
+        open.value['ff-' + owner.id + '-' + infra.kind] = true
+      }
+    } else {
+      open.value.infra = true
+      open.value['ik-' + infra.kind] = true
+    }
+  } else {
+    const booth = props.booths.find((item) => item.id === targetId)
+    if (!booth) return
+    open.value.booth = true
+    open.value['bk-' + boothKindOf(booth)] = true
+  }
+
+  await nextTick()
+  scrollToNode(targetId, true)
+}
+
 /* ---------- 数据分组 ---------- */
 
 const boothsByKind = computed(() => {
@@ -157,16 +229,10 @@ function isOn(id: string) {
   return props.selectedIds.includes(id)
 }
 
-/** 重绘场馆会替换轮廓，先确认 */
-function confirmRedraw() {
+/** 重绘场馆会替换轮廓，交给 App 的自定义确认弹层 */
+function requestRedraw() {
   if (props.renderOnly) return
-  if (
-    props.venue &&
-    !window.confirm('重绘会替换当前场馆轮廓，馆内展台不会自动删除。确定重新绘制？')
-  ) {
-    return
-  }
-  emit('draw-venue')
+  emit('request-redraw')
 }
 
 watch(
@@ -192,6 +258,19 @@ watch(
       <span class="sp" />
       <button
         type="button"
+        class="wb-mini-btn wb-locate-btn"
+        :disabled="!canLocate"
+        :title="canLocate ? '定位到当前选中对象' : '请先在画布中选中模型'"
+        aria-label="定位到当前选中对象"
+        @click="locateSelected"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="7" />
+          <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+        </svg>
+      </button>
+      <button
+        type="button"
         class="wb-mini-btn"
         :title="expandAll ? '全部收起' : '全部展开'"
         @click="toggleAll"
@@ -214,7 +293,7 @@ watch(
           type="button"
           class="wb-add"
           title="重绘场馆轮廓"
-          @click.stop="confirmRedraw"
+          @click.stop="requestRedraw"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3.6 12a8.4 8.4 0 1 0 2.6-6.1" />
@@ -226,7 +305,7 @@ watch(
         <div v-if="!venue" class="wb-empty">
           还未绘制场地面积
           <div style="margin-top: 8px">
-            <button v-if="!renderOnly" type="button" class="wb-btn" style="height: 26px" @click="confirmRedraw">
+            <button v-if="!renderOnly" type="button" class="wb-btn" style="height: 26px" @click="requestRedraw">
               绘制场地面积
             </button>
           </div>
@@ -274,6 +353,7 @@ watch(
               type="button"
               class="wb-node lv3"
               :class="{ on: isOn(b.id) }"
+              :data-node-id="b.id"
               @click="emit('select', b.id)"
             >
               <span class="sw" />
@@ -325,6 +405,7 @@ watch(
               type="button"
               class="wb-node lv3"
               :class="{ on: selectedInfraId === it.id }"
+              :data-node-id="it.id"
               @click="emit('select-infra', it.id)"
             >
               <span class="sw" style="background: #4a4438" />
@@ -384,6 +465,7 @@ watch(
                   type="button"
                   class="wb-node lv4"
                   :class="{ on: selectedInfraId === it.id }"
+                  :data-node-id="it.id"
                   @click="emit('select-infra', it.id)"
                 >
                   <span class="sw" style="background: #4a4438" />

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ActionDock from './components/ActionDock.vue'
 import AppTopBar from './components/AppTopBar.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 import HelpMobilePanel from './components/HelpMobilePanel.vue'
 import HelpPanel from './components/HelpPanel.vue'
 import Inspector from './components/Inspector.vue'
@@ -112,12 +113,10 @@ const {
   coverage,
   showWelcome,
   draftArea,
-  isDrawing,
   isPlacing,
   rotateDisplay,
   rotateSnapped,
   gridWanted,
-  segmentLength,
   focusAdd,
   toast,
   handleStageHover,
@@ -711,6 +710,62 @@ function closeMergeDialog() {
   mergeDialog.value = null
 }
 
+type PendingConfirm = {
+  kind: 'clear-data' | 'redraw-venue'
+  title: string
+  message: string
+  confirmLabel: string
+  danger: boolean
+}
+const pendingConfirm = ref<PendingConfirm | null>(null)
+
+function requestClearData() {
+  if (renderOnly.value) return
+  toolMenu.value = null
+  pendingConfirm.value = {
+    kind: 'clear-data',
+    title: '清空场景数据',
+    message:
+      '将清空场馆、展台、基础设施、家具和底图，并重置场馆名称。确定清空当前数据？',
+    confirmLabel: '清空',
+    danger: true,
+  }
+}
+
+function requestRedrawVenue() {
+  if (renderOnly.value) return
+  toolMenu.value = null
+  if (!venue.value) {
+    startVenueDraw()
+    return
+  }
+  pendingConfirm.value = {
+    kind: 'redraw-venue',
+    title: '重绘场馆',
+    message: '重绘会替换当前场馆轮廓，馆内展台不会自动删除。确定重新绘制？',
+    confirmLabel: '重新绘制',
+    danger: false,
+  }
+}
+
+function closeConfirmDialog() {
+  pendingConfirm.value = null
+}
+
+function confirmPendingAction() {
+  const action = pendingConfirm.value
+  pendingConfirm.value = null
+  if (!action) return
+  if (action.kind === 'redraw-venue') {
+    startVenueDraw()
+    return
+  }
+  deleteVenue()
+  underlay.value = null
+  venueName.value = '场馆白膜'
+  toast('已清空场景数据')
+}
+
 /** 多人漫游在新页面运行；先落盘当前场景，避免跳转丢失最新编辑 */
 async function openMultiplayer() {
   if (!venue.value) {
@@ -833,6 +888,10 @@ onMounted(() => {
     onMoveInfra: (id, x, z, rotation) => moveInfra(id, x, z, rotation),
     onMoveInfras: (targets) => moveInfraGroup(targets),
     onNorthAngle: (deg) => (northDeg.value = Math.round(deg * 10) / 10),
+    onViewInfo: (info) => {
+      viewCenter.value = { x: info.x, y: info.y, z: info.z }
+      viewAzimuth.value = Math.round(info.azimuth * 10) / 10
+    },
     onSunTime: (p) => (sunProgress.value = p),
     onQualityChange: (level, auto) => {
       quality.value = level
@@ -943,6 +1002,10 @@ const selectedPosition = computed<Pt | null>(() => {
   return { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 }
 })
 
+/** 状态栏：画布中心世界坐标 + 相机方位角 */
+const viewCenter = ref<{ x: number; y: number; z: number } | null>(null)
+const viewAzimuth = ref(0)
+
 function togglePresentation() {
   if (presentationOn.value) exitPresentation()
   else enterPresentation()
@@ -1043,6 +1106,7 @@ onBeforeUnmount(() => {
       @report="downloadReportImage"
       @export="downloadScene"
       @import="triggerImport"
+      @clear-data="requestClearData"
       @open-weather="openWeather"
       @open-help="openHelp"
       @open-multiplayer="openMultiplayer"
@@ -1078,6 +1142,7 @@ onBeforeUnmount(() => {
       @select-infra="selectInfraFromPanel"
       @select-venue="selectVenueNode"
       @draw-venue="startVenueDraw"
+      @request-redraw="requestRedrawVenue"
       @draw-booth="startBoothDraw"
       @add-infra="beginInfraPlace"
       @add-furniture="addFurniture"
@@ -1116,13 +1181,6 @@ onBeforeUnmount(() => {
 
     <div v-if="rotateDeg !== null" class="coord" :class="{ snap: rotateSnapped }">
       <div class="coord-item"><span>旋转</span><b>{{ rotateDisplay }}</b><i>°</i></div>
-    </div>
-
-    <div v-if="isDrawing" class="coord">
-      <div class="coord-item"><span>X</span><b>{{ hover ? hover.x.toFixed(0) : '—' }}</b><i>m</i></div>
-      <div class="coord-item"><span>Z</span><b>{{ hover ? hover.z.toFixed(0) : '—' }}</b><i>m</i></div>
-      <div class="sep" />
-      <div class="coord-item"><span>边长</span><b>{{ segmentLength ? segmentLength.toFixed(1) : '—' }}</b><i>m</i></div>
     </div>
 
     <aside v-if="!isMobile && !showWelcome" class="wb-right">
@@ -1247,13 +1305,23 @@ onBeforeUnmount(() => {
         </p>
         <div class="modal-actions">
           <button class="btn ghost" @click="mergeDialog = null">取消</button>
-          <button class="btn" @click="applyMerge(false)">保留各自高度</button>
+          <button class="btn ghost" @click="applyMerge(false)">保留各自高度</button>
           <button class="btn primary" @click="applyMerge(true)">
             统一为 {{ mergeDialog.targetHeight.toFixed(2) }} m
           </button>
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-if="pendingConfirm"
+      :title="pendingConfirm.title"
+      :message="pendingConfirm.message"
+      :confirm-label="pendingConfirm.confirmLabel"
+      :danger="pendingConfirm.danger"
+      @confirm="confirmPendingAction"
+      @cancel="closeConfirmDialog"
+    />
 
     <WeatherPanel
       v-if="showWeather"
@@ -1311,6 +1379,8 @@ onBeforeUnmount(() => {
       :selected-label="selectedLabel"
       :hover="hover"
       :position="selectedPosition"
+      :view-center="viewCenter"
+      :view-azimuth="viewAzimuth"
       :grid-on="gridOn"
       :render-only="renderOnly"
       :walking="walkState !== 'off'"
@@ -1358,6 +1428,7 @@ onBeforeUnmount(() => {
       @import="triggerImport"
       @export="downloadScene"
       @report="downloadReportImage"
+      @clear-data="requestClearData"
       @open-weather="openWeather"
       @open-help="openHelp"
       @open-multiplayer="openMultiplayer"

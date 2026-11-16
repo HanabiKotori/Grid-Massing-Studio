@@ -44,6 +44,7 @@ const emit = defineEmits<{
   (e: 'report'): void
   (e: 'export'): void
   (e: 'import'): void
+  (e: 'clear-data'): void
   (e: 'open-weather'): void
   (e: 'open-help'): void
   (e: 'open-multiplayer'): void
@@ -178,6 +179,7 @@ function cancelName() {
       @report="emit('report')"
       @export="emit('export')"
       @import="emit('import')"
+      @clear-data="emit('clear-data')"
       @open-weather="emit('open-weather')"
       @open-help="emit('open-help')"
       @open-multiplayer="emit('open-multiplayer')"

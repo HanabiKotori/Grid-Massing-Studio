@@ -445,6 +445,20 @@ body {
   color: var(--ink);
 }
 
+.wb-mini-btn:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+.wb-mini-btn:disabled:hover {
+  background: transparent;
+  color: var(--ink-3);
+}
+
+.wb-locate-btn:not(:disabled):hover {
+  color: var(--accent-ink);
+}
+
 .wb-tree {
   flex: 1;
   min-height: 0;
@@ -575,6 +589,11 @@ body {
 .wb-node .del:hover {
   background: rgba(201, 128, 89, 0.16);
   color: #e09a72;
+}
+
+/* 家具节点没有面积 / 编号列，删除按钮直接用自动外边距贴到最右侧 */
+.wb-node.lv4 .del {
+  margin-left: auto;
 }
 
 .wb-node .sw {
@@ -1884,6 +1903,23 @@ body {
   color: var(--ink);
 }
 
+.mv-row.danger {
+  color: #e08a7a;
+}
+
+.mv-row.danger .num {
+  color: #c97668;
+}
+
+.tool-menu .tool-btn.danger {
+  color: #e08a7a;
+}
+
+.tool-menu .tool-btn.danger:hover {
+  background: rgba(195, 79, 69, 0.12);
+  color: #f0a092;
+}
+
 .mv-row .sw {
   width: 6px;
   height: 6px;
@@ -2178,6 +2214,16 @@ body {
   font-family: var(--mono);
   font-size: 9.5px;
   color: var(--ink-3);
+}
+
+.wb-coord-label {
+  color: var(--ink-3);
+}
+
+.wb-coord-sep {
+  width: 1px;
+  height: 10px;
+  background: var(--line);
 }
 
 .wb-save {

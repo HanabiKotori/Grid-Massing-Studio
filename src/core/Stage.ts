@@ -171,6 +171,8 @@ export interface StageOptions {
   onMoveInfras?: (targets: { id: string; x: number; z: number; rotation: number }[]) => void
   /** 世界北方向在屏幕上的角度：0 为向上，正值顺时针 */
   onNorthAngle?: (deg: number) => void
+  /** 画布中心的世界坐标与相机方位角（正北 0°，顺时针） */
+  onViewInfo?: (info: { x: number; y: number; z: number; azimuth: number }) => void
   /** 模拟时间进度：0 = 午夜，0.5 = 正午 */
   onSunTime?: (progress: number) => void
   /** 画质变化：auto 为 true 表示帧率过低自动降级 */
@@ -606,10 +608,19 @@ export class Stage {
   private shadowUpdateAt = 0
   private lastCompassAt = 0
   private lastCompassDeg = Number.NaN
+  private viewForward = new THREE.Vector3()
+  private viewUp = new THREE.Vector3()
+  private lastViewCenter = new THREE.Vector3()
+  private lastViewAzimuth = Number.NaN
+  private viewInfoReady = false
   private lastLabelAt = 0
   private lastLabelCamera = new THREE.Matrix4()
   private labelCameraReady = false
   private areaProbe = new THREE.Vector3()
+  private axisGizmo: HTMLCanvasElement | null = null
+  private axisGizmoCtx: CanvasRenderingContext2D | null = null
+  private axisGizmoVisible = false
+  private axisGizmoHideTimer: number | null = null
 
   private groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
   private raycaster = new THREE.Raycaster()
@@ -693,6 +704,8 @@ export class Stage {
   private venueXray = false
   /** 摆放家具时，标准展台顶板 / 脚手架顶棚半透明 */
   private boothTopsXray = false
+  /** 当前选中的家具所属展台；仅这些展台顶面半透明 */
+  private selectedFurnitureBoothIds = new Set<string>()
 
   // 基础设施
   private infras: Infra[] = []
@@ -939,6 +952,10 @@ export class Stage {
     this.controls.maxPolarAngle = Math.PI / 2 - 0.02
     this.controls.target.set(0, 2, 0)
     this.controls.update()
+    this.setupAxisGizmo()
+    this.controls.addEventListener('start', this.onCameraControlStart)
+    this.controls.addEventListener('change', this.onCameraControlChange)
+    this.controls.addEventListener('end', this.onCameraControlEnd)
 
     // 光照：动态太阳主光（形成体块明暗面） + 天光补光
     const hemi = new THREE.HemisphereLight(0xffffff, 0xc9c4b8, 0.8)
@@ -1259,6 +1276,20 @@ export class Stage {
     const heading = (Math.atan2(this.northForward.x, -this.northForward.z) * 180) / Math.PI
     this.lastNorthDeg = -heading
     return this.lastNorthDeg
+  }
+
+  /** 相机方位角：正北 0°，顺时针；俯视时用屏幕上方方向兜底 */
+  private viewAzimuthDeg(): number {
+    this.camera.getWorldDirection(this.viewForward)
+    const len = Math.hypot(this.viewForward.x, this.viewForward.z)
+    let bearing: number
+    if (len >= 1e-4) {
+      bearing = Math.atan2(this.viewForward.x, -this.viewForward.z)
+    } else {
+      this.viewUp.set(0, 1, 0).applyQuaternion(this.camera.quaternion)
+      bearing = Math.atan2(this.viewUp.x, -this.viewUp.z)
+    }
+    return ((bearing * 180) / Math.PI + 360) % 360
   }
 
   // ---------- 数据 ----------
@@ -1998,7 +2029,9 @@ export class Stage {
     this.refreshPickables()
     this.setSelected(this.selectedIds)
     this.refreshDimensions()
-    if (this.boothTopsXray) this.applyBoothTopsXray()
+    if (this.boothTopsXray || this.selectedFurnitureBoothIds.size) {
+      this.applyBoothTopsXray()
+    }
   }
 
   /** 展台类型 / 高度变化后，让家具重新落在对应的台面上 */
@@ -2021,13 +2054,22 @@ export class Stage {
   }
 
   private applyBoothTopsXray() {
-    const on = this.boothTopsXray
-    const roots: THREE.Object3D[] = [
+    const selectedRoots = new Set<THREE.Object3D>()
+    for (const id of this.selectedFurnitureBoothIds) {
+      const spec = this.boothSpecs.get(id)
+      const gid = spec?.groupId
+      const root =
+        (gid ? this.groupMeshes.get(gid) : undefined) ?? this.boothGroups.get(id)
+      if (root) selectedRoots.add(root)
+    }
+
+    const roots = new Set<THREE.Object3D>([
       ...this.boothGroups.values(),
       ...this.groupMeshes.values(),
-    ]
+    ])
 
     for (const root of roots) {
+      const on = this.boothTopsXray || selectedRoots.has(root)
       root.traverse((o) => {
         const mesh = o as THREE.Mesh
         if (!mesh.isMesh) return
@@ -2048,6 +2090,15 @@ export class Stage {
         mesh.castShadow = on ? false : (mesh.userData.baseCastShadow as boolean)
       })
     }
+  }
+
+  /** 家具所在展台：合并组 / 普通展台均可 */
+  private boothForFurniture(it: Infra): Booth | null {
+    for (const booth of this.boothSpecs.values()) {
+      if (booth.points.length < 3) continue
+      if (pointInPolygon({ x: it.x, z: it.z }, booth.points)) return booth
+    }
+    return null
   }
 
   private addBoothMesh(b: Booth, edgeColor?: number, markOverride?: BoothMark | null) {
@@ -2241,6 +2292,17 @@ export class Stage {
       this.infraBoxes.set(id, helper)
       this.scene.add(helper)
     }
+
+    // 选中家具时，仅把其所在展台的顶板 / 顶棚变为半透明
+    const furnitureBooths = new Set<string>()
+    for (const id of next) {
+      const infra = this.infras.find((item) => item.id === id)
+      if (!infra || !isFurnitureKind(infra.kind)) continue
+      const booth = this.boothForFurniture(infra)
+      if (booth) furnitureBooths.add(booth.id)
+    }
+    this.selectedFurnitureBoothIds = furnitureBooths
+    this.applyBoothTopsXray()
   }
 
   private setInfraBoxesVisible(visible: boolean) {
@@ -2819,7 +2881,10 @@ export class Stage {
     for (const bid of this.dragIds(id)) {
       const spec = this.boothSpecs.get(bid)
       const gid = spec?.groupId
-      const mesh = gid ? this.groupMeshes.get(gid) : this.boothGroups.get(bid)
+      // 高度 / 类型不一致的合并组没有 union mesh，需要回退到成员自己的展台网格
+      const mesh =
+        (gid ? this.groupMeshes.get(gid) : undefined) ??
+        this.boothGroups.get(bid)
       if (mesh && !out.includes(mesh)) out.push(mesh)
     }
     return out
@@ -4094,6 +4159,8 @@ export class Stage {
       }
     }
     if (this.mode === 'idle') {
+      // 常态也持续回传鼠标在地面的世界坐标，供底部状态栏显示
+      this.opts.onHover?.(this.groundPoint(e.clientX, e.clientY))
       if (this.pickInfraAt(e.clientX, e.clientY)) {
         this.host.style.cursor = 'pointer'
         return
@@ -6681,6 +6748,108 @@ export class Stage {
     if (this.walkState === 'pick' && this.isTouchDevice) this.viewTop()
   }
 
+  /** 旋转 / 平移视角时显示在画布右下角的 XYZ 坐标指示器 */
+  private setupAxisGizmo() {
+    const canvas = document.createElement('canvas')
+    canvas.className = 'stage-axis-gizmo'
+    canvas.width = 164
+    canvas.height = 164
+    canvas.setAttribute('aria-hidden', 'true')
+    this.host.appendChild(canvas)
+    this.axisGizmo = canvas
+    this.axisGizmoCtx = canvas.getContext('2d')
+  }
+
+  private onCameraControlStart = () => {
+    if (this.axisGizmoHideTimer !== null) {
+      window.clearTimeout(this.axisGizmoHideTimer)
+      this.axisGizmoHideTimer = null
+    }
+    this.axisGizmoVisible = true
+    this.axisGizmo?.classList.add('is-visible')
+    this.drawAxisGizmo()
+  }
+
+  private onCameraControlChange = () => {
+    if (this.axisGizmoVisible) this.drawAxisGizmo()
+  }
+
+  private onCameraControlEnd = () => {
+    if (this.axisGizmoHideTimer !== null) {
+      window.clearTimeout(this.axisGizmoHideTimer)
+    }
+    this.axisGizmoHideTimer = window.setTimeout(() => {
+      this.axisGizmoHideTimer = null
+      this.axisGizmoVisible = false
+      this.axisGizmo?.classList.remove('is-visible')
+    }, 520)
+  }
+
+  private drawAxisGizmo() {
+    const ctx = this.axisGizmoCtx
+    if (!ctx) return
+    const size = 82
+    const center = size / 2
+    const dpr = 2
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, size, size)
+
+    const inverse = this.camera.quaternion.clone().invert()
+    const axes = [
+      { label: 'X', color: '#ff8275', dir: new THREE.Vector3(1, 0, 0) },
+      { label: 'Y', color: '#75d18b', dir: new THREE.Vector3(0, 1, 0) },
+      { label: 'Z', color: '#7aa4ff', dir: new THREE.Vector3(0, 0, 1) },
+    ].map((axis) => {
+      const v = axis.dir.clone().applyQuaternion(inverse)
+      return { ...axis, x: v.x, y: -v.y, z: v.z }
+    })
+    axes.sort((a, b) => a.z - b.z)
+
+    for (const axis of axes) {
+      const flat = Math.hypot(axis.x, axis.y)
+      const ux = flat > 1e-4 ? axis.x / flat : 0
+      const uy = flat > 1e-4 ? axis.y / flat : 0
+      const ex = center + axis.x * 25
+      const ey = center + axis.y * 25
+
+      ctx.strokeStyle = axis.color
+      ctx.fillStyle = axis.color
+      ctx.lineWidth = 2
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(center, center)
+      ctx.lineTo(ex, ey)
+      ctx.stroke()
+
+      if (flat > 0.08) {
+        const ah = 4.8
+        ctx.beginPath()
+        ctx.moveTo(ex, ey)
+        ctx.lineTo(ex - ux * ah - uy * ah * 0.55, ey - uy * ah + ux * ah * 0.55)
+        ctx.lineTo(ex - ux * ah + uy * ah * 0.55, ey - uy * ah - ux * ah * 0.55)
+        ctx.closePath()
+        ctx.fill()
+      }
+
+      ctx.font =
+        '600 10px "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      const lx = flat > 0.08 ? ex + ux * 8 : center + (axis.label === 'X' ? -11 : 11)
+      const ly = flat > 0.08 ? ey + uy * 8 : center - 11
+      // 透明背景下给标签补一圈深色描边，避免落在浅色模型或天空上看不清
+      ctx.lineWidth = 2.5
+      ctx.strokeStyle = 'rgba(8, 10, 14, 0.58)'
+      ctx.strokeText(axis.label, lx, ly)
+      ctx.fillText(axis.label, lx, ly)
+    }
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)'
+    ctx.beginPath()
+    ctx.arc(center, center, 2.1, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
   private updateGateAnimations(now: number) {
     if (!this.gateAnims.size) return
     for (const [id, anim] of [...this.gateAnims]) {
@@ -6760,6 +6929,27 @@ export class Stage {
         this.lastCompassDeg = deg
         this.opts.onNorthAngle?.(deg)
       }
+
+      // 状态栏画布中心坐标 + 相机方位角
+      if (this.walkState === 'off') {
+        const center = this.controls.target
+        const azimuth = this.viewAzimuthDeg()
+        if (
+          !this.viewInfoReady ||
+          center.distanceToSquared(this.lastViewCenter) > 1e-4 ||
+          Math.abs(azimuth - this.lastViewAzimuth) >= 0.05
+        ) {
+          this.viewInfoReady = true
+          this.lastViewCenter.copy(center)
+          this.lastViewAzimuth = azimuth
+          this.opts.onViewInfo?.({
+            x: center.x,
+            y: center.y,
+            z: center.z,
+            azimuth,
+          })
+        }
+      }
     }
 
     this.renderer.render(this.scene, this.camera)
@@ -6788,6 +6978,16 @@ export class Stage {
     this.clearUnderlay()
     this.walkState = 'off'
     if (document.pointerLockElement === el) document.exitPointerLock()
+    this.controls.removeEventListener('start', this.onCameraControlStart)
+    this.controls.removeEventListener('change', this.onCameraControlChange)
+    this.controls.removeEventListener('end', this.onCameraControlEnd)
+    if (this.axisGizmoHideTimer !== null) {
+      window.clearTimeout(this.axisGizmoHideTimer)
+      this.axisGizmoHideTimer = null
+    }
+    this.axisGizmo?.remove()
+    this.axisGizmo = null
+    this.axisGizmoCtx = null
     this.controls.dispose()
     this.clearLabels()
     this.clearInfraLabels()

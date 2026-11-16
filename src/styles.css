@@ -70,6 +70,38 @@ input {
     radial-gradient(100% 100% at 50% 50%, rgba(30, 32, 38, 0) 62%, rgba(30, 32, 38, 0.08) 100%);
 }
 
+.stage-axis-gizmo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  width: 82px;
+  height: 82px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.97);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.stage-axis-gizmo.is-visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* 工作台有 “viewport canvas 100%” 的通用规则，指示器需要更高优先级 */
+.app.wb .viewport canvas.stage-axis-gizmo {
+  width: 82px !important;
+  height: 82px !important;
+}
+
+@media (max-width: 760px) {
+  .stage-axis-gizmo,
+  .app.wb .viewport canvas.stage-axis-gizmo {
+    width: 70px !important;
+    height: 70px !important;
+  }
+}
+
 /* ---------- 品牌 ---------- */
 
 .brand {
@@ -677,6 +709,18 @@ input {
 
 .btn.dark:hover {
   background: #000;
+}
+
+.btn.danger {
+  background: #c34f45;
+  border-color: #c34f45;
+  color: #fff;
+  box-shadow: 0 6px 14px -8px rgba(195, 79, 69, 0.85);
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: #a83f37;
+  border-color: #a83f37;
 }
 
 .btn.w-full {
@@ -1678,6 +1722,11 @@ input[type='range']::-moz-range-thumb {
   place-items: center;
   background: rgba(24, 26, 30, 0.26);
   backdrop-filter: blur(3px);
+}
+
+.confirm-mask {
+  position: fixed;
+  z-index: 200;
 }
 
 .modal {

@@ -45,6 +45,7 @@ const emit = defineEmits<{
   (e: 'report'): void
   (e: 'export'): void
   (e: 'import'): void
+  (e: 'clear-data'): void
   (e: 'open-weather'): void
   (e: 'open-help'): void
   (e: 'open-multiplayer'): void
@@ -280,6 +281,14 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
           >
             导入
           </button>
+          <button
+            v-if="!renderOnly"
+            class="tool-btn danger"
+            role="menuitem"
+            @click="emit('clear-data')"
+          >
+            清空
+          </button>
         </div>
       </div>
 
@@ -447,6 +456,14 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
           @click="emit('import')"
         >
           导入
+        </button>
+        <button
+          v-if="!renderOnly"
+          class="tool-btn danger"
+          role="menuitem"
+          @click="emit('clear-data')"
+        >
+          清空
         </button>
       </template>
     </div>
