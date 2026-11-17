@@ -19,6 +19,12 @@ import {
   type MassingOpening,
 } from './build'
 import { OPEN_FLOOR_HEIGHT, boothKindOf } from './booth'
+import {
+  fitGroupOffset,
+  presetFitRadius,
+  presetItemsAt,
+  type FurniturePreset,
+} from './furniturePreset'
 import { groupColor } from './groupColor'
 import {
   ELEVATOR_DEFAULT_COUNT,
@@ -199,6 +205,8 @@ export interface StageOptions {
   ) => void
   /** 复制展台组后点击落位，参数为新组中心 */
   onPlacePaste?: (center: Pt) => void
+  /** 家具组合预设 / 组合复制落位，参数为组合中心与整体朝向 */
+  onPlacePreset?: (spot: { x: number; z: number; rotation: number }) => void
   onMoveInfra?: (id: string, x: number, z: number, rotation: number) => void
   /** 相邻基础设施整体拖动后的落位 */
   onMoveInfras?: (targets: { id: string; x: number; z: number; rotation: number }[]) => void
@@ -750,6 +758,16 @@ export class Stage {
   private pasteTarget: Pt | null = null
   private pasteBaseBox: SnapBox | null = null
   private pasteTargets: SnapBox[] = []
+  /** 家具组合落位：整组幽灵、组合数据与当前可行落点 */
+  private presetGhost: THREE.Group | null = null
+  private presetSpec: FurniturePreset | null = null
+  private presetRotation = 0
+  private presetSpot: { x: number; z: number; rotation: number } | null = null
+  private presetRaw: Pt | null = null
+  private presetGhostMats: {
+    mesh: THREE.MeshStandardMaterial[]
+    line: THREE.LineBasicMaterial[]
+  } = { mesh: [], line: [] }
   private snapGuide: THREE.Line | null = null
   private infraPlaceWidth = 1
   private infraPlaceDepth = 1
@@ -762,8 +780,14 @@ export class Stage {
   }[] = []
   private boothLabelsVisible = true
   private infraLabelsVisible = false
+  /** 家具名称单独开关，默认关闭，避免小件家具名称铺满画面 */
+  private furnitureLabelsVisible = false
   private presentation = false
-  private labelsBeforePresentation = { booth: true, infra: true }
+  private labelsBeforePresentation = {
+    booth: true,
+    infra: true,
+    furniture: false,
+  }
   private areaLabels: CSS2DObject[] = []
   /** 过道净宽标注：独立分组，便于整体开关 */
   /** 视口尺寸突变时的过渡快照层 */
@@ -811,7 +835,11 @@ export class Stage {
     hostHeight?: number
   } | null = null
   private infraDrag: InfraDragState | null = null
-  private infraLabels: { obj: CSS2DObject; line: THREE.Line }[] = []
+  private infraLabels: {
+    obj: CSS2DObject
+    line: THREE.Line
+    furniture: boolean
+  }[] = []
 
   // 第一人称出入口交互
   private walkForward = new THREE.Vector3()
@@ -1790,10 +1818,11 @@ export class Stage {
     this.labels = []
   }
 
-  /** 同时控制展台和基础设施名称 */
+  /** 同时控制展台、基础设施和家具名称 */
   setLabelsVisible(visible: boolean) {
     this.setBoothLabelsVisible(visible)
     this.setInfraLabelsVisible(visible)
+    this.setFurnitureLabelsVisible(visible)
   }
 
   setBoothLabelsVisible(visible: boolean) {
@@ -1806,7 +1835,18 @@ export class Stage {
 
   setInfraLabelsVisible(visible: boolean) {
     this.infraLabelsVisible = visible
-    for (const { obj, line } of this.infraLabels) {
+    for (const { obj, line, furniture } of this.infraLabels) {
+      if (furniture) continue
+      obj.visible = visible
+      line.visible = visible
+    }
+  }
+
+  /** 家具名称单独开关：家具标签更贴近物件顶部，避免整片标签飘在半空 */
+  setFurnitureLabelsVisible(visible: boolean) {
+    this.furnitureLabelsVisible = visible
+    for (const { obj, line, furniture } of this.infraLabels) {
+      if (!furniture) continue
       obj.visible = visible
       line.visible = visible
     }
@@ -2430,22 +2470,25 @@ export class Stage {
     this.infraLabels = []
   }
 
-  /** 基础设施名称标签：挂在体块上，拖动时随之移动 */
+  /** 基础设施 / 家具名称标签：挂在体块上，拖动时随之移动 */
   private addInfraLabel(group: THREE.Group, it: Infra) {
-    // 家具尺寸小、数量多，名称只在右侧结构面板中显示
-    if (isFurnitureKind(it.kind)) return
-
+    const furniture = isFurnitureKind(it.kind)
     const el = document.createElement('div')
-    el.className = 'booth-label infra-label'
+    el.className = furniture
+      ? 'booth-label infra-label furniture-label'
+      : 'booth-label infra-label'
     el.textContent = it.name
 
     const labelBase =
       it.kind === 'window' ? (it.sill ?? WINDOW_SILL) + it.height : it.height
-    const top = labelBase + 1.25
+    // 家具矮小，引线只留很短一段；其他设施沿用原来的 1.25m
+    const top = labelBase + (furniture ? 0.32 : 1.25)
     const obj = new CSS2DObject(el)
     obj.position.set(0, top, 0)
     obj.center.set(0.5, 1)
-    obj.visible = this.infraLabelsVisible
+    obj.visible = furniture
+      ? this.furnitureLabelsVisible
+      : this.infraLabelsVisible
     group.add(obj)
 
     const line = new THREE.Line(
@@ -2461,11 +2504,11 @@ export class Stage {
       }),
     )
     line.name = 'label-leader'
-    line.visible = this.infraLabelsVisible
+    line.visible = obj.visible
     line.renderOrder = 6
     group.add(line)
 
-    this.infraLabels.push({ obj, line })
+    this.infraLabels.push({ obj, line, furniture })
   }
 
   setSelectedInfra(id: string | null) {
@@ -2731,6 +2774,157 @@ export class Stage {
       (this.infraPlaceRotation + Math.PI / 2) % (Math.PI * 2)
     if (this.infraSpot) this.infraSpot.rotation = this.infraPlaceRotation
     if (this.infraGhost) this.infraGhost.rotation.y = this.infraPlaceRotation
+  }
+
+  /** 进入家具组合落位：整组幽灵跟随鼠标，落点自动避开展台边界与既有对象 */
+  startPresetPlace(preset: FurniturePreset) {
+    this.stopPresetPlace()
+    if (!preset.items.length) return
+    this.setBoothTopsXray(true)
+    this.presetSpec = preset
+    this.presetRotation = 0
+    this.presetSpot = null
+    this.presetRaw = null
+    // 落位期间右键用于旋转整组，禁用 OrbitControls 的右键平移
+    this.prevRightMouse = this.controls.mouseButtons.RIGHT
+    this.controls.mouseButtons.RIGHT = this.spaceNav ? THREE.MOUSE.PAN : undefined
+
+    const root = new THREE.Group()
+    root.name = 'preset-ghost'
+    for (const item of preset.items) {
+      root.add(
+        buildInfra(
+          {
+            id: 'ghost',
+            kind: item.kind,
+            name: '',
+            x: 0,
+            z: 0,
+            rotation: item.rotation,
+            width: item.width,
+            depth: item.depth,
+            height: item.height,
+          },
+          true,
+        ),
+      )
+    }
+    root.visible = false
+    this.previewRoot.add(root)
+    this.presetGhost = root
+    this.collectPresetGhostMats()
+    this.applyPresetRotation()
+    this.host.style.cursor = 'crosshair'
+  }
+
+  stopPresetPlace() {
+    if (!this.presetSpec && !this.presetGhost) return
+    this.presetSpec = null
+    this.presetRotation = 0
+    this.presetSpot = null
+    this.presetRaw = null
+    this.controls.mouseButtons.RIGHT = this.prevRightMouse ?? THREE.MOUSE.PAN
+    this.prevRightMouse = undefined
+    this.snapRing.visible = false
+    if (this.presetGhost) {
+      this.previewRoot.remove(this.presetGhost)
+      disposeDeep(this.presetGhost)
+      this.presetGhost = null
+    }
+    this.presetGhostMats = { mesh: [], line: [] }
+    this.setBoothTopsXray(false)
+    this.host.style.cursor = this.mode === 'draw' ? 'crosshair' : 'default'
+  }
+
+  /** 缓存幽灵材质，落点非法时整组变红提示 */
+  private collectPresetGhostMats() {
+    const mesh: THREE.MeshStandardMaterial[] = []
+    const line: THREE.LineBasicMaterial[] = []
+    this.presetGhost?.traverse((obj) => {
+      const target = obj as THREE.Mesh
+      const list = Array.isArray(target.material)
+        ? target.material
+        : target.material
+          ? [target.material]
+          : []
+      for (const m of list) {
+        if (m instanceof THREE.MeshStandardMaterial) {
+          if (!mesh.includes(m)) mesh.push(m)
+        } else if (m instanceof THREE.LineBasicMaterial) {
+          if (!line.includes(m)) line.push(m)
+        }
+      }
+    })
+    this.presetGhostMats = { mesh, line }
+  }
+
+  /** 组合内部相对位置按当前整体朝向重排 */
+  private applyPresetRotation() {
+    const root = this.presetGhost
+    const spec = this.presetSpec
+    if (!root || !spec) return
+    const cos = Math.cos(this.presetRotation)
+    const sin = Math.sin(this.presetRotation)
+    spec.items.forEach((item, i) => {
+      const child = root.children[i]
+      if (!child) return
+      child.position.set(
+        item.x * cos + item.z * sin,
+        0,
+        -item.x * sin + item.z * cos,
+      )
+      child.rotation.y = item.rotation + this.presetRotation
+    })
+  }
+
+  private setPresetGhostValid(valid: boolean) {
+    for (const m of this.presetGhostMats.mesh) {
+      m.color.set(valid ? 0xdbe4ff : 0xffc7c2)
+    }
+    for (const m of this.presetGhostMats.line) {
+      m.color.set(valid ? 0x2f5fe0 : 0xd8503f)
+    }
+  }
+
+  private updatePresetGhost(raw: Pt | null) {
+    const root = this.presetGhost
+    const spec = this.presetSpec
+    if (!root || !spec) return
+    if (!raw) {
+      root.visible = false
+      this.presetSpot = null
+      this.snapRing.visible = false
+      this.updateSnapGuide(null)
+      return
+    }
+
+    this.presetRaw = raw
+    const items = presetItemsAt(spec, raw.x, raw.z, this.presetRotation)
+    const fit = fitGroupOffset(
+      items,
+      [...this.boothSpecs.values()],
+      this.infras,
+      undefined,
+      presetFitRadius(spec),
+    )
+    const cx = Math.round((raw.x + (fit?.dx ?? 0)) * 1000) / 1000
+    const cz = Math.round((raw.z + (fit?.dz ?? 0)) * 1000) / 1000
+    const baseY = this.furnitureBaseYAt(cx, cz)
+    root.visible = true
+    root.position.set(cx, baseY, cz)
+    this.setPresetGhostValid(!!fit)
+    this.presetSpot = fit ? { x: cx, z: cz, rotation: this.presetRotation } : null
+    this.snapRing.visible = !!fit
+    if (fit) this.snapRing.position.set(cx, 0.05, cz)
+    this.updateSnapGuide(null)
+  }
+
+  /** 落位预览中右键：整组旋转 90°，并立即重算落点合法性 */
+  private rotatePresetPlace() {
+    if (!this.presetSpec) return
+    this.presetRotation = (this.presetRotation + Math.PI / 2) % (Math.PI * 2)
+    this.applyPresetRotation()
+    this.updatePresetGhost(this.presetRaw)
   }
 
   private onContextMenu = (e: Event) => {
@@ -3451,6 +3645,7 @@ export class Stage {
       this.rubber.visible = false
       if (this.infraKind) this.stopInfraPlace()
       this.stopBoothPaste()
+      this.stopPresetPlace()
       this.opts.onHover?.(null)
     }
   }
@@ -3719,21 +3914,8 @@ export class Stage {
   }
 
   viewTop() {
-    const src = this.contentPoints()
-    const b = boundsOf(src.points)
-    const cx = (b.minX + b.maxX) / 2
-    const cz = (b.minZ + b.maxZ) / 2
-    const w = Math.max(b.maxX - b.minX, 2)
-    const d = Math.max(b.maxZ - b.minZ, 2)
-    const vFov = (this.camera.fov * Math.PI) / 180
-    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect)
-    // 1.35 的取景余量比原来的 1.9 更紧凑，移动端选点时不至于把场馆缩得太小
-    const dist = Math.max(
-      (d * 1.35) / (2 * Math.tan(vFov / 2)),
-      (w * 1.35) / (2 * Math.tan(hFov / 2)),
-      10,
-    )
-    this.animateCamera(new THREE.Vector3(cx, dist, cz + 0.01), new THREE.Vector3(cx, 0, cz))
+    // 与家具聚焦共用同一套俯视取景：1.35 的边距比原来的 1.9 更紧凑
+    this.focusTop(this.contentPoints().points)
   }
 
   viewIso() {
@@ -3751,8 +3933,39 @@ export class Stage {
     this.fit(booth.points, booth.height, 1.15, 2)
   }
 
+  /** 家具俯视取景：镜头直接落到区域正上方，按区域范围留出边距 */
+  private focusTop(points: Pt[], distanceScale = 1) {
+    const b = boundsOf(points)
+    const cx = (b.minX + b.maxX) / 2
+    const cz = (b.minZ + b.maxZ) / 2
+    const w = Math.max(b.maxX - b.minX, 2)
+    const d = Math.max(b.maxZ - b.minZ, 2)
+    const vFov = (this.camera.fov * Math.PI) / 180
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect)
+    const dist =
+      Math.max(
+        (d * 1.35) / (2 * Math.tan(vFov / 2)),
+        (w * 1.35) / (2 * Math.tan(hFov / 2)),
+        10,
+      ) * distanceScale
+    this.animateCamera(
+      new THREE.Vector3(cx, dist, cz + 0.01),
+      new THREE.Vector3(cx, 0, cz),
+    )
+  }
+
   /** 从结构列表选中基础设施时，将视角聚焦到该设施 */
   focusInfra(id: string) {
+    const spec = this.infras.find((it) => it.id === id)
+    // 家具单体很小，俯视它所在的展台既能看清布局，也避免镜头贴到家具前
+    if (spec && isFurnitureKind(spec.kind)) {
+      const host = this.boothForFurniture(spec)
+      if (host) {
+        this.focusTop(host.points, 1.15)
+        return
+      }
+    }
+
     const group = this.infraGroups.get(id)
     if (!group) return
     group.updateMatrixWorld(true)
@@ -3911,7 +4124,7 @@ export class Stage {
         this.down = null
         return
       }
-      if (!this.infraKind && !this.pasteGhost) {
+      if (!this.infraKind && !this.pasteGhost && !this.presetGhost) {
         const p = this.pickGround(e)
         if (p) {
           this.rectDrag = {
@@ -3929,6 +4142,13 @@ export class Stage {
     if (this.mode === 'draw' && this.infraKind && e.button === 2) {
       e.preventDefault()
       this.rotateInfraPlace()
+      return
+    }
+
+    // 家具组合落位时，右键整组旋转 90°
+    if (this.mode === 'draw' && this.presetGhost && e.button === 2) {
+      e.preventDefault()
+      this.rotatePresetPlace()
       return
     }
 
@@ -4158,6 +4378,10 @@ export class Stage {
     if (dist > 6 || performance.now() - down.t > 900) return
 
     if (this.mode === 'draw') {
+      if (this.presetGhost) {
+        if (this.presetSpot) this.opts.onPlacePreset?.(this.presetSpot)
+        return
+      }
       if (this.pasteGhost) {
         if (this.pasteTarget) this.opts.onPlacePaste?.(this.pasteTarget)
         return
@@ -4172,7 +4396,9 @@ export class Stage {
       const additive = e.ctrlKey || e.metaKey || e.shiftKey
       const infraId = this.pickInfraAt(e.clientX, e.clientY)
       if (infraId) {
-        this.opts.onPick?.(infraId, additive, 'infra')
+        // 多选（Ctrl / Shift）已在 pointerdown 立即处理，
+        // 这里再回调一次会把这个刚选中的对象当成“再次点击”而取消
+        if (!additive) this.opts.onPick?.(infraId, false, 'infra')
         return
       }
       this.opts.onPick?.(this.pickBoothAt(e.clientX, e.clientY), additive, 'booth')
@@ -4377,6 +4603,12 @@ export class Stage {
       return
     }
     if (this.mode !== 'draw') return
+    if (this.presetGhost) {
+      const raw = this.groundPoint(e.clientX, e.clientY)
+      this.updatePresetGhost(raw)
+      this.opts.onHover?.(raw)
+      return
+    }
     if (this.pasteGhost) {
       const raw = this.groundPoint(e.clientX, e.clientY)
       if (raw) this.updateBoothPaste(raw)
@@ -4417,6 +4649,7 @@ export class Stage {
 
   private onPointerLeave = () => {
     if (this.walkState !== 'off') return
+    if (this.presetGhost) this.updatePresetGhost(null)
     this.snapRing.visible = false
     this.rubber.visible = false
     this.updateSnapGuide(null)
@@ -5977,10 +6210,12 @@ export class Stage {
     this.labelsBeforePresentation = {
       booth: this.boothLabelsVisible,
       infra: this.infraLabelsVisible,
+      furniture: this.furnitureLabelsVisible,
     }
-    // 展示时只保留展台名称，基础设施名称隐藏
+    // 展示时只保留展台名称，基础设施 / 家具名称隐藏
     this.setBoothLabelsVisible(true)
     this.setInfraLabelsVisible(false)
+    this.setFurnitureLabelsVisible(false)
     this.setPresentationLabels(true)
     if (this.venue) this.fit(this.venue.points, this.venue.height)
     window.setTimeout(() => {
@@ -5997,6 +6232,7 @@ export class Stage {
     this.setPresentationLabels(false)
     this.setBoothLabelsVisible(this.labelsBeforePresentation.booth)
     this.setInfraLabelsVisible(this.labelsBeforePresentation.infra)
+    this.setFurnitureLabelsVisible(this.labelsBeforePresentation.furniture)
   }
 
   /** 预加载汇报图所需的展台 Logo，避免导出时只画出空白底板 */

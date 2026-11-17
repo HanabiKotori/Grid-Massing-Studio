@@ -1,5 +1,6 @@
 import { watch, type Ref, type ShallowRef } from 'vue'
 import type { Stage, WalkState } from '../core/Stage'
+import type { FurniturePreset } from '../core/furniturePreset'
 import type { Booth, BoothKind, EditorMode, Infra, Pt, Underlay, Venue } from '../core/types'
 import type { BoothPasteClipboard } from './useBoothEditing'
 import { kindOfPlaceMode } from './useInfraEditing'
@@ -22,6 +23,8 @@ interface StageSyncOptions {
   gridWanted: Ref<boolean>
   gridOn: Ref<boolean>
   pendingInfraCopy: Ref<Infra | null>
+  /** 正在落位的家具组合 */
+  getPendingPreset: () => FurniturePreset | null
   getStage: () => Stage | null
   getPasteClipboard: () => BoothPasteClipboard | null
   applyVenueXray: () => void
@@ -54,12 +57,21 @@ export function useStageSync(options: StageSyncOptions) {
     if (!stage) return
     const m = options.mode.value
     const placeKind = kindOfPlaceMode(m)
-    if (!placeKind && m !== 'paste-booths') {
+    if (!placeKind && m !== 'paste-booths' && m !== 'place-preset') {
       options.pendingInfraCopy.value = null
     }
     if (!placeKind) stage.stopInfraPlace()
+    if (m !== 'place-preset') stage.stopPresetPlace()
     if (m !== 'idle' && options.walkState.value !== 'off') stage.stopWalk()
-    if (m === 'paste-booths') {
+    if (m === 'place-preset') {
+      const preset = options.getPendingPreset()
+      if (!preset) {
+        options.mode.value = 'idle'
+        return
+      }
+      stage.setMode('draw')
+      stage.startPresetPlace(preset)
+    } else if (m === 'paste-booths') {
       const clip = options.getPasteClipboard()
       if (!clip) {
         options.mode.value = 'idle'

@@ -14,6 +14,7 @@ defineProps<{
   qualityLabel: string
   boothLabelsOn: boolean
   infraLabelsOn: boolean
+  furnitureLabelsOn: boolean
   dimOn: boolean
   areaOn: boolean
   aisleOn?: boolean
@@ -34,6 +35,7 @@ const emit = defineEmits<{
   (e: 'toggle-name-submenu'): void
   (e: 'toggle-booth-labels'): void
   (e: 'toggle-infra-labels'): void
+  (e: 'toggle-furniture-labels'): void
   (e: 'toggle-dimensions'): void
   (e: 'toggle-areas'): void
   (e: 'toggle-aisle'): void
@@ -186,6 +188,15 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
                 @click.stop="emit('toggle-infra-labels')"
               >
                 基础设施
+              </button>
+              <button
+                class="tool-btn"
+                :class="{ on: furnitureLabelsOn }"
+                role="menuitemcheckbox"
+                :aria-checked="furnitureLabelsOn"
+                @click.stop="emit('toggle-furniture-labels')"
+              >
+                家具
               </button>
             </div>
           </div>
@@ -404,6 +415,15 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
             @click.stop="emit('toggle-infra-labels')"
           >
             基础设施
+          </button>
+          <button
+            class="tool-btn"
+            :class="{ on: furnitureLabelsOn }"
+            role="menuitemcheckbox"
+            :aria-checked="furnitureLabelsOn"
+            @click.stop="emit('toggle-furniture-labels')"
+          >
+            家具
           </button>
         </div>
         <button

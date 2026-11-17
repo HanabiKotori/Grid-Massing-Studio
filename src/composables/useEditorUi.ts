@@ -46,6 +46,7 @@ interface EditorUiOptions {
   areaOn: Ref<boolean>
   boothLabelsOn: Ref<boolean>
   infraLabelsOn: Ref<boolean>
+  furnitureLabelsOn: Ref<boolean>
   quality: Ref<QualityLevel>
   sunPlaying: Ref<boolean>
   sunProgress: Ref<number>
@@ -199,6 +200,14 @@ export function useEditorUi(options: EditorUiOptions) {
     options
       .getStage()
       ?.setInfraLabelsVisible(options.infraLabelsOn.value)
+  }
+
+  /** 家具名称：默认关闭，单独控制，避免小件家具标签铺满画面 */
+  function toggleFurnitureLabels() {
+    options.furnitureLabelsOn.value = !options.furnitureLabelsOn.value
+    options
+      .getStage()
+      ?.setFurnitureLabelsVisible(options.furnitureLabelsOn.value)
   }
 
   /** 帮助快捷入口同时控制两类名称 */
@@ -384,6 +393,7 @@ export function useEditorUi(options: EditorUiOptions) {
     closeWeather,
     toggleBoothLabels,
     toggleInfraLabels,
+    toggleFurnitureLabels,
     toggleLabels,
     toggleNameSubmenu,
     toggleAreas,

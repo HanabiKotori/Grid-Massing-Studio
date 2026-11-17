@@ -86,6 +86,8 @@ export function parseMultiplayerScene(raw: unknown): LoadedMultiplayerScene {
     booths,
     infras,
     underlay,
+    // 多人漫游只需要场景本体，预设不参与同步
+    furniturePresets: [],
   })
 
   return { sceneJson, venue, booths, infras, underlay, weather, sunProgress, venueName }

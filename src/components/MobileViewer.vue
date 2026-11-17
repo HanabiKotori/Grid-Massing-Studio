@@ -24,6 +24,7 @@ const props = defineProps<{
   areaOn: boolean
   boothLabelsOn: boolean
   infraLabelsOn: boolean
+  furnitureLabelsOn: boolean
   weather: WeatherKind
   weatherOn: boolean
   liveWeather: LiveWeather | null
@@ -42,6 +43,7 @@ const emit = defineEmits<{
   (e: 'toggle-areas'): void
   (e: 'toggle-booth-labels'): void
   (e: 'toggle-infra-labels'): void
+  (e: 'toggle-furniture-labels'): void
   (e: 'toggle-underlay'): void
   (e: 'choose-quality', level: QualityLevel): void
   (e: 'select', id: string): void
@@ -199,6 +201,11 @@ function onGrabDown(e: PointerEvent) {
           </button>
           <button type="button" class="mv-switch" :class="{ on: infraLabelsOn }" @click="emit('toggle-infra-labels')">
             基础设施名称
+            <span class="sp" />
+            <span class="dot" />
+          </button>
+          <button type="button" class="mv-switch" :class="{ on: furnitureLabelsOn }" @click="emit('toggle-furniture-labels')">
+            家具名称
             <span class="sp" />
             <span class="dot" />
           </button>

@@ -669,6 +669,35 @@ body {
   font-weight: 400;
 }
 
+/* 家具目录：整行点击即可进入放置，右侧保留 + 入口 */
+.wb-furniture-add {
+  cursor: pointer;
+}
+
+.wb-furniture-add:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.wb-furniture-add.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.wb-furniture-add.disabled:hover {
+  background: transparent;
+}
+
+.wb-furniture-add .wb-add:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.wb-furniture-add .wb-add:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.13);
+  color: var(--ink);
+}
+
 .wb-add {
   display: grid;
   place-items: center;
@@ -3819,4 +3848,136 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ---------- 左侧：家具预设组合 ---------- */
+
+.wb-preset-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 6px 4px 22px;
+}
+
+.wb-preset-count {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.wb-preset-bar .wb-add:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.wb-preset-bar .wb-add:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.13);
+  color: var(--ink);
+}
+
+.wb-preset-node .nm {
+  flex: 1;
+  min-width: 0;
+}
+
+.wb-preset-node .num {
+  margin-left: 6px;
+  font-size: 10px;
+}
+
+/* 预设删除常驻行尾，避免只靠悬停才能发现 */
+.wb-preset-node .del {
+  display: inline-block;
+  margin-left: 4px;
+}
+
+/* ---------- 右侧：家具预设详情 ---------- */
+
+.wb-right .ap .preset-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0 6px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.wb-right .ap .preset-name-row .name-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 7px;
+}
+
+.wb-right .ap .preset-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 2px 0 8px;
+  list-style: none;
+}
+
+.wb-right .ap .preset-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+}
+
+.wb-right .ap .preset-item .idx {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.wb-right .ap .preset-item .meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.wb-right .ap .preset-item .name-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wb-right .ap .preset-item .name-line .name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.wb-right .ap .preset-item-size {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.wb-right .ap .preset-item-meta {
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.wb-right .ap .preset-card-actions {
+  display: flex;
+  gap: 6px;
+  padding-top: 2px;
 }

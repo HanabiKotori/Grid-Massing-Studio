@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { boothKindOf } from '../core/booth'
+import type { FurniturePreset } from '../core/furniturePreset'
 import { INFRA_LABELS, isFurnitureKind } from '../core/infra'
 import { pointInPolygon, polygonArea } from '../core/polygon'
 import type { Booth, BoothKind, Infra, InfraKind, Venue } from '../core/types'
@@ -12,6 +13,9 @@ const props = defineProps<{
   infras: Infra[]
   selectedIds: string[]
   selectedInfraId: string | null
+  selectedInfraIds: string[]
+  presets: FurniturePreset[]
+  selectedPresetId: string | null
   venueArea: number
   boothArea: number
   coverage: number
@@ -20,15 +24,17 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'select', id: string): void
-  (e: 'select-infra', id: string): void
+  (e: 'select-infra', id: string, additive?: boolean): void
   (e: 'select-venue'): void
   (e: 'draw-venue'): void
   (e: 'request-redraw'): void
   (e: 'draw-booth', kind: BoothKind): void
   (e: 'add-infra', kind: InfraKind): void
-  (e: 'add-furniture', kind: InfraKind, boothId: string): void
   (e: 'delete-booth', id: string): void
   (e: 'delete-infra', id: string): void
+  (e: 'save-preset'): void
+  (e: 'place-preset', preset: FurniturePreset): void
+  (e: 'delete-preset', id: string): void
 }>()
 
 const BOOTH_GROUPS: { kind: BoothKind; label: string }[] = [
@@ -46,13 +52,50 @@ const INFRA_GROUPS: InfraKind[] = [
   'wall',
 ]
 
-const FURNITURE_GROUPS: InfraKind[] = [
-  'chair',
-  'armchair',
-  'sofa',
-  'table-round',
-  'table-square',
+interface FurnitureCategory {
+  key: string
+  label: string
+  kinds: InfraKind[]
+}
+
+/** 左侧家具栏分类：目录按类别新增，已布置家具按类别归档 */
+const FURNITURE_CATEGORIES: FurnitureCategory[] = [
+  {
+    key: 'table-chair',
+    label: '桌椅',
+    kinds: [
+      'meeting-table',
+      'meeting-chair',
+      'bar-table',
+      'bar-stool',
+      'chair',
+      'armchair',
+      'sofa',
+      'table-round',
+      'table-square',
+    ],
+  },
+  {
+    key: 'cabinet',
+    label: '柜子',
+    kinds: ['reception-desk', 'display-case', 'low-cabinet', 'shelf'],
+  },
+  {
+    key: 'other',
+    label: '其他',
+    kinds: [
+      'display-screen',
+      'display-plinth',
+      'display-column',
+      'brochure-stand',
+      'lectern',
+      'plant',
+    ],
+  },
 ]
+
+/** 展台下直接列类型时的顺序：沿用目录分类顺序 */
+const FURNITURE_KIND_ORDER = FURNITURE_CATEGORIES.flatMap((cat) => cat.kinds)
 
 /** 树节点展开状态：缺省按节点类型给出默认值 */
 const open = ref<Record<string, boolean>>({
@@ -60,6 +103,8 @@ const open = ref<Record<string, boolean>>({
   booth: true,
   infra: true,
   furniture: true,
+  'furniture-occupied': true,
+  preset: true,
 })
 
 function isOpen(key: string, fallback = true) {
@@ -75,12 +120,22 @@ function toggle(key: string, fallback = true) {
 const expandAll = ref(true)
 
 function allKeys(): string[] {
-  const keys = ['venue', 'booth', 'infra', 'furniture']
+  const keys = [
+    'venue',
+    'booth',
+    'infra',
+    'furniture',
+    'furniture-occupied',
+    'preset',
+  ]
   for (const g of BOOTH_GROUPS) keys.push('bk-' + g.kind)
   for (const k of INFRA_GROUPS) keys.push('ik-' + k)
+  for (const cat of FURNITURE_CATEGORIES) keys.push('fc-' + cat.key)
   for (const b of props.booths) {
     keys.push('fb-' + b.id)
-    for (const fk of FURNITURE_GROUPS) keys.push('ff-' + b.id + '-' + fk)
+    for (const cat of FURNITURE_CATEGORIES) {
+      for (const fk of cat.kinds) keys.push('fbk-' + b.id + '-' + fk)
+    }
   }
   return keys
 }
@@ -142,13 +197,14 @@ async function locateSelected() {
   if (infra) {
     if (isFurnitureKind(infra.kind)) {
       open.value.furniture = true
+      open.value['furniture-occupied'] = true
       const owner = props.booths.find(
         (b) =>
           b.points.length >= 3 && pointInPolygon({ x: infra.x, z: infra.z }, b.points),
       )
       if (owner) {
         open.value['fb-' + owner.id] = true
-        open.value['ff-' + owner.id + '-' + infra.kind] = true
+        open.value['fbk-' + owner.id + '-' + infra.kind] = true
       }
     } else {
       open.value.infra = true
@@ -164,6 +220,9 @@ async function locateSelected() {
   await nextTick()
   scrollToNode(targetId, true)
 }
+
+// 供 App 的 L 快捷键调用
+defineExpose({ locateSelected })
 
 /* ---------- 数据分组 ---------- */
 
@@ -192,6 +251,25 @@ const infraByKind = computed(() => {
 
 const furnitureAll = computed(() => props.infras.filter((i) => isFurnitureKind(i.kind)))
 
+/** 多选高亮：所有被选中的家具 / 设施都给选中态 */
+const selectedInfraSet = computed(() => new Set(props.selectedInfraIds))
+
+function isInfraOn(id: string) {
+  return selectedInfraSet.value.has(id)
+}
+
+/** 当前多选的家具数量：决定「保存组合 / 整组旋转 / 复制」是否可用 */
+const selectedFurnitureCount = computed(
+  () =>
+    props.infras.filter(
+      (it) => selectedInfraSet.value.has(it.id) && isFurnitureKind(it.kind),
+    ).length,
+)
+
+const canSavePreset = computed(
+  () => !props.renderOnly && selectedFurnitureCount.value >= 2,
+)
+
 const furnitureByBooth = computed(() => {
   const map = new Map<string, Infra[]>()
   for (const b of props.booths) map.set(b.id, [])
@@ -209,9 +287,55 @@ function furnitureOf(boothId: string) {
   return furnitureByBooth.value.get(boothId) ?? []
 }
 
-function furnitureOfKind(boothId: string, kind: InfraKind) {
-  return furnitureOf(boothId).filter((i) => i.kind === kind)
+/** 家具目录：按类别统计全场景数量 */
+function furnitureKindCount(kind: InfraKind) {
+  return furnitureAll.value.filter((it) => it.kind === kind).length
 }
+
+function categoryCount(cat: FurnitureCategory) {
+  return furnitureAll.value.filter((it) => cat.kinds.includes(it.kind)).length
+}
+
+function addFurnitureKind(kind: InfraKind) {
+  if (props.renderOnly || !props.booths.length) return
+  emit('add-infra', kind)
+}
+
+interface OccupiedKind {
+  kind: InfraKind
+  items: Infra[]
+}
+interface OccupiedBooth {
+  booth: Booth
+  items: Infra[]
+  kinds: OccupiedKind[]
+}
+
+/** 「有家具的展台」：展台下直接列具体家具类型（按目录分类顺序排列） */
+const occupiedTree = computed<OccupiedBooth[]>(() => {
+  const rows: OccupiedBooth[] = []
+  for (const booth of props.booths) {
+    const items = furnitureOf(booth.id)
+    if (!items.length) continue
+    const kinds: OccupiedKind[] = []
+    for (const kind of FURNITURE_KIND_ORDER) {
+      const kindItems = items.filter((it) => it.kind === kind)
+      if (kindItems.length) kinds.push({ kind, items: kindItems })
+    }
+    rows.push({ booth, items, kinds })
+  }
+  return rows
+})
+
+/** 家具目录里的全部类型数（用于标题计数） */
+const furnitureKindTotal = computed(() =>
+  FURNITURE_CATEGORIES.reduce((sum, cat) => sum + cat.kinds.length, 0),
+)
+
+/** 场景内实际出现的家具种类数 */
+const placedFurnitureKindCount = computed(
+  () => new Set(furnitureAll.value.map((it) => it.kind)).size,
+)
 
 function infraCount() {
   return props.infras.filter((i) => !isFurnitureKind(i.kind)).length
@@ -260,7 +384,7 @@ watch(
         type="button"
         class="wb-mini-btn wb-locate-btn"
         :disabled="!canLocate"
-        :title="canLocate ? '定位到当前选中对象' : '请先在画布中选中模型'"
+        :title="canLocate ? '定位到当前选中对象 (L)' : '请先在画布中选中模型'"
         aria-label="定位到当前选中对象"
         @click="locateSelected"
       >
@@ -404,9 +528,10 @@ watch(
               :key="it.id"
               type="button"
               class="wb-node lv3"
-              :class="{ on: selectedInfraId === it.id }"
+              :class="{ on: isInfraOn(it.id) }"
               :data-node-id="it.id"
-              @click="emit('select-infra', it.id)"
+              title="Ctrl / Shift 点击可多选"
+              @click="emit('select-infra', it.id, $event.ctrlKey || $event.metaKey || $event.shiftKey)"
             >
               <span class="sw" style="background: #4a4438" />
               <span class="nm">{{ it.name }}</span>
@@ -428,66 +553,193 @@ watch(
         </template>
       </template>
 
-      <!-- 家具：家具 → 展台 → 家具类型 -->
+      <!-- 家具：上方按类别添加，下方按展台归档已布置家具 -->
       <button type="button" class="wb-grp" @click="toggle('furniture')">
         <span class="tri" :class="{ open: isOpen('furniture') }" />
         <b>家具</b>
-        <span class="cnt" :title="`${booths.length} 个展台 · ${furnitureAll.length} 件家具`">
-          {{ booths.length }} 展台
+        <span
+          class="cnt"
+          :title="`可添加 ${furnitureKindTotal} 种家具 · 场景内已放置 ${placedFurnitureKindCount} 种，共 ${furnitureAll.length} 件`"
+        >
+          {{ furnitureKindTotal }} 种 · {{ furnitureAll.length }} 件
         </span>
       </button>
       <template v-if="isOpen('furniture')">
         <div v-if="!booths.length" class="wb-empty sub">家具需要放在展台内部</div>
-        <template v-for="b in booths" :key="'fb-' + b.id">
-          <div class="wb-grp sub" :style="{ '--lv': 1 }" @click="toggle('fb-' + b.id, false)">
-            <span class="tri" :class="{ open: isOpen('fb-' + b.id, false) }" />
-            <b>{{ b.name }}</b>
-            <span class="cnt" :class="{ zero: !furnitureOf(b.id).length }">
-              {{ furnitureOf(b.id).length }}
-            </span>
+
+        <template v-for="cat in FURNITURE_CATEGORIES" :key="'fc-' + cat.key">
+          <div
+            class="wb-grp sub"
+            :style="{ '--lv': 1 }"
+            @click="toggle('fc-' + cat.key, false)"
+          >
+            <span class="tri" :class="{ open: isOpen('fc-' + cat.key, false) }" />
+            <b>{{ cat.label }}</b>
+            <span class="cnt">{{ categoryCount(cat) }}</span>
           </div>
-          <template v-if="isOpen('fb-' + b.id, false)">
-            <template v-for="fk in FURNITURE_GROUPS" :key="fk">
-              <div class="wb-grp sub" :style="{ '--lv': 2 }" @click="toggle('ff-' + b.id + '-' + fk, false)">
-                <span class="tri" :class="{ open: isOpen('ff-' + b.id + '-' + fk, false) }" />
-                <b>{{ INFRA_LABELS[fk] }}</b>
-                <span class="cnt">{{ furnitureOfKind(b.id, fk).length }}</span>
-                <button
-                  v-if="!renderOnly"
-                  type="button"
-                  class="wb-add"
-                  :title="`在 ${b.name} 内新增${INFRA_LABELS[fk]}`"
-                  @click.stop="emit('add-furniture', fk, b.id)"
+          <template v-if="isOpen('fc-' + cat.key, false)">
+            <div
+              v-for="fk in cat.kinds"
+              :key="fk"
+              class="wb-grp sub wb-furniture-add"
+              :class="{ disabled: !booths.length || renderOnly }"
+              :style="{ '--lv': 2 }"
+              :title="
+                !booths.length || renderOnly
+                  ? ''
+                  : `添加${INFRA_LABELS[fk]}：点击后在任意展台内落位`
+              "
+              @click="addFurnitureKind(fk)"
+            >
+              <b>{{ INFRA_LABELS[fk] }}</b>
+              <span class="cnt">{{ furnitureKindCount(fk) }}</span>
+              <button
+                v-if="!renderOnly"
+                type="button"
+                class="wb-add"
+                :disabled="!booths.length"
+                :title="`添加${INFRA_LABELS[fk]}`"
+                @click.stop="emit('add-infra', fk)"
+              >
+                +
+              </button>
+            </div>
+          </template>
+        </template>
+
+        <div
+          class="wb-grp sub"
+          :style="{ '--lv': 1 }"
+          @click="toggle('furniture-occupied')"
+        >
+          <span class="tri" :class="{ open: isOpen('furniture-occupied') }" />
+          <b>有家具的展台</b>
+          <span class="cnt">{{ occupiedTree.length }}</span>
+        </div>
+        <template v-if="isOpen('furniture-occupied')">
+          <div v-if="!occupiedTree.length" class="wb-empty sub">暂无已布置的家具</div>
+          <template v-for="row in occupiedTree" :key="'fb-' + row.booth.id">
+            <div
+              class="wb-grp sub"
+              :style="{ '--lv': 2 }"
+              @click="toggle('fb-' + row.booth.id, false)"
+            >
+              <span class="tri" :class="{ open: isOpen('fb-' + row.booth.id, false) }" />
+              <b>{{ row.booth.name }}</b>
+              <span class="cnt">{{ row.items.length }}</span>
+            </div>
+            <template v-if="isOpen('fb-' + row.booth.id, false)">
+              <template v-for="kindRow in row.kinds" :key="kindRow.kind">
+                <div
+                  class="wb-grp sub"
+                  :style="{ '--lv': 3 }"
+                  @click="
+                    toggle('fbk-' + row.booth.id + '-' + kindRow.kind, false)
+                  "
                 >
-                  +
-                </button>
-              </div>
-              <template v-if="isOpen('ff-' + b.id + '-' + fk, false)">
-                <button
-                  v-for="it in furnitureOfKind(b.id, fk)"
-                  :key="it.id"
-                  type="button"
-                  class="wb-node lv4"
-                  :class="{ on: selectedInfraId === it.id }"
-                  :data-node-id="it.id"
-                  @click="emit('select-infra', it.id)"
-                >
-                  <span class="sw" style="background: #4a4438" />
-                  <span class="nm">{{ it.name }}</span>
                   <span
-                    v-if="!renderOnly"
-                    class="del"
-                    role="button"
-                    title="删除家具"
-                    @click.stop="emit('delete-infra', it.id)"
+                    class="tri"
+                    :class="{
+                      open: isOpen(
+                        'fbk-' + row.booth.id + '-' + kindRow.kind,
+                        false,
+                      ),
+                    }"
+                  />
+                  <b>{{ INFRA_LABELS[kindRow.kind] }}</b>
+                  <span class="cnt">{{ kindRow.items.length }}</span>
+                </div>
+                <template
+                  v-if="
+                    isOpen('fbk-' + row.booth.id + '-' + kindRow.kind, false)
+                  "
+                >
+                  <button
+                    v-for="it in kindRow.items"
+                    :key="it.id"
+                    type="button"
+                    class="wb-node lv4"
+                    :class="{ on: isInfraOn(it.id) }"
+                    :data-node-id="it.id"
+                    title="Ctrl / Shift 点击可多选，多选后可整组拖动 / 旋转 / 复制 / 存为预设"
+                    @click="
+                      emit(
+                        'select-infra',
+                        it.id,
+                        $event.ctrlKey || $event.metaKey || $event.shiftKey,
+                      )
+                    "
                   >
-                    ×
-                  </span>
-                </button>
+                    <span class="sw" style="background: #4a4438" />
+                    <span class="nm">{{ it.name }}</span>
+                    <span
+                      v-if="!renderOnly"
+                      class="del"
+                      role="button"
+                      title="删除家具"
+                      @click.stop="emit('delete-infra', it.id)"
+                    >
+                      ×
+                    </span>
+                  </button>
+                </template>
               </template>
             </template>
           </template>
         </template>
+      </template>
+
+      <!-- 家具预设：多选家具保存的组合，点击后可摆到任意展台 -->
+      <button type="button" class="wb-grp" @click="toggle('preset')">
+        <span class="tri" :class="{ open: isOpen('preset') }" />
+        <b>家具预设</b>
+        <span class="cnt">{{ presets.length }}</span>
+      </button>
+      <template v-if="isOpen('preset')">
+        <div class="wb-preset-bar">
+          <span class="wb-preset-count" :title="`已选 ${selectedFurnitureCount} 件家具`">
+            <template v-if="selectedFurnitureCount > 1">
+              已选 {{ selectedFurnitureCount }} 件家具
+            </template>
+            <template v-else>Ctrl / Shift 多选家具后保存</template>
+          </span>
+          <button
+            v-if="!renderOnly"
+            type="button"
+            class="wb-add"
+            :disabled="!canSavePreset"
+            title="把当前多选的家具保存为组合预设"
+            aria-label="保存家具组合预设"
+            @click="emit('save-preset')"
+          >
+            +
+          </button>
+        </div>
+        <button
+          v-for="p in presets"
+          :key="p.id"
+          type="button"
+          class="wb-node lv2 wb-preset-node"
+          :class="{ on: selectedPresetId === p.id }"
+          :title="`点击后在展台内布置「${p.name}」，右侧可查看组合详情`"
+          @click="emit('place-preset', p)"
+        >
+          <span class="sw" style="background: #4a4438" />
+          <span class="nm">{{ p.name }}</span>
+          <span class="num">{{ p.items.length }} 件</span>
+          <span
+            v-if="!renderOnly"
+            class="del"
+            role="button"
+            title="删除预设"
+            @click.stop="emit('delete-preset', p.id)"
+          >
+            ×
+          </span>
+        </button>
+        <div v-if="!presets.length" class="wb-empty sub">
+          把同一个展台内的多件家具选中，点「+」生成组合；点击组合可查看详情并布置到任意展台
+        </div>
       </template>
     </div>
 

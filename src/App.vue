@@ -38,6 +38,7 @@ import { useScenePersistence } from './composables/useScenePersistence'
 import { useStageSync } from './composables/useStageSync'
 import { useUnderlay } from './composables/useUnderlay'
 import { useInfraEditing } from './composables/useInfraEditing'
+import { useFurniturePresets } from './composables/useFurniturePresets'
 import { useBoothEditing } from './composables/useBoothEditing'
 import { useSceneOperations } from './composables/useSceneOperations'
 import { useEditorUi } from './composables/useEditorUi'
@@ -46,8 +47,10 @@ import {
   useEditorState,
 } from './composables/useEditorState'
 import { BOOTH_KIND_LABELS, boothKindOf } from './core/booth'
+import { isFurnitureKind } from './core/infra'
 import { downloadPlanPdf as buildPlanPdf } from './core/planPdf'
-import type { Booth, InfraKind, Pt, VenueRules } from './core/types'
+import type { FurniturePreset } from './core/furniturePreset'
+import type { Booth, Pt, VenueRules } from './core/types'
 import { DEFAULT_VENUE_RULES } from './core/types'
 import { checkCompliance } from './core/compliance'
 
@@ -79,6 +82,7 @@ const {
   venueXray,
   boothLabelsOn,
   infraLabelsOn,
+  furnitureLabelsOn,
   areaOn,
   venueNoTop,
   toastMsg,
@@ -174,12 +178,18 @@ const weatherLensOn = computed(
     LENS_WEATHER.has(weather.value),
 )
 const importInput = ref<HTMLInputElement | null>(null)
+/** 右侧属性面板正在查看的家具预设 */
+const selectedPresetId = ref<string | null>(null)
 watch(mobileDocked, (on) => {
   if (!on) dockExpanded.value = false
 })
 
 const router = useRouter()
 let stage: Stage | null = null
+/** 左侧结构树：供 L 快捷键触发“定位到选中对象” */
+const sceneTreeRef = ref<{
+  locateSelected: () => void | Promise<void>
+} | null>(null)
 
 let seq = 0
 let infraSeq = 0
@@ -308,6 +318,11 @@ const {
   restoringProject,
   appBooting,
   clearInfraSelection,
+  getPresets: () => presets.value,
+  applyScenePresets: (raw) => setPresetsFromScene(raw),
+  clearPresetSelection: () => {
+    selectedPresetId.value = null
+  },
   setSuppressAutoWeather,
   toast,
   getStage: () => stage,
@@ -345,6 +360,7 @@ const {
   closeWeather,
   toggleBoothLabels,
   toggleInfraLabels,
+  toggleFurnitureLabels,
   toggleNameSubmenu,
   toggleAreas,
   toggleGrid,
@@ -382,6 +398,7 @@ const {
   areaOn,
   boothLabelsOn,
   infraLabelsOn,
+  furnitureLabelsOn,
   quality,
   sunPlaying,
   sunProgress,
@@ -400,12 +417,15 @@ const {
   selectInfra,
   renameInfra,
   deleteInfra,
+  deleteInfraSelection,
   updateInfraDims,
   updateInfraMaterial,
   moveInfra,
   moveInfraGroup,
   nudgeInfra,
+  nudgeInfraGroup,
   rotateInfra,
+  rotateInfraGroup,
   toggleGate,
   setGateOpenMode,
   changeInfraCount,
@@ -430,21 +450,168 @@ const {
   },
 })
 
-function selectInfraFromPanel(id: string) {
+// ---------- 家具组合预设 ----------
+
+const {
+  presets,
+  pendingPreset,
+  savePresetFromSelection,
+  removePreset,
+  renamePreset,
+  setPresetsFromScene,
+  beginPresetPlace,
+  placePresetAt,
+  cancelPresetPlacement,
+  copySelectedFurniture,
+} = useFurniturePresets({
+  infras,
+  booths,
+  mode,
+  selectedIds,
+  selectedInfraIds,
+  setInfraSelection,
+  clearInfraSelection,
+  renderOnly,
+  toast,
+  nextInfraSeq: () => {
+    infraSeq += 1
+    return infraSeq
+  },
+})
+
+/** 右侧属性面板当前查看的家具预设 */
+const selectedPreset = computed(
+  () => presets.value.find((p) => p.id === selectedPresetId.value) ?? null,
+)
+
+/** 左侧预设行 / 属性面板「布置」：选中预设并进入落位 */
+function selectPresetFromPanel(preset: FurniturePreset) {
+  if (mode.value === 'place-preset') cancelPresetPlacement()
+  if (!renderOnly.value && mode.value !== 'idle') {
+    beginPresetPlace(preset)
+    return
+  }
+  selectedPresetId.value = preset.id
+  selectedIds.value = []
+  clearInfraSelection()
+  if (!renderOnly.value) beginPresetPlace(preset)
+}
+
+watch(presets, (list) => {
+  if (
+    selectedPresetId.value &&
+    !list.some((p) => p.id === selectedPresetId.value)
+  ) {
+    selectedPresetId.value = null
+  }
+})
+
+/** 删除预设：如果正在布置它，先结束落位，避免留下幽灵 */
+function deletePreset(id: string) {
+  if (pendingPreset.value?.id === id) cancelPresetPlacement()
+  removePreset(id)
+}
+
+// 进入绘制 / 放置其他对象时，离开预设详情
+watch(mode, (m) => {
+  if (m !== 'idle' && m !== 'place-preset') selectedPresetId.value = null
+})
+
+// 布置完成后新家具会被选中，此时右侧切回家具属性
+watch(selectedInfraId, (id) => {
+  if (id) selectedPresetId.value = null
+})
+watch(selectedIds, (ids) => {
+  if (ids.length) selectedPresetId.value = null
+})
+
+/** 右键旋转：多选家具时整组旋转，否则只转单件 */
+function rotateInfraOrSelection(id: string, dir: 1 | -1) {
+  const ids = selectedInfraIds.value
+  if (ids.length > 1 && ids.includes(id)) {
+    const items = infras.value.filter((it) => ids.includes(it.id))
+    const furnitureGroup =
+      items.length === ids.length && items.every((it) => isFurnitureKind(it.kind))
+    if (furnitureGroup) {
+      rotateInfraGroup(ids, dir)
+      return
+    }
+  }
+  rotateInfra(id, dir)
+}
+
+/** Ctrl+C：多选家具整组复制并进入落位，单件沿用原有复制 */
+function copyInfraOrSelection() {
+  const ids = selectedInfraIds.value
+  if (ids.length > 1) {
+    const items = infras.value.filter((it) => ids.includes(it.id))
+    const furnitureGroup =
+      items.length === ids.length && items.every((it) => isFurnitureKind(it.kind))
+    if (furnitureGroup) {
+      copySelectedFurniture()
+      return
+    }
+  }
+  copySelectedInfra()
+}
+
+function deleteSelectedFurniture() {
+  const ids = selectedInfraIds.value.length
+    ? selectedInfraIds.value
+    : selectedInfraId.value
+      ? [selectedInfraId.value]
+      : []
+  if (ids.length) deleteInfraSelection(ids)
+}
+
+function nudgeSelectedFurniture(dx: number, dz: number) {
+  const ids = selectedInfraIds.value.length
+    ? selectedInfraIds.value
+    : selectedInfraId.value
+      ? [selectedInfraId.value]
+      : []
+  if (ids.length > 1) nudgeInfraGroup(ids, dx, dz)
+  else if (ids.length === 1) nudgeInfra(ids[0], dx, dz)
+}
+
+/** Esc：家具组合落位与其他设施放置分别收尾 */
+function cancelPlacing() {
+  if (mode.value === 'place-preset') cancelPresetPlacement()
+  else cancelInfraPlacement()
+}
+
+function selectInfraFromPanel(id: string, additive = false) {
+  selectedPresetId.value = null
+  if (additive) {
+    handlePick(id, true, 'infra')
+    return
+  }
   selectInfra(id)
   stage?.focusInfra(id)
 }
 
 function selectBoothFromPanel(id: string, additive = false) {
+  selectedPresetId.value = null
   handlePick(id, additive, 'booth')
   stage?.focusBooth(id)
 }
 
 /** 点击结构树里的场馆名：取消选中，镜头回到全景 */
 function selectVenueNode() {
+  selectedPresetId.value = null
   selectedIds.value = []
   clearInfraSelection()
   fitView()
+}
+
+/** 画布点选：离开预设详情，交给原来的选中逻辑 */
+function handleStagePick(
+  id: string | null,
+  additive: boolean,
+  kind?: 'booth' | 'infra',
+) {
+  selectedPresetId.value = null
+  handlePick(id, additive, kind)
 }
 
 /** 结构树删除展台：走统一确认弹窗，避免误删连带家具与落地设施 */
@@ -556,8 +723,9 @@ const {
 })
 
 // IndexedDB 自动保存：名称、场景、底图、天气和太阳时间一起保留
-watch([venue, booths, infras, underlay, venueName, weather, weatherOn], () =>
-  scheduleAutosave(),
+watch(
+  [venue, booths, infras, underlay, venueName, weather, weatherOn, presets],
+  () => scheduleAutosave(),
 )
 
 // 只有用户拖动时间轴时才落盘：播放推进不写盘，拖动结束 1.2s 后保存一次
@@ -871,6 +1039,7 @@ function loadSample() {
   draftPoints.value = []
   boothLabelsOn.value = false
   infraLabelsOn.value = false
+  furnitureLabelsOn.value = false
   stage?.setLabelsVisible(false)
   toast(`W1 示例场景已载入 · ${booths.value.length} 个展台 / ${infras.value.length} 个设施`)
 }
@@ -895,6 +1064,7 @@ const { dispose: disposeStageSync } = useStageSync({
   gridWanted,
   gridOn,
   pendingInfraCopy,
+  getPendingPreset: () => pendingPreset.value,
   getStage: () => stage,
   getPasteClipboard,
   applyVenueXray,
@@ -1037,22 +1207,23 @@ const { onKey } = useEditorShortcuts({
   hasMergeDialog,
   closeMergeDialog,
   cancelBoothPaste,
-  cancelInfraPlacement,
+  cancelInfraPlacement: cancelPlacing,
   cancelDraft,
   backToDraw,
   confirmHeight,
   closeDraft,
   copySelectedBooths,
-  copySelectedInfra,
+  copySelectedInfra: copyInfraOrSelection,
   undoPoint,
   undo,
   redo,
   deleteSelectedBooths,
-  deleteInfra,
-  nudgeSelectedFurniture: (dx, dz) => {
-    if (selectedInfraId.value) nudgeInfra(selectedInfraId.value, dx, dz)
-  },
+  deleteSelectedFurniture,
+  nudgeSelectedFurniture,
   toggleGrid,
+  locateSelection: () => {
+    void sceneTreeRef.value?.locateSelected()
+  },
   openMultiplayer,
 })
 
@@ -1063,11 +1234,11 @@ onMounted(() => {
     onDrawRect: handleDrawRect,
     onUnderlayChange: applyUnderlayChange,
     onCloseDraft: closeDraft,
-    onPick: handlePick,
+    onPick: handleStagePick,
     onHover: handleStageHover,
     onMoveBooth: moveBooth,
     onRotateBooth: rotateBooth,
-    onRotateInfra: (id, dir) => rotateInfra(id, dir),
+    onRotateInfra: (id, dir) => rotateInfraOrSelection(id, dir),
     onRotateDrag: (deg) => (rotateDeg.value = deg),
     onSpaceNav: (on) => (spaceNavActive.value = on),
     onWalkView: (v) => (walkView.value = v),
@@ -1109,6 +1280,7 @@ onMounted(() => {
     onToggleGate: (id) => toggleGate(id),
     onPlaceInfra: (kind, spot) => handlePlaceInfra(kind, spot),
     onPlacePaste: (center) => placePastedBooths(center),
+    onPlacePreset: (spot) => placePresetAt(spot),
     onMoveInfra: (id, x, z, rotation) => moveInfra(id, x, z, rotation),
     onMoveInfras: (targets) => moveInfraGroup(targets),
     onNorthAngle: (deg) => (northDeg.value = Math.round(deg * 10) / 10),
@@ -1138,6 +1310,7 @@ onMounted(() => {
   stage.setUnderlay(underlay.value)
   stage.setBoothLabelsVisible(boothLabelsOn.value)
   stage.setInfraLabelsVisible(infraLabelsOn.value)
+  stage.setFurnitureLabelsVisible(furnitureLabelsOn.value)
   stage.setBoothAreasVisible(areaOn.value)
   stage.setAisleVisible(aisleOn.value)
   stage.setDimensionsVisible(dimOn.value)
@@ -1258,12 +1431,6 @@ function togglePresentation() {
   else enterPresentation()
 }
 
-/** 结构树里从某个展台点「+」新增家具：镜头飞到该展台，放置范围也锁定在它内部 */
-function addFurniture(kind: InfraKind, boothId: string) {
-  stage?.focusBooth(boothId)
-  beginInfraPlace(kind, boothId)
-}
-
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('resize', onOrientationChange)
@@ -1335,6 +1502,7 @@ onBeforeUnmount(() => {
       :quality-label="qualityLabel"
       :booth-labels-on="boothLabelsOn"
       :infra-labels-on="infraLabelsOn"
+      :furniture-labels-on="furnitureLabelsOn"
       :dim-on="dimOn"
       :area-on="areaOn"
       :aisle-on="aisleOn"
@@ -1370,6 +1538,7 @@ onBeforeUnmount(() => {
       @toggle-name-submenu="toggleNameSubmenu"
       @toggle-booth-labels="toggleBoothLabels"
       @toggle-infra-labels="toggleInfraLabels"
+      @toggle-furniture-labels="toggleFurnitureLabels"
       @toggle-dimensions="toggleDimensions"
       @toggle-areas="toggleAreas"
       @toggle-aisle="toggleAisle"
@@ -1379,12 +1548,16 @@ onBeforeUnmount(() => {
 
     <SceneTree
       v-if="!isMobile"
+      ref="sceneTreeRef"
       :venue="venue"
       :venue-name="venueName"
       :booths="booths"
       :infras="infras"
       :selected-ids="selectedIds"
       :selected-infra-id="selectedInfraId"
+      :selected-infra-ids="selectedInfraIds"
+      :presets="presets"
+      :selected-preset-id="selectedPresetId"
       :venue-area="venueArea"
       :booth-area="boothsArea"
       :coverage="coverage"
@@ -1396,9 +1569,11 @@ onBeforeUnmount(() => {
       @request-redraw="requestRedrawVenue"
       @draw-booth="startBoothDraw"
       @add-infra="beginInfraPlace"
-      @add-furniture="addFurniture"
       @delete-booth="confirmDeleteBooth"
       @delete-infra="deleteInfra"
+      @save-preset="savePresetFromSelection"
+      @place-preset="selectPresetFromPanel"
+      @delete-preset="deletePreset"
     />
 
 
@@ -1452,7 +1627,12 @@ onBeforeUnmount(() => {
       :focus-add-token="addFocusToken"
       :rules="venueRules"
       :issues="complianceIssues"
+      :preset="selectedPreset"
+      :render-only="renderOnly"
       detail-only
+      @rename-preset="renamePreset"
+      @delete-preset="deletePreset"
+      @place-preset="selectPresetFromPanel"
       @update-rule="setVenueRule"
       @array-booth="arrayBooth"
       @draw-venue="startVenueDraw"
@@ -1675,6 +1855,7 @@ onBeforeUnmount(() => {
       :area-on="areaOn"
       :booth-labels-on="boothLabelsOn"
       :infra-labels-on="infraLabelsOn"
+      :furniture-labels-on="furnitureLabelsOn"
       :weather="weather"
       :weather-on="weatherOn"
       :live-weather="liveWeather"
@@ -1690,6 +1871,7 @@ onBeforeUnmount(() => {
       @toggle-areas="toggleAreas"
       @toggle-booth-labels="toggleBoothLabels"
       @toggle-infra-labels="toggleInfraLabels"
+      @toggle-furniture-labels="toggleFurnitureLabels"
       @toggle-underlay="toggleUnderlay"
       @choose-quality="chooseQuality"
       @select="selectBoothFromPanel"

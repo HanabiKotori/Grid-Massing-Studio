@@ -23,6 +23,7 @@ const props = defineProps<{
   qualityLabel: string
   boothLabelsOn: boolean
   infraLabelsOn: boolean
+  furnitureLabelsOn: boolean
   dimOn: boolean
   areaOn: boolean
   aisleOn?: boolean
@@ -61,6 +62,7 @@ const emit = defineEmits<{
   (e: 'toggle-name-submenu'): void
   (e: 'toggle-booth-labels'): void
   (e: 'toggle-infra-labels'): void
+  (e: 'toggle-furniture-labels'): void
   (e: 'toggle-dimensions'): void
   (e: 'toggle-areas'): void
   (e: 'toggle-aisle'): void
@@ -159,6 +161,7 @@ function cancelName() {
       :quality-label="qualityLabel"
       :booth-labels-on="boothLabelsOn"
       :infra-labels-on="infraLabelsOn"
+      :furniture-labels-on="furnitureLabelsOn"
       :dim-on="dimOn"
       :area-on="areaOn"
       :aisle-on="aisleOn"
@@ -172,6 +175,7 @@ function cancelName() {
       @toggle-name-submenu="emit('toggle-name-submenu')"
       @toggle-booth-labels="emit('toggle-booth-labels')"
       @toggle-infra-labels="emit('toggle-infra-labels')"
+      @toggle-furniture-labels="emit('toggle-furniture-labels')"
       @toggle-dimensions="emit('toggle-dimensions')"
       @toggle-areas="emit('toggle-areas')"
       @toggle-aisle="emit('toggle-aisle')"

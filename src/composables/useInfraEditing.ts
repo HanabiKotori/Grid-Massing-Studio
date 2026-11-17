@@ -11,6 +11,7 @@ import {
   isFurnitureKind,
   type InfraDims,
 } from '../core/infra'
+import { fitGroupOffset } from '../core/furniturePreset'
 import {
   furnitureInsideBooth,
   gateWindowConflict,
@@ -39,6 +40,20 @@ export const PLACE_MODE: Record<InfraKind, EditorMode> = {
   sofa: 'place-sofa',
   'table-round': 'place-table-round',
   'table-square': 'place-table-square',
+  'meeting-table': 'place-meeting-table',
+  'meeting-chair': 'place-meeting-chair',
+  'reception-desk': 'place-reception-desk',
+  'display-case': 'place-display-case',
+  'display-screen': 'place-display-screen',
+  plant: 'place-plant',
+  shelf: 'place-shelf',
+  'display-plinth': 'place-display-plinth',
+  'display-column': 'place-display-column',
+  'bar-table': 'place-bar-table',
+  'bar-stool': 'place-bar-stool',
+  'low-cabinet': 'place-low-cabinet',
+  'brochure-stand': 'place-brochure-stand',
+  lectern: 'place-lectern',
 }
 
 export function kindOfPlaceMode(m: EditorMode): InfraKind | null {
@@ -53,6 +68,20 @@ export function kindOfPlaceMode(m: EditorMode): InfraKind | null {
   if (m === 'place-sofa') return 'sofa'
   if (m === 'place-table-round') return 'table-round'
   if (m === 'place-table-square') return 'table-square'
+  if (m === 'place-meeting-table') return 'meeting-table'
+  if (m === 'place-meeting-chair') return 'meeting-chair'
+  if (m === 'place-reception-desk') return 'reception-desk'
+  if (m === 'place-display-case') return 'display-case'
+  if (m === 'place-display-screen') return 'display-screen'
+  if (m === 'place-plant') return 'plant'
+  if (m === 'place-shelf') return 'shelf'
+  if (m === 'place-display-plinth') return 'display-plinth'
+  if (m === 'place-display-column') return 'display-column'
+  if (m === 'place-bar-table') return 'bar-table'
+  if (m === 'place-bar-stool') return 'bar-stool'
+  if (m === 'place-low-cabinet') return 'low-cabinet'
+  if (m === 'place-brochure-stand') return 'brochure-stand'
+  if (m === 'place-lectern') return 'lectern'
   return null
 }
 
@@ -255,12 +284,28 @@ export function useInfraEditing(options: InfraEditingOptions) {
   }
 
   function deleteInfra(id: string) {
-    const target = options.infras.value.find((it) => it.id === id)
-    options.infras.value = options.infras.value.filter((it) => it.id !== id)
+    deleteInfraSelection([id])
+  }
+
+  /** 多选删除：家具组合可一次移除 */
+  function deleteInfraSelection(ids: string[]) {
+    const set = new Set(ids)
+    const targets = options.infras.value.filter((it) => set.has(it.id))
+    if (!targets.length) return
+    options.infras.value = options.infras.value.filter((it) => !set.has(it.id))
     options.setInfraSelection(
-      options.selectedInfraIds.value.filter((x) => x !== id),
+      options.selectedInfraIds.value.filter((x) => !set.has(x)),
     )
-    options.toast(target ? `已删除 ${target.name}` : '已删除基础设施')
+    if (targets.length === 1) {
+      options.toast(`已删除 ${targets[0].name}`)
+    } else {
+      const furniture = targets.filter((it) => isFurnitureKind(it.kind)).length
+      options.toast(
+        furniture === targets.length
+          ? `已删除 ${targets.length} 件家具`
+          : `已删除 ${targets.length} 个对象`,
+      )
+    }
   }
 
   function updateInfraDims(
@@ -471,6 +516,53 @@ export function useInfraEditing(options: InfraEditingOptions) {
     )
   }
 
+  /** 多选方向键微调：整组同步平移，任何一件越界或压到对象就不动 */
+  function nudgeInfraGroup(ids: string[], dx: number, dz: number) {
+    const moving = new Set(ids)
+    const items = options.infras.value.filter(
+      (it) => moving.has(it.id) && isFurnitureKind(it.kind),
+    )
+    if (!items.length) return
+    const moved = items.map((it) => ({
+      ...it,
+      x: Math.round((it.x + dx) * 100) / 100,
+      z: Math.round((it.z + dz) * 100) / 100,
+    }))
+    for (const it of moved) {
+      if (
+        !furnitureInsideBooth(
+          options.booths.value,
+          it.kind,
+          it.x,
+          it.z,
+          it.width,
+          it.depth,
+          it.rotation,
+        )
+      ) {
+        options.toast('家具需完整位于展台内部')
+        return
+      }
+    }
+    for (const it of moved) {
+      if (
+        !infraSpotFree(
+          options.infras.value,
+          options.booths.value,
+          it.x,
+          it.z,
+          it,
+          moving,
+        )
+      ) {
+        options.toast('该位置已被占用')
+        return
+      }
+    }
+    const map = new Map(moved.map((it) => [it.id, it]))
+    options.infras.value = options.infras.value.map((it) => map.get(it.id) ?? it)
+  }
+
   /** 相邻多选整体拖动：全部通过校验后一次性写回 */
   function moveInfraGroup(
     targets: { id: string; x: number; z: number; rotation: number }[],
@@ -523,7 +615,15 @@ export function useInfraEditing(options: InfraEditingOptions) {
     }
 
     options.infras.value = next
-    options.toast(`已整体移动 ${targets.length} 个设施`)
+    const furniture = targets.filter((target) => {
+      const it = options.infras.value.find((v) => v.id === target.id)
+      return it ? isFurnitureKind(it.kind) : false
+    }).length
+    options.toast(
+      furniture === targets.length
+        ? `已整体移动 ${targets.length} 件家具`
+        : `已整体移动 ${targets.length} 个设施`,
+    )
   }
 
   function rotateInfra(id: string, dir: 1 | -1) {
@@ -566,6 +666,65 @@ export function useInfraEditing(options: InfraEditingOptions) {
       it.id === id ? { ...it, rotation } : it,
     )
     options.toast(`${target.name} 已旋转 90°`)
+  }
+
+  /**
+   * 多选家具整体旋转 90°：绕组合中心转动每件的朝向与相对位置；
+   * 旋转后若压到展台边界或其它对象，就在近旁自动平移整组避让。
+   */
+  function rotateInfraGroup(ids: string[], dir: 1 | -1) {
+    const moving = new Set(ids)
+    const items = options.infras.value.filter((it) => moving.has(it.id))
+    if (!items.length) return
+    if (items.length === 1) {
+      rotateInfra(items[0].id, dir)
+      return
+    }
+    if (
+      items.some(
+        (it) => it.kind === 'gate' || it.kind === 'window' || !isFurnitureKind(it.kind),
+      )
+    ) {
+      options.toast('只有家具支持整组旋转')
+      return
+    }
+
+    const turn = (dir * Math.PI) / 2
+    const cx = items.reduce((sum, it) => sum + it.x, 0) / items.length
+    const cz = items.reduce((sum, it) => sum + it.z, 0) / items.length
+    const cos = Math.cos(turn)
+    const sin = Math.sin(turn)
+    const rotated = items.map((it) => {
+      const dx = it.x - cx
+      const dz = it.z - cz
+      return {
+        ...it,
+        x: cx + dx * cos + dz * sin,
+        z: cz - dx * sin + dz * cos,
+        rotation:
+          (((it.rotation + turn) % (Math.PI * 2)) + Math.PI * 2) %
+          (Math.PI * 2),
+      }
+    })
+
+    const fit = fitGroupOffset(
+      rotated,
+      options.booths.value,
+      options.infras.value,
+      moving,
+    )
+    if (!fit) {
+      options.toast('整体旋转后会超出展台或与其他对象重叠')
+      return
+    }
+    const map = new Map(
+      rotated.map((it) => [
+        it.id,
+        { ...it, x: it.x + fit.dx, z: it.z + fit.dz },
+      ]),
+    )
+    options.infras.value = options.infras.value.map((it) => map.get(it.id) ?? it)
+    options.toast(`已整体旋转 ${items.length} 件家具 90°`)
   }
 
   function toggleGate(id: string) {
@@ -616,12 +775,15 @@ export function useInfraEditing(options: InfraEditingOptions) {
     selectInfra,
     renameInfra,
     deleteInfra,
+    deleteInfraSelection,
     updateInfraDims,
     updateInfraMaterial,
     moveInfra,
     moveInfraGroup,
     nudgeInfra,
+    nudgeInfraGroup,
     rotateInfra,
+    rotateInfraGroup,
     toggleGate,
     setGateOpenMode,
     changeInfraCount,

@@ -35,6 +35,20 @@ export const INFRA_LABELS: Record<InfraKind, string> = {
   sofa: '沙发',
   'table-round': '圆茶几',
   'table-square': '方茶几',
+  'meeting-table': '洽谈桌',
+  'meeting-chair': '洽谈椅',
+  'reception-desk': '接待台',
+  'display-case': '展柜',
+  'display-screen': '显示屏',
+  plant: '绿植',
+  shelf: '层架',
+  'display-plinth': '样品台',
+  'display-column': '样品柱',
+  'bar-table': '吧桌',
+  'bar-stool': '吧椅',
+  'low-cabinet': '矮柜',
+  'brochure-stand': '资料架',
+  lectern: '讲台',
 }
 
 /** 放置时的默认尺寸（米） */
@@ -50,6 +64,20 @@ export const INFRA_DEFAULTS: Record<InfraKind, InfraDims> = {
   sofa: { width: 2, depth: 1, height: 1.2 },
   'table-round': { width: 1, depth: 1, height: 1 },
   'table-square': { width: 1, depth: 1, height: 0.5 },
+  'meeting-table': { width: 1.6, depth: 0.8, height: 0.75 },
+  'meeting-chair': { width: 0.5, depth: 0.5, height: 0.9 },
+  'reception-desk': { width: 2, depth: 0.6, height: 1.05 },
+  'display-case': { width: 1, depth: 0.5, height: 1.3 },
+  'display-screen': { width: 1.1, depth: 0.45, height: 1.8 },
+  plant: { width: 0.6, depth: 0.6, height: 1.3 },
+  shelf: { width: 1, depth: 0.4, height: 1.8 },
+  'display-plinth': { width: 1, depth: 1, height: 0.9 },
+  'display-column': { width: 0.6, depth: 0.6, height: 1 },
+  'bar-table': { width: 0.8, depth: 0.8, height: 1.05 },
+  'bar-stool': { width: 0.45, depth: 0.45, height: 0.75 },
+  'low-cabinet': { width: 1.2, depth: 0.45, height: 0.8 },
+  'brochure-stand': { width: 0.4, depth: 0.4, height: 1.3 },
+  lectern: { width: 0.6, depth: 0.5, height: 1.1 },
 }
 
 /** 可调尺寸范围：[最小, 最大]，宽深高均以 1m 为基本单位 */
@@ -68,6 +96,20 @@ export const INFRA_LIMITS: Record<
   sofa: { width: [1, 6], depth: [0.6, 2], height: [1.2, 1.2] },
   'table-round': { width: [0.6, 3], depth: [0.6, 3], height: [1, 1] },
   'table-square': { width: [0.6, 3], depth: [0.6, 3], height: [0.5, 0.5] },
+  'meeting-table': { width: [1, 2.6], depth: [0.5, 1.2], height: [0.75, 0.75] },
+  'meeting-chair': { width: [0.5, 0.5], depth: [0.5, 0.5], height: [0.9, 0.9] },
+  'reception-desk': { width: [1.2, 3.6], depth: [0.4, 1], height: [1.05, 1.05] },
+  'display-case': { width: [0.6, 2], depth: [0.4, 0.8], height: [1.3, 1.3] },
+  'display-screen': { width: [0.6, 2.2], depth: [0.3, 0.9], height: [1.8, 1.8] },
+  plant: { width: [0.4, 1], depth: [0.4, 1], height: [1.3, 1.3] },
+  shelf: { width: [0.6, 2], depth: [0.25, 0.8], height: [1.8, 1.8] },
+  'display-plinth': { width: [0.4, 2], depth: [0.4, 2], height: [0.9, 0.9] },
+  'display-column': { width: [0.3, 1.2], depth: [0.3, 1.2], height: [1, 1] },
+  'bar-table': { width: [0.6, 1.6], depth: [0.6, 1.6], height: [1.05, 1.05] },
+  'bar-stool': { width: [0.45, 0.45], depth: [0.45, 0.45], height: [0.75, 0.75] },
+  'low-cabinet': { width: [0.6, 2.4], depth: [0.3, 0.8], height: [0.8, 0.8] },
+  'brochure-stand': { width: [0.35, 0.6], depth: [0.35, 0.6], height: [1.3, 1.3] },
+  lectern: { width: [0.5, 0.9], depth: [0.4, 0.7], height: [1.1, 1.1] },
 }
 
 /** 电梯数量范围与默认值 */
@@ -80,6 +122,20 @@ const FURNITURE_KINDS = new Set<InfraKind>([
   'sofa',
   'table-round',
   'table-square',
+  'meeting-table',
+  'meeting-chair',
+  'reception-desk',
+  'display-case',
+  'display-screen',
+  'plant',
+  'shelf',
+  'display-plinth',
+  'display-column',
+  'bar-table',
+  'bar-stool',
+  'low-cabinet',
+  'brochure-stand',
+  'lectern',
 ])
 
 /** 家具类设施：只能摆放在展台内部，高度固定 */

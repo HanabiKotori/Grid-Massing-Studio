@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { BOOTH_KIND_LABELS, boothKindOf } from '../core/booth'
+import type { FurniturePreset } from '../core/furniturePreset'
 import { groupCss } from '../core/groupColor'
 import {
   ELEVATOR_DEFAULT_COUNT,
@@ -42,6 +43,10 @@ const props = defineProps<{
   infras: Infra[]
   underlay: Underlay | null
   selectedInfraId: string | null
+  /** 当前查看的家具预设：显示组合信息，家具属性只读 */
+  preset?: FurniturePreset | null
+  /** 只读预览：预设也不允许改名 / 删除 */
+  renderOnly?: boolean
   mode: EditorMode
   /** 按住空格时的纯视角浏览状态 */
   spaceNav?: boolean
@@ -131,6 +136,9 @@ const emit = defineEmits<{
     patch: { material?: string | null; texture?: string | null },
   ): void
   (e: 'material-error', message: string): void
+  (e: 'rename-preset', id: string, name: string): void
+  (e: 'delete-preset', id: string): void
+  (e: 'place-preset', preset: FurniturePreset): void
   (e: 'underlay-file', file: File): void
   (e: 'center-underlay'): void
   (e: 'toggle-underlay-lock'): void
@@ -431,6 +439,20 @@ const kindShort: Record<InfraKind, string> = {
   sofa: '沙',
   'table-round': '圆',
   'table-square': '方',
+  'meeting-table': '谈',
+  'meeting-chair': '座',
+  'reception-desk': '接',
+  'display-case': '柜',
+  'display-screen': '屏',
+  plant: '植',
+  shelf: '架',
+  'display-plinth': '台',
+  'display-column': '柱',
+  'bar-table': '吧',
+  'bar-stool': '椅',
+  'low-cabinet': '柜',
+  'brochure-stand': '资',
+  lectern: '讲',
 }
 
 const BOOTH_KINDS: BoothKind[] = ['massing', 'scaffold', 'openfloor']
@@ -443,6 +465,20 @@ const BASIC_INFRA_ORDER: InfraKind[] = [
   'wall',
 ]
 const FURNITURE_ORDER: InfraKind[] = [
+  'meeting-table',
+  'meeting-chair',
+  'reception-desk',
+  'display-case',
+  'display-screen',
+  'plant',
+  'shelf',
+  'display-plinth',
+  'display-column',
+  'bar-table',
+  'bar-stool',
+  'low-cabinet',
+  'brochure-stand',
+  'lectern',
   'chair',
   'armchair',
   'sofa',
@@ -610,8 +646,15 @@ function fieldsOf(it: Infra): SizeField[] {
       : lim.height[1]
 
   if (isFurnitureKind(it.kind)) {
-    // 椅子尺寸固定；沙发与茶几只调整长宽，高度由类型决定
-    if (it.kind === 'chair' || it.kind === 'armchair') return []
+    // 椅子尺寸固定；桌、柜、屏与绿植只调整长宽，高度由类型决定
+    if (
+      it.kind === 'chair' ||
+      it.kind === 'armchair' ||
+      it.kind === 'meeting-chair' ||
+      it.kind === 'bar-stool'
+    ) {
+      return []
+    }
     return [
       { key: 'width', label: '长', min: lim.width[0], max: lim.width[1], value: it.width },
       { key: 'depth', label: '宽', min: lim.depth[0], max: lim.depth[1], value: it.depth },
@@ -713,7 +756,7 @@ function materialScope(kind: InfraKind): 'furniture' | 'wall' | null {
 
 function materialPresetsOf(kind: InfraKind): MaterialPreset[] {
   const scope = materialScope(kind)
-  return scope ? materialPresetsFor(scope) : []
+  return scope ? materialPresetsFor(scope, kind) : []
 }
 
 function materialLabel(it: Infra): string {
@@ -724,7 +767,12 @@ function materialLabel(it: Infra): string {
 function materialSwatchStyle(preset: MaterialPreset) {
   const url = materialPreviewUrl(preset)
   return url
-    ? { backgroundColor: preset.swatch, backgroundImage: `url("${url}")` }
+    ? {
+        backgroundColor: preset.swatch,
+        backgroundImage: `url("${url}")`,
+        // 彩色预设是「贴图 × 色板」，色板叠在贴图上才能看出真实的木色 / 布色
+        backgroundBlendMode: 'multiply',
+      }
     : { backgroundColor: preset.swatch }
 }
 
@@ -818,6 +866,33 @@ function cancelInfraEdit() {
   editingInfraId.value = null
 }
 
+// 家具预设：只改组合名称，组合内家具属性只读
+const presetNameDraft = ref('')
+watch(
+  () => [props.preset?.id, props.preset?.name] as const,
+  () => {
+    presetNameDraft.value = props.preset?.name ?? ''
+  },
+  { immediate: true },
+)
+
+function commitPresetName() {
+  const preset = props.preset
+  if (!preset) return
+  const name = presetNameDraft.value.trim().slice(0, 24)
+  if (!name) {
+    presetNameDraft.value = preset.name
+    return
+  }
+  presetNameDraft.value = name
+  if (name !== preset.name) emit('rename-preset', preset.id, name)
+}
+
+function presetItemMaterialLabel(id?: string) {
+  if (!id) return '默认材质'
+  return materialPresetById(id)?.label ?? id
+}
+
 function onLogoChange(id: string, e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
@@ -853,17 +928,91 @@ function onLogoChange(id: string, e: Event) {
       </span>
     </div>
 
-    <div v-if="!detailOnly || (!selectedIds.length && !selectedInfraId)" class="stats">
+    <section v-if="preset" class="card preset-card">
+      <div class="card-head">
+        <span class="swatch solid" />
+        <h2>家具预设</h2>
+        <span class="count">{{ preset.items.length }} 件</span>
+        <span class="spacer" />
+        <span class="count">
+          {{ preset.width.toFixed(1) }} × {{ preset.depth.toFixed(1) }} m
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="card-body-inner">
+          <label class="preset-name-row">
+            <span>名称</span>
+            <input
+              v-model="presetNameDraft"
+              class="name-input"
+              maxlength="24"
+              :disabled="renderOnly"
+              @blur="commitPresetName"
+              @keydown.enter.prevent="commitPresetName"
+              @keydown.esc.prevent="presetNameDraft = preset.name"
+            />
+          </label>
+          <p class="row-hint">
+            这里只显示组合内的家具信息，单件家具属性不可编辑；布置到展台后可在场景中调整。
+          </p>
+          <ul class="preset-item-list">
+            <li v-for="(item, i) in preset.items" :key="i" class="preset-item">
+              <span class="idx">{{ kindShort[item.kind] }}</span>
+              <div class="meta">
+                <div class="name-line">
+                  <b class="name">{{ INFRA_LABELS[item.kind] }}</b>
+                  <span class="preset-item-size">
+                    {{ item.width.toFixed(2) }} × {{ item.depth.toFixed(2) }} ×
+                    {{ item.height.toFixed(2) }} m
+                  </span>
+                </div>
+                <div class="preset-item-meta">
+                  {{ presetItemMaterialLabel(item.material) }} · 相对 x
+                  {{ item.x.toFixed(2) }} / z {{ item.z.toFixed(2) }} ·
+                  {{ Math.round((item.rotation * 180) / Math.PI) }}°
+                </div>
+              </div>
+            </li>
+          </ul>
+          <div class="preset-card-actions">
+            <button
+              type="button"
+              class="btn sm"
+              :disabled="renderOnly"
+              @click="emit('place-preset', preset)"
+            >
+              布置到展台
+            </button>
+            <button
+              v-if="!renderOnly"
+              type="button"
+              class="btn sm danger"
+              @click="emit('delete-preset', preset.id)"
+            >
+              删除预设
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div
+      v-if="!preset && (!detailOnly || (!selectedIds.length && !selectedInfraId))"
+      class="stats"
+    >
       <div><span>场馆面积</span><b>{{ fmt(venueArea) }} m²</b></div>
       <div><span>展台覆盖率</span><b>{{ coverage }}%</b></div>
     </div>
 
-    <div v-if="detailOnly && !selectedIds.length && !selectedInfraId" class="detail-title">
+    <div
+      v-if="!preset && detailOnly && !selectedIds.length && !selectedInfraId"
+      class="detail-title"
+    >
       {{ venueName || '场馆' }}
     </div>
 
     <section
-      v-if="!detailOnly || (!selectedIds.length && !selectedInfraId)"
+      v-if="!preset && (!detailOnly || (!selectedIds.length && !selectedInfraId))"
       class="card"
       :class="{ collapsed: !venueOpen }"
     >
@@ -1487,6 +1636,104 @@ function onLogoChange(id: string, e: Event) {
         >
           + 方茶几
         </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'meeting-table')"
+        >
+          + 洽谈桌
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'meeting-chair')"
+        >
+          + 洽谈椅
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'reception-desk')"
+        >
+          + 接待台
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'display-case')"
+        >
+          + 展柜
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'display-screen')"
+        >
+          + 显示屏
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'plant')"
+        >
+          + 绿植
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'shelf')"
+        >
+          + 层架
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'display-plinth')"
+        >
+          + 样品台
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'display-column')"
+        >
+          + 样品柱
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'bar-table')"
+        >
+          + 吧桌
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'bar-stool')"
+        >
+          + 吧椅
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'low-cabinet')"
+        >
+          + 矮柜
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'brochure-stand')"
+        >
+          + 资料架
+        </button>
+        <button
+          class="btn sm"
+          :disabled="mode !== 'idle' || !booths.length"
+          @click="emit('add-infra', 'lectern')"
+        >
+          + 讲台
+        </button>
       </div>
       <p v-if="!booths.length" class="empty-line" style="margin-top: 0">
         先添加展台才能摆放家具
@@ -1570,10 +1817,20 @@ function onLogoChange(id: string, e: Event) {
                     </button>
                   </div>
                 </div>
-                <p v-if="it.kind === 'chair' || it.kind === 'armchair'" class="infra-fixed">
+                <p
+                  v-if="
+                    it.kind === 'chair' ||
+                    it.kind === 'armchair' ||
+                    it.kind === 'meeting-chair' ||
+                    it.kind === 'bar-stool'
+                  "
+                  class="infra-fixed"
+                >
                   固定尺寸 {{ it.width.toFixed(1) }} × {{ it.depth.toFixed(1) }} ×
                   {{ it.height.toFixed(1) }} m
                   <template v-if="it.kind === 'armchair'"> · 座高 0.5 m</template>
+                  <template v-if="it.kind === 'meeting-chair'"> · 座高 0.45 m</template>
+                  <template v-if="it.kind === 'bar-stool'"> · 座高 0.75 m</template>
                 </p>
                 <label v-for="f in fieldsOf(it)" :key="f.key" class="infra-field">
                   <span>{{ f.label }}</span>

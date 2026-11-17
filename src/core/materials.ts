@@ -1,5 +1,7 @@
 /** 家具 / 基础设施墙面的预设材质与自定义贴图 */
 
+import type { InfraKind } from './types'
+
 export type MaterialScope = 'furniture' | 'wall'
 
 export interface MaterialPreset {
@@ -16,6 +18,8 @@ export interface MaterialPreset {
   wallTile?: number
   /** 无贴图时色板显示的底色 */
   swatch: string
+  /** 推荐用于这些家具类型：材质面板里排到前面，不填表示通用 */
+  kinds?: InfraKind[]
 }
 
 export const CUSTOM_TEXTURE_MAX_LENGTH = 1_600_000
@@ -30,6 +34,18 @@ export const MATERIAL_PRESETS: MaterialPreset[] = [
     roughness: 0.92,
     metalness: 0,
     swatch: '#d8d9d7',
+    kinds: ['meeting-chair', 'bar-stool'],
+  },
+  {
+    id: 'fabric-sand',
+    label: '米白麻布',
+    scopes: ['furniture'],
+    texture: 'furniture/fabric-light-grey.jpg',
+    color: '#e7d8bd',
+    roughness: 0.94,
+    metalness: 0,
+    swatch: '#e7d8bd',
+    kinds: ['meeting-chair', 'bar-stool'],
   },
   {
     id: 'fabric-mid',
@@ -41,6 +57,18 @@ export const MATERIAL_PRESETS: MaterialPreset[] = [
     metalness: 0,
     wallTile: 3,
     swatch: '#a8aaa8',
+    kinds: ['meeting-chair', 'bar-stool'],
+  },
+  {
+    id: 'fabric-navy',
+    label: '藏青布艺',
+    scopes: ['furniture'],
+    texture: 'furniture/fabric-mid-grey.jpg',
+    color: '#3e4d64',
+    roughness: 0.9,
+    metalness: 0.02,
+    swatch: '#3e4d64',
+    kinds: ['meeting-chair', 'bar-stool'],
   },
   {
     id: 'fabric-graphite',
@@ -52,6 +80,7 @@ export const MATERIAL_PRESETS: MaterialPreset[] = [
     metalness: 0.02,
     wallTile: 3,
     swatch: '#4a4c4d',
+    kinds: ['meeting-chair', 'bar-stool'],
   },
   {
     id: 'metal-satin',
@@ -63,6 +92,36 @@ export const MATERIAL_PRESETS: MaterialPreset[] = [
     metalness: 0.18,
     wallTile: 3.2,
     swatch: '#8e9192',
+    kinds: [
+      'meeting-table',
+      'reception-desk',
+      'display-case',
+      'display-screen',
+      'shelf',
+      'display-column',
+      'bar-table',
+      'bar-stool',
+    ],
+  },
+  {
+    id: 'metal-black',
+    label: '黑色粉末喷涂',
+    scopes: ['furniture', 'wall'],
+    texture: 'furniture/metal-satin-grey.jpg',
+    color: '#3a3d42',
+    roughness: 0.42,
+    metalness: 0.22,
+    wallTile: 3.2,
+    swatch: '#3a3d42',
+    kinds: [
+      'meeting-table',
+      'reception-desk',
+      'display-screen',
+      'display-column',
+      'bar-table',
+      'bar-stool',
+      'plant',
+    ],
   },
   {
     id: 'wood-oak',
@@ -74,6 +133,39 @@ export const MATERIAL_PRESETS: MaterialPreset[] = [
     metalness: 0,
     wallTile: 2.6,
     swatch: '#b88b5d',
+    kinds: [
+      'meeting-table',
+      'reception-desk',
+      'display-case',
+      'shelf',
+      'display-plinth',
+      'bar-table',
+      'low-cabinet',
+      'brochure-stand',
+      'lectern',
+    ],
+  },
+  {
+    id: 'wood-walnut',
+    label: '深胡桃木',
+    scopes: ['furniture', 'wall'],
+    texture: 'materials/wood-oak.jpg',
+    color: '#6f4a30',
+    roughness: 0.68,
+    metalness: 0,
+    wallTile: 2.6,
+    swatch: '#6f4a30',
+    kinds: [
+      'meeting-table',
+      'reception-desk',
+      'display-case',
+      'shelf',
+      'display-plinth',
+      'bar-table',
+      'low-cabinet',
+      'brochure-stand',
+      'lectern',
+    ],
   },
   {
     id: 'concrete',
@@ -105,6 +197,17 @@ export const MATERIAL_PRESETS: MaterialPreset[] = [
     roughness: 0.86,
     metalness: 0,
     swatch: '#f2f0ea',
+    kinds: [
+      'reception-desk',
+      'display-case',
+      'display-plinth',
+      'display-column',
+      'shelf',
+      'low-cabinet',
+      'brochure-stand',
+      'lectern',
+      'plant',
+    ],
   },
   {
     id: 'black-panel',
@@ -114,6 +217,15 @@ export const MATERIAL_PRESETS: MaterialPreset[] = [
     roughness: 0.82,
     metalness: 0.04,
     swatch: '#2b2d31',
+    kinds: [
+      'display-screen',
+      'display-case',
+      'display-plinth',
+      'display-column',
+      'shelf',
+      'lectern',
+      'plant',
+    ],
   },
 ]
 
@@ -128,8 +240,19 @@ export function isMaterialPresetId(value: unknown): value is string {
   return typeof value === 'string' && PRESET_BY_ID.has(value)
 }
 
-export function materialPresetsFor(scope: MaterialScope): MaterialPreset[] {
-  return MATERIAL_PRESETS.filter((item) => item.scopes.includes(scope))
+/**
+ * 按用途取材质预设；传入家具类型时，把推荐给该类型的预设排在最前，
+ * 其余通用预设保持原有顺序跟在后面。
+ */
+export function materialPresetsFor(
+  scope: MaterialScope,
+  kind?: InfraKind,
+): MaterialPreset[] {
+  const list = MATERIAL_PRESETS.filter((item) => item.scopes.includes(scope))
+  if (!kind) return list
+  const recommended = list.filter((item) => item.kinds?.includes(kind))
+  if (!recommended.length) return list
+  return [...recommended, ...list.filter((item) => !item.kinds?.includes(kind))]
 }
 
 /** 预设贴图的公开 URL；BASE_URL 支持子目录部署 */

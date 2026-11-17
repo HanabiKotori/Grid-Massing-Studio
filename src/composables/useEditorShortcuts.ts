@@ -26,6 +26,8 @@ interface EditorShortcutOptions {
   viewTop: () => void
   viewIso: () => void
   fitView: () => void
+  /** 展开结构树并定位到当前选中对象 */
+  locateSelection: () => void
   enterPresentation: () => void
   hasMergeDialog: () => boolean
   closeMergeDialog: () => void
@@ -41,8 +43,9 @@ interface EditorShortcutOptions {
   undo: () => void
   redo: () => void
   deleteSelectedBooths: () => void
-  deleteInfra: (id: string) => void
-  /** 方向键微调选中的家具，单位 m */
+  /** 删除当前选中的设施 / 家具（多选时整组删除） */
+  deleteSelectedFurniture: () => void
+  /** 方向键微调选中的家具（多选时整组平移），单位 m */
   nudgeSelectedFurniture: (dx: number, dz: number) => void
   toggleGrid: () => void
   openMultiplayer: () => void
@@ -143,7 +146,7 @@ export function useEditorShortcuts(options: EditorShortcutOptions) {
       return
     }
 
-    // 视角快捷键：T 俯视 / I 轴测 / F 适配，预览模式下也可用
+    // 视角快捷键：T 俯视 / I 轴测 / F 适配 / L 定位，预览模式下也可用
     if (
       !typing &&
       !e.ctrlKey &&
@@ -152,6 +155,12 @@ export function useEditorShortcuts(options: EditorShortcutOptions) {
       options.walkState.value === 'off'
     ) {
       const viewKey = e.key.toLowerCase()
+      if (viewKey === 'l') {
+        e.preventDefault()
+        options.closeToolMenu()
+        options.locateSelection()
+        return
+      }
       if (viewKey === 't') {
         e.preventDefault()
         options.closeToolMenu()
@@ -317,7 +326,7 @@ export function useEditorShortcuts(options: EditorShortcutOptions) {
       }
       if (options.selectedInfraId.value) {
         e.preventDefault()
-        options.deleteInfra(options.selectedInfraId.value)
+        options.deleteSelectedFurniture()
         return
       }
     }

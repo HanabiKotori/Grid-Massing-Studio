@@ -2358,6 +2358,16 @@ input[type='range']::-moz-range-thumb {
   will-change: transform;
 }
 
+/* 家具名称：更小、更轻，避免数量多时盖住模型 */
+.furniture-label {
+  padding: 1px 5px;
+  border-left-color: #8a8f99;
+  color: var(--ink-2);
+  font-size: 10px;
+  font-weight: 500;
+  max-width: 110px;
+}
+
 /* 展台顶面面积标注 */
 .booth-area {
   padding: 1px 4px;

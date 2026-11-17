@@ -12,6 +12,7 @@ import {
   normalizeMaterialTexture,
 } from './materials'
 import { UNDERLAY_DEFAULT_OPACITY, clampUnderlaySpec } from './underlay'
+import type { FurniturePreset } from './furniturePreset'
 import { DEFAULT_VENUE_RULES } from './types'
 import type {
   Booth,
@@ -39,6 +40,8 @@ export interface SceneJson {
   underlay?: Underlay | null
   /** 规范校验参数 */
   rules?: VenueRules
+  /** 家具组合预设：随场景一起保存 / 导入导出 */
+  furniturePresets?: FurniturePreset[]
 }
 
 export interface SceneFileInput {
@@ -51,6 +54,7 @@ export interface SceneFileInput {
   infras: Infra[]
   underlay: Underlay | null
   rules: VenueRules
+  furniturePresets: FurniturePreset[]
 }
 
 const INFRA_KIND_SET = new Set<InfraKind>([
@@ -65,6 +69,20 @@ const INFRA_KIND_SET = new Set<InfraKind>([
   'sofa',
   'table-round',
   'table-square',
+  'meeting-table',
+  'meeting-chair',
+  'reception-desk',
+  'display-case',
+  'display-screen',
+  'plant',
+  'shelf',
+  'display-plinth',
+  'display-column',
+  'bar-table',
+  'bar-stool',
+  'low-cabinet',
+  'brochure-stand',
+  'lectern',
 ])
 
 export function cloneData(
@@ -279,6 +297,10 @@ export function buildSceneFile(input: SceneFileInput): SceneJson {
     infras: input.infras.map((it) => ({ ...it })),
     underlay: input.underlay ? { ...input.underlay } : null,
     rules: { ...input.rules },
+    furniturePresets: input.furniturePresets.map((preset) => ({
+      ...preset,
+      items: preset.items.map((item) => ({ ...item })),
+    })),
   }
 }
 

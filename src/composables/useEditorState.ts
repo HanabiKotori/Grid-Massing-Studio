@@ -57,6 +57,7 @@ export function useEditorState() {
   const venueXray = ref(false)
   const boothLabelsOn = ref(true)
   const infraLabelsOn = ref(false)
+  const furnitureLabelsOn = ref(false)
   const areaOn = ref(false)
   const venueNoTop = ref(true)
   const toastMsg = ref('')
@@ -233,6 +234,7 @@ export function useEditorState() {
     venueXray,
     boothLabelsOn,
     infraLabelsOn,
+    furnitureLabelsOn,
     areaOn,
     venueNoTop,
     toastMsg,

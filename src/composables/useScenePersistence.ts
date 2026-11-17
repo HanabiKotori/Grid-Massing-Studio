@@ -12,6 +12,7 @@ import {
   readPoints,
   type SceneJson,
 } from '../core/sceneFile'
+import type { FurniturePreset } from '../core/furniturePreset'
 import type { LiveWeather } from '../core/amapWeather'
 import type { Stage } from '../core/Stage'
 import type {
@@ -47,6 +48,10 @@ interface ScenePersistenceOptions {
   /** 初次加载遮罩：查到本地场景后保持 2 秒再应用，避免欢迎弹窗闪现 */
   appBooting: Ref<boolean>
   clearInfraSelection: () => void
+  /** 家具预设随场景一起保存 / 导入导出 */
+  getPresets: () => FurniturePreset[]
+  applyScenePresets: (raw: unknown) => void
+  clearPresetSelection: () => void
   setSuppressAutoWeather: (on: boolean) => void
   toast: (text: string) => void
   getStage: () => Stage | null
@@ -98,6 +103,7 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
       infras: options.infras.value,
       underlay: options.underlay.value,
       rules: options.rules.value,
+      furniturePresets: options.getPresets(),
     })
   }
 
@@ -304,8 +310,13 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
     options.infras.value = validInfras
     options.underlay.value = nextUnderlay
     options.rules.value = normalizeRules(obj.rules)
+    // 家具预设属于场景内容：文件里带该字段时整体替换
+    if (Array.isArray(obj.furniturePresets)) {
+      options.applyScenePresets(obj.furniturePresets)
+    }
     options.selectedIds.value = []
     options.clearInfraSelection()
+    options.clearPresetSelection()
     options.mode.value = 'idle'
     options.draftPoints.value = []
     options.resetSequences(nextBooths.length, validInfras.length)

@@ -111,23 +111,38 @@ export function useSceneOperations(options: SceneOperationsOptions) {
     )
     // 删除或取消中间设施后若剩余对象断开，只保留最后选中的一个
     if (valid.length > 1) {
-      const set = new Set(valid)
       const byId = new Map(infras.value.map((it) => [it.id, it]))
-      const start = byId.get(valid[0])
-      const visited = new Set<string>(start ? [start.id] : [])
-      const queue = start ? [start] : []
-      while (queue.length) {
-        const current = queue.shift()!
-        for (const id of set) {
-          if (visited.has(id)) continue
-          const other = byId.get(id)
-          if (!other || !infraTouching(current, other)) continue
-          visited.add(id)
-          queue.push(other)
+      const items = valid
+        .map((id) => byId.get(id))
+        .filter((it): it is Infra => !!it)
+      // 同一展台内的家具可以自由多选（不要求贴边）；其他设施仍需相互连通
+      const hosts = new Set(
+        items.map((it) => boothAtPoint(booths.value, it)?.id ?? ''),
+      )
+      const furnitureGroup =
+        items.length === valid.length &&
+        items.every((it) => isFurnitureKind(it.kind)) &&
+        hosts.size === 1 &&
+        !hosts.has('')
+
+      if (!furnitureGroup) {
+        const set = new Set(valid)
+        const start = byId.get(valid[0])
+        const visited = new Set<string>(start ? [start.id] : [])
+        const queue = start ? [start] : []
+        while (queue.length) {
+          const current = queue.shift()!
+          for (const id of set) {
+            if (visited.has(id)) continue
+            const other = byId.get(id)
+            if (!other || !infraTouching(current, other)) continue
+            visited.add(id)
+            queue.push(other)
+          }
         }
-      }
-      if (visited.size !== valid.length) {
-        valid = [valid[valid.length - 1]]
+        if (visited.size !== valid.length) {
+          valid = [valid[valid.length - 1]]
+        }
       }
     }
     selectedInfraIds.value = valid
@@ -168,6 +183,27 @@ export function useSceneOperations(options: SceneOperationsOptions) {
           })
         if (current.length && wallItem) {
           options.toast('门窗只能单独选择')
+          return
+        }
+        // 家具不要求贴边：只要同属一个展台就能整组选中
+        if (current.length && isFurnitureKind(target.kind)) {
+          const host = boothAtPoint(booths.value, target)
+          const currentItems = current.map((x) =>
+            infras.value.find((v) => v.id === x),
+          )
+          if (currentItems.some((it) => !it || !isFurnitureKind(it.kind))) {
+            options.toast('家具只能与其他家具一起多选')
+            return
+          }
+          const sameHost = currentItems.every((it) => {
+            const other = it ? boothAtPoint(booths.value, it) : null
+            return !!host && !!other && host.id === other.id
+          })
+          if (!sameHost) {
+            options.toast('多选家具需位于同一个展台内')
+            return
+          }
+          setInfraSelection([...current, id])
           return
         }
         const touches = current.some((x) => {

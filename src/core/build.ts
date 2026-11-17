@@ -798,7 +798,14 @@ function infraMats(ghost: boolean) {
 
 // ---------- 家具 ----------
 
-type FurnitureMapKey = 'fabric' | 'graphite' | 'metal'
+type FurnitureMapKey = 'fabric' | 'graphite' | 'metal' | 'wood'
+
+const FURNITURE_MAP_FILES: Record<FurnitureMapKey, string> = {
+  fabric: 'furniture/fabric-light-grey.jpg',
+  graphite: 'furniture/fabric-graphite.jpg',
+  metal: 'furniture/metal-satin-grey.jpg',
+  wood: 'materials/wood-oak.jpg',
+}
 
 const furnitureTextureLoader = new THREE.TextureLoader()
 const furnitureTextureCache = new Map<FurnitureMapKey, THREE.Texture>()
@@ -808,14 +815,8 @@ function furnitureMap(key: FurnitureMapKey): THREE.Texture {
   const cached = furnitureTextureCache.get(key)
   if (cached) return cached
 
-  const file =
-    key === 'fabric'
-      ? 'fabric-light-grey.jpg'
-      : key === 'graphite'
-        ? 'fabric-graphite.jpg'
-        : 'metal-satin-grey.jpg'
   const texture = furnitureTextureLoader.load(
-    `${import.meta.env.BASE_URL}textures/furniture/${file}`,
+    `${import.meta.env.BASE_URL}textures/${FURNITURE_MAP_FILES[key]}`,
   )
   texture.colorSpace = THREE.SRGBColorSpace
   texture.wrapS = THREE.RepeatWrapping
@@ -833,7 +834,20 @@ function furnitureMap(key: FurnitureMapKey): THREE.Texture {
 function furnitureMats(ghost: boolean) {
   const { wall, edge } = infraMats(ghost)
   if (ghost) {
-    return { wall, edge, fabric: wall, fabricDark: wall, metal: wall }
+    return {
+      wall,
+      edge,
+      fabric: wall,
+      fabricDark: wall,
+      metal: wall,
+      wood: wall,
+      glass: wall,
+      screen: wall,
+      foliage: wall,
+      foliageDark: wall,
+      ceramic: wall,
+      soil: wall,
+    }
   }
 
   const fabric = new THREE.MeshStandardMaterial({
@@ -855,7 +869,68 @@ function furnitureMats(ghost: boolean) {
     roughness: 0.55,
     metalness: 0.12,
   })
-  return { wall, edge, fabric, fabricDark, metal }
+  const wood = new THREE.MeshStandardMaterial({
+    map: furnitureMap('wood'),
+    color: 0xffffff,
+    roughness: 0.7,
+    metalness: 0,
+  })
+  const glass = new THREE.MeshStandardMaterial({
+    color: 0xbfe3f2,
+    roughness: 0.08,
+    metalness: 0.08,
+    transparent: true,
+    opacity: 0.26,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  })
+  const screen = new THREE.MeshStandardMaterial({
+    color: 0x0e141b,
+    roughness: 0.3,
+    metalness: 0.08,
+    emissive: 0x12283c,
+    emissiveIntensity: 0.5,
+  })
+  const foliage = new THREE.MeshStandardMaterial({
+    color: 0x50794c,
+    roughness: 0.94,
+    metalness: 0,
+  })
+  const foliageDark = new THREE.MeshStandardMaterial({
+    color: 0x3c6140,
+    roughness: 0.96,
+    metalness: 0,
+  })
+  const ceramic = new THREE.MeshStandardMaterial({
+    color: 0xd9d3c6,
+    roughness: 0.58,
+    metalness: 0.02,
+  })
+  const soil = new THREE.MeshStandardMaterial({
+    color: 0x3b2f26,
+    roughness: 0.98,
+    metalness: 0,
+  })
+  return {
+    wall,
+    edge,
+    fabric,
+    fabricDark,
+    metal,
+    wood,
+    glass,
+    screen,
+    foliage,
+    foliageDark,
+    ceramic,
+    soil,
+  }
+}
+
+/** 标记不希望被“整体换材质”覆盖的部件（玻璃 / 屏幕 / 植物） */
+function protectPart<T extends THREE.Mesh | null | undefined>(mesh: T): T {
+  if (mesh) mesh.userData.noFinish = true
+  return mesh
 }
 
 // ---------- 家具 / 基础设施墙面材质 ----------
@@ -913,6 +988,8 @@ function applyInfraFinish(group: THREE.Group, infra: Infra) {
   group.traverse((object) => {
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh) return
+    // 玻璃、屏幕、植物等部件保留自己的材质，换材质只作用于柜体 / 框架
+    if (mesh.userData.noFinish === true) return
     const replace = (material: THREE.Material): THREE.Material => {
       if (!(material instanceof THREE.MeshStandardMaterial)) return material
       const existing = cloned.get(material)
@@ -1261,6 +1338,1040 @@ function tableSquareGroup(width: number, depth: number, height: number, ghost: b
     )
   }
 
+  return group
+}
+
+// ---------- 第一批扩展家具 ----------
+
+/** 洽谈桌：木纹台面 + 细金属腿 + 桌下围板，高度固定 0.75m */
+function meetingTableGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, wood, metal } = furnitureMats(ghost)
+  const w = Math.max(0.8, width)
+  const d = Math.max(0.4, depth)
+  const h = Math.max(0.5, height)
+  const topT = Math.min(0.06, h * 0.08)
+  const legT = Math.min(0.06, Math.min(w, d) * 0.07)
+  const inset = Math.max(legT * 1.6, Math.min(0.18, Math.min(w, d) * 0.14))
+  const legH = Math.max(0.1, h - topT)
+  const apronH = Math.min(0.1, h * 0.12)
+
+  furnitureBox(group, wood, edge, w, topT, d, 0, h - topT / 2, 0, 0, 'meeting-table-top')
+  furnitureBox(
+    group,
+    wood,
+    edge,
+    Math.max(0.2, w - inset * 2),
+    apronH,
+    Math.max(0.2, d - inset * 2),
+    0,
+    h - topT - apronH / 2,
+    0,
+    0,
+    'meeting-table-apron',
+  )
+
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      protectPart(
+        furnitureBox(
+          group,
+          metal,
+          edge,
+          legT,
+          legH,
+          legT,
+          sx * (w / 2 - inset - legT / 2),
+          legH / 2,
+          sz * (d / 2 - inset - legT / 2),
+          0,
+          'meeting-table-leg',
+        ),
+      )
+    }
+  }
+
+  // 长桌补一根中横撑，视觉上更稳
+  if (w >= 1.4) {
+    protectPart(
+      furnitureBox(
+        group,
+        metal,
+        edge,
+        Math.max(0.2, w - inset * 2 - legT),
+        legT * 0.8,
+        legT * 0.8,
+        0,
+        legH * 0.4,
+        0,
+        0,
+        'meeting-table-stretcher',
+      ),
+    )
+  }
+  return group
+}
+
+/** 洽谈椅：软包座面 + 靠背 + 四条细金属腿，0.5 × 0.5 × 0.9m（座高约 0.45m） */
+function meetingChairGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, fabric, fabricDark, metal } = furnitureMats(ghost)
+  const w = Math.max(0.42, width)
+  const d = Math.max(0.42, depth)
+  const h = Math.max(0.7, height)
+  const seatT = Math.min(0.09, h * 0.1)
+  const seatTop = Math.min(h - 0.26, Math.max(seatT + 0.12, 0.45))
+  const legH = Math.max(0.12, seatTop - seatT)
+  const legT = Math.min(0.04, w * 0.08)
+  const backT = Math.min(0.08, d * 0.16)
+  const backH = Math.max(0.28, h - seatTop)
+
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      protectPart(
+        furnitureBox(
+          group,
+          metal,
+          edge,
+          legT,
+          legH,
+          legT,
+          sx * (w / 2 - legT * 1.4),
+          legH / 2,
+          sz * (d / 2 - legT * 1.4),
+          0,
+          'meeting-chair-leg',
+        ),
+      )
+    }
+  }
+
+  furnitureBox(
+    group,
+    fabric,
+    edge,
+    Math.max(0.2, w - 0.02),
+    seatT,
+    Math.max(0.2, d - 0.02),
+    0,
+    legH + seatT / 2,
+    0,
+    0,
+    'meeting-chair-seat',
+  )
+
+  furnitureBox(
+    group,
+    fabricDark,
+    edge,
+    Math.max(0.2, w - 0.02),
+    backH,
+    backT,
+    0,
+    seatTop + backH / 2,
+    -d / 2 + backT / 2 + 0.012,
+    -0.1,
+    'meeting-chair-back',
+  )
+  return group
+}
+
+/** 接待台：柜体 + 外挑台面 + 内缩踢脚 + 正面装饰板 */
+function receptionDeskGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, wood, metal, fabricDark } = furnitureMats(ghost)
+  const w = Math.max(1, width)
+  const d = Math.max(0.4, depth)
+  const h = Math.max(0.9, height)
+  const topT = Math.min(0.06, h * 0.07)
+  const kickH = Math.min(0.1, h * 0.1)
+  const bodyD = Math.max(0.25, d - 0.06)
+  const bodyH = Math.max(0.2, h - topT - kickH)
+  const bodyY = kickH + bodyH / 2
+
+  protectPart(
+    furnitureBox(
+      group,
+      fabricDark,
+      edge,
+      Math.max(0.3, w - 0.18),
+      kickH,
+      Math.max(0.2, bodyD - 0.12),
+      0,
+      kickH / 2,
+      0,
+      0,
+      'reception-kick',
+    ),
+  )
+  furnitureBox(
+    group,
+    wood,
+    edge,
+    Math.max(0.3, w - 0.04),
+    bodyH,
+    bodyD,
+    0,
+    bodyY,
+    0,
+    0,
+    'reception-body',
+  )
+  protectPart(
+    furnitureBox(group, metal, edge, w, topT, d, 0, h - topT / 2, 0, 0, 'reception-top'),
+  )
+  protectPart(
+    furnitureBox(
+      group,
+      fabricDark,
+      edge,
+      Math.max(0.4, w - 0.36),
+      Math.max(0.2, bodyH * 0.5),
+      0.02,
+      0,
+      kickH + bodyH * 0.55,
+      bodyD / 2 + 0.012,
+      0,
+      'reception-front',
+    ),
+  )
+  return group
+}
+
+/** 展柜：下柜 + 四角金属立柱 + 玻璃罩 + 内部层板，高 1.3m */
+function displayCaseGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, wood, metal, fabricDark, glass } = furnitureMats(ghost)
+  const w = Math.max(0.6, width)
+  const d = Math.max(0.4, depth)
+  const h = Math.max(0.9, height)
+  const baseTop = Math.min(h - 0.3, Math.max(0.5, h * 0.58))
+  const counterT = 0.03
+  const glassH = Math.max(0.2, h - baseTop - counterT - 0.02)
+  const glassBottom = baseTop + counterT + 0.01
+  const postT = Math.min(0.03, w * 0.04)
+  const glassT = 0.012
+
+  // 下柜与门缝把手
+  furnitureBox(group, wood, edge, w, baseTop, d, 0, baseTop / 2, 0, 0, 'case-base')
+  for (const sx of [-1, 1]) {
+    protectPart(
+      furnitureBox(
+        group,
+        fabricDark,
+        edge,
+        Math.min(0.02, w * 0.03),
+        Math.min(0.18, baseTop * 0.45),
+        0.012,
+        sx * w * 0.14,
+        baseTop * 0.56,
+        d / 2 - 0.006,
+        0,
+        'case-handle',
+      ),
+    )
+  }
+  // 台面压板
+  protectPart(
+    furnitureBox(
+      group,
+      metal,
+      edge,
+      w,
+      counterT,
+      d,
+      0,
+      baseTop + counterT / 2,
+      0,
+      0,
+      'case-counter',
+    ),
+  )
+
+  const gw = Math.max(0.1, w - postT * 2)
+  const gd = Math.max(0.1, d - postT * 2)
+  const gy = glassBottom + glassH / 2
+
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      protectPart(
+        furnitureBox(
+          group,
+          metal,
+          edge,
+          postT,
+          glassH,
+          postT,
+          sx * (w / 2 - postT / 2),
+          gy,
+          sz * (d / 2 - postT / 2),
+          0,
+          'case-post',
+        ),
+      )
+    }
+  }
+
+  // 四面玻璃 + 顶板，玻璃不参与整体材质替换
+  protectPart(
+    furnitureBox(group, glass, edge, gw, glassH, glassT, 0, gy, d / 2 - glassT / 2, 0, 'case-glass-front'),
+  )
+  protectPart(
+    furnitureBox(group, glass, edge, gw, glassH, glassT, 0, gy, -d / 2 + glassT / 2, 0, 'case-glass-back'),
+  )
+  protectPart(
+    furnitureBox(group, glass, edge, glassT, glassH, gd, w / 2 - glassT / 2, gy, 0, 0, 'case-glass-right'),
+  )
+  protectPart(
+    furnitureBox(group, glass, edge, glassT, glassH, gd, -w / 2 + glassT / 2, gy, 0, 0, 'case-glass-left'),
+  )
+  protectPart(
+    furnitureBox(group, glass, edge, gw, glassT, gd, 0, h - glassT / 2, 0, 0, 'case-glass-top'),
+  )
+
+  // 中部展示层板
+  furnitureBox(
+    group,
+    wood,
+    edge,
+    Math.max(0.1, gw - 0.04),
+    0.015,
+    Math.max(0.1, gd - 0.04),
+    0,
+    glassBottom + glassH * 0.46,
+    0,
+    0,
+    'case-shelf',
+  )
+  return group
+}
+
+/** 立式显示屏：底座 + 立杆 + 深色边框 + 屏幕，高 1.8m，屏幕面向 +Z */
+function displayScreenGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, metal, fabricDark, screen } = furnitureMats(ghost)
+  const w = Math.max(0.5, width)
+  const d = Math.max(0.3, depth)
+  const h = Math.max(1.2, height)
+  const baseH = 0.04
+  const baseW = Math.max(0.34, Math.min(w * 0.7, 0.7))
+  const baseD = Math.max(0.24, d)
+  const poleT = Math.max(0.05, Math.min(0.09, w * 0.08))
+  const screenH = Math.min(h - 0.4, Math.max(0.5, h * 0.72))
+  // 边框厚度 0.03：屏幕中心上移，使整机顶面正好落在标称高度
+  const screenY = h - 0.03 - screenH / 2
+  const screenBottom = screenY - screenH / 2
+  const screenW = Math.max(0.3, w * 0.94)
+
+  protectPart(
+    furnitureBox(group, metal, edge, baseW, baseH, baseD, 0, baseH / 2, 0, 0, 'screen-base'),
+  )
+  protectPart(
+    furnitureBox(
+      group,
+      metal,
+      edge,
+      poleT,
+      Math.max(0.2, screenY - baseH),
+      poleT,
+      0,
+      baseH + Math.max(0.2, screenY - baseH) / 2,
+      -0.01,
+      0,
+      'screen-pole',
+    ),
+  )
+  // 屏幕背板 / 边框
+  furnitureBox(
+    group,
+    fabricDark,
+    edge,
+    screenW + 0.06,
+    screenH + 0.06,
+    0.05,
+    0,
+    screenY,
+    0.025,
+    0,
+    'screen-bezel',
+  )
+  // 屏幕发光面
+  protectPart(
+    furnitureBox(
+      group,
+      screen,
+      edge,
+      screenW,
+      screenH,
+      0.012,
+      0,
+      screenY,
+      0.056,
+      0,
+      'screen-panel',
+    ),
+  )
+  // 底座与立杆之间的装饰横条
+  protectPart(
+    furnitureBox(
+      group,
+      metal,
+      edge,
+      Math.min(screenW * 0.5, 0.5),
+      0.03,
+      0.03,
+      0,
+      screenBottom - 0.03,
+      0.01,
+      0,
+      'screen-bar',
+    ),
+  )
+  return group
+}
+
+/** 绿植：陶瓷花盆 + 树干 + 分层树冠，高 1.3m；树冠不参与整体材质替换 */
+function plantGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, ceramic, soil, foliage, foliageDark } = furnitureMats(ghost)
+  const w = Math.max(0.4, width)
+  const d = Math.max(0.4, depth)
+  const h = Math.max(0.9, height)
+  const r = Math.min(w, d) / 2
+  const potH = Math.min(0.36, h * 0.28)
+  const potTopR = Math.max(0.12, r * 0.96)
+  const potBottomR = potTopR * 0.78
+
+  furnitureCylinder(group, ceramic, edge, potTopR, potBottomR, potH, potH / 2, 30, 'plant-pot')
+  protectPart(
+    furnitureCylinder(
+      group,
+      soil,
+      edge,
+      potTopR * 0.92,
+      potTopR * 0.92,
+      0.02,
+      potH - 0.03,
+      28,
+      'plant-soil',
+    ),
+  )
+
+  const trunkH = Math.max(0.25, h * 0.42)
+  const trunkR = Math.max(0.025, r * 0.09)
+  protectPart(
+    furnitureCylinder(
+      group,
+      soil,
+      edge,
+      trunkR * 0.8,
+      trunkR,
+      trunkH,
+      potH + trunkH / 2 - 0.02,
+      12,
+      'plant-trunk',
+    ),
+  )
+
+  const crownY = potH + trunkH
+  // 冠幅限制在占地范围内，避免视觉上穿出碰撞盒
+  const crownR = Math.max(0.12, Math.min(r * 0.9, (h - crownY) / 1.42))
+  const blobs = [
+    { x: 0, y: crownY + crownR * 0.55, z: 0, s: 0.86, dark: false },
+    { x: -crownR * 0.3, y: crownY + crownR * 0.18, z: crownR * 0.2, s: 0.54, dark: true },
+    { x: crownR * 0.28, y: crownY + crownR * 0.3, z: -crownR * 0.2, s: 0.5, dark: false },
+    { x: crownR * 0.05, y: crownY + crownR * 0.96, z: -crownR * 0.08, s: 0.45, dark: true },
+  ]
+  for (const blob of blobs) {
+    const geo = new THREE.IcosahedronGeometry(crownR * blob.s, 1)
+    const mesh = new THREE.Mesh(geo, blob.dark ? foliageDark : foliage)
+    mesh.name = 'plant-foliage'
+    mesh.position.set(blob.x, blob.y, blob.z)
+    mesh.castShadow = !(blob.dark ? foliageDark : foliage).transparent
+    mesh.receiveShadow = true
+    mesh.userData.noFinish = true
+    group.add(mesh)
+  }
+  return group
+}
+
+/** 椭圆圆柱：按 width / depth 独立缩放，用于样品柱这类可调长宽的圆柱件 */
+function ellipseCylinder(
+  group: THREE.Group,
+  material: THREE.Material,
+  edge: THREE.LineBasicMaterial,
+  width: number,
+  depth: number,
+  height: number,
+  y: number,
+  name: string,
+) {
+  const mesh = furnitureCylinder(
+    group,
+    material,
+    edge,
+    0.5,
+    0.5,
+    height,
+    y,
+    40,
+    name,
+  )
+  if (!mesh) return null
+  mesh.scale.set(width, 1, depth)
+  const line = group.children[group.children.length - 1] as THREE.LineSegments
+  if (line && (line as THREE.LineSegments).isLineSegments) {
+    line.scale.set(width, 1, depth)
+  }
+  return mesh
+}
+
+// ---------- 第二批扩展家具 ----------
+
+/** 层架：四角金属立柱 + 4 层木层板 + 背板，高 1.8m，正面开放 */
+function shelfGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, wood, metal } = furnitureMats(ghost)
+  const w = Math.max(0.6, width)
+  const d = Math.max(0.25, depth)
+  const h = Math.max(1.2, height)
+  const postT = Math.min(0.04, Math.min(w, d) * 0.12)
+  const shelfT = 0.03
+  const innerW = Math.max(0.1, w - postT * 2)
+  const innerD = Math.max(0.1, d - 0.03)
+  const levels = 4
+  const gap = (h - 0.16) / (levels - 1)
+
+  // 背板
+  furnitureBox(
+    group,
+    wood,
+    edge,
+    innerW,
+    Math.max(0.2, h - 0.08),
+    0.012,
+    0,
+    (h - 0.08) / 2 + 0.04,
+    -d / 2 + 0.01,
+    0,
+    'shelf-back',
+  )
+
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      protectPart(
+        furnitureBox(
+          group,
+          metal,
+          edge,
+          postT,
+          h,
+          postT,
+          sx * (w / 2 - postT / 2),
+          h / 2,
+          sz * (d / 2 - postT / 2),
+          0,
+          'shelf-post',
+        ),
+      )
+    }
+  }
+
+  for (let i = 0; i < levels; i += 1) {
+    furnitureBox(
+      group,
+      wood,
+      edge,
+      innerW,
+      shelfT,
+      innerD,
+      0,
+      0.06 + i * gap,
+      0,
+      0,
+      'shelf-board',
+    )
+  }
+
+  furnitureBox(group, wood, edge, w, 0.03, d, 0, h - 0.015, 0, 0, 'shelf-top')
+  return group
+}
+
+/** 样品台：内缩踢脚 + 方形台体 + 金属台面，高 0.9m */
+function displayPlinthGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, wood, metal, fabricDark } = furnitureMats(ghost)
+  const w = Math.max(0.4, width)
+  const d = Math.max(0.4, depth)
+  const h = Math.max(0.5, height)
+  const kickH = Math.min(0.05, h * 0.08)
+  const topT = Math.min(0.045, h * 0.06)
+  const bodyH = Math.max(0.2, h - kickH - topT)
+
+  protectPart(
+    furnitureBox(
+      group,
+      fabricDark,
+      edge,
+      Math.max(0.2, w - 0.1),
+      kickH,
+      Math.max(0.2, d - 0.1),
+      0,
+      kickH / 2,
+      0,
+      0,
+      'plinth-kick',
+    ),
+  )
+  furnitureBox(group, wood, edge, w, bodyH, d, 0, kickH + bodyH / 2, 0, 0, 'plinth-body')
+  protectPart(
+    furnitureBox(group, metal, edge, w, topT, d, 0, h - topT / 2, 0, 0, 'plinth-top'),
+  )
+  return group
+}
+
+/** 样品柱：方形底座 + 椭圆柱身 + 金属柱帽，高 1.0m */
+function displayColumnGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, wood, metal } = furnitureMats(ghost)
+  const w = Math.max(0.3, width)
+  const d = Math.max(0.3, depth)
+  const h = Math.max(0.6, height)
+  const baseH = 0.04
+  const topT = 0.03
+  const bodyH = Math.max(0.2, h - baseH - topT)
+
+  protectPart(
+    ellipseCylinder(group, metal, edge, w, d, baseH, baseH / 2, 'column-base'),
+  )
+  ellipseCylinder(
+    group,
+    wood,
+    edge,
+    w * 0.94,
+    d * 0.94,
+    bodyH,
+    baseH + bodyH / 2,
+    'column-body',
+  )
+  protectPart(
+    ellipseCylinder(group, metal, edge, w, d, topT, h - topT / 2, 'column-cap'),
+  )
+  return group
+}
+
+/** 吧桌：木台面 + 中央金属立柱 + 金属底盘，高 1.05m */
+function barTableGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, wood, metal } = furnitureMats(ghost)
+  const w = Math.max(0.4, width)
+  const d = Math.max(0.4, depth)
+  const h = Math.max(0.8, height)
+  const topT = 0.05
+  const baseH = 0.04
+  const columnT = Math.min(0.09, Math.min(w, d) * 0.16)
+  const columnH = Math.max(0.2, h - topT - baseH)
+
+  furnitureBox(group, wood, edge, w, topT, d, 0, h - topT / 2, 0, 0, 'bar-table-top')
+  protectPart(
+    furnitureBox(
+      group,
+      metal,
+      edge,
+      columnT,
+      columnH,
+      columnT,
+      0,
+      baseH + columnH / 2,
+      0,
+      0,
+      'bar-table-column',
+    ),
+  )
+  protectPart(
+    furnitureBox(
+      group,
+      metal,
+      edge,
+      Math.max(0.2, w * 0.5),
+      baseH,
+      Math.max(0.2, d * 0.5),
+      0,
+      baseH / 2,
+      0,
+      0,
+      'bar-table-base',
+    ),
+  )
+  return group
+}
+
+/** 吧椅：圆软包座面 + 金属立柱 + 底盘 + 脚踏环，固定 0.45 × 0.45 × 0.75m */
+function barStoolGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, fabric, metal } = furnitureMats(ghost)
+  const w = Math.max(0.36, width)
+  const d = Math.max(0.36, depth)
+  const h = Math.max(0.6, height)
+  const seatT = 0.06
+  const baseH = 0.03
+  const seatR = Math.max(0.12, Math.min(w, d) * 0.48)
+  const columnR = Math.max(0.02, seatR * 0.14)
+
+  furnitureCylinder(group, fabric, edge, seatR, seatR * 0.94, seatT, h - seatT / 2, 28, 'stool-seat')
+  protectPart(
+    furnitureCylinder(
+      group,
+      metal,
+      edge,
+      columnR,
+      columnR,
+      Math.max(0.15, h - seatT - baseH),
+      baseH + Math.max(0.15, h - seatT - baseH) / 2,
+      12,
+      'stool-column',
+    ),
+  )
+  protectPart(
+    furnitureCylinder(
+      group,
+      metal,
+      edge,
+      Math.max(0.12, seatR * 0.9),
+      Math.max(0.12, seatR * 0.9),
+      baseH,
+      baseH / 2,
+      24,
+      'stool-base',
+    ),
+  )
+
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(Math.max(0.09, seatR * 0.68), 0.012, 8, 24),
+    metal,
+  )
+  ring.name = 'stool-ring'
+  ring.rotation.x = Math.PI / 2
+  ring.position.y = h * 0.36
+  ring.castShadow = !(metal as THREE.MeshStandardMaterial).transparent
+  ring.receiveShadow = true
+  ring.userData.noFinish = true
+  group.add(ring)
+  return group
+}
+
+/** 矮柜：内缩踢脚 + 柜体 + 金属台面 + 门缝把手，高 0.8m */
+function lowCabinetGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, wood, metal, fabricDark } = furnitureMats(ghost)
+  const w = Math.max(0.6, width)
+  const d = Math.max(0.3, depth)
+  const h = Math.max(0.6, height)
+  const kickH = Math.min(0.05, h * 0.08)
+  const topT = 0.03
+  const bodyH = Math.max(0.2, h - kickH - topT)
+
+  protectPart(
+    furnitureBox(
+      group,
+      fabricDark,
+      edge,
+      Math.max(0.3, w - 0.1),
+      kickH,
+      Math.max(0.2, d - 0.08),
+      0,
+      kickH / 2,
+      0,
+      0,
+      'cabinet-kick',
+    ),
+  )
+  furnitureBox(group, wood, edge, w, bodyH, d, 0, kickH + bodyH / 2, 0, 0, 'cabinet-body')
+  protectPart(
+    furnitureBox(group, metal, edge, w, topT, d, 0, h - topT / 2, 0, 0, 'cabinet-top'),
+  )
+  // 对开门缝
+  protectPart(
+    furnitureBox(
+      group,
+      fabricDark,
+      edge,
+      0.008,
+      bodyH * 0.86,
+      0.006,
+      0,
+      kickH + bodyH / 2,
+      d / 2 - 0.003,
+      0,
+      'cabinet-seam',
+    ),
+  )
+  for (const sx of [-1, 1]) {
+    protectPart(
+      furnitureBox(
+        group,
+        fabricDark,
+        edge,
+        0.14,
+        0.014,
+        0.012,
+        sx * w * 0.22,
+        kickH + bodyH * 0.56,
+        d / 2 - 0.006,
+        0,
+        'cabinet-handle',
+      ),
+    )
+  }
+  return group
+}
+
+/** 资料架：金属底盘 + 立杆 + 两层倾斜资料板 + 顶部标题板，高 1.3m */
+function brochureStandGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, wood, metal } = furnitureMats(ghost)
+  const w = Math.max(0.35, width)
+  const d = Math.max(0.35, depth)
+  const h = Math.max(1, height)
+  const baseH = 0.03
+  const baseR = Math.max(0.12, Math.min(w, d) * 0.48)
+  const poleR = 0.022
+  const poleTop = h - 0.04
+  const trayW = Math.max(0.2, w * 0.98)
+  const trayD = Math.min(0.32, d * 0.95)
+  const trayT = 0.02
+  // 正向倾斜：正面（+Z）低、背面高，宣传册自然向后靠
+  const tilt = 0.42
+
+  protectPart(
+    furnitureCylinder(group, metal, edge, baseR, baseR, baseH, baseH / 2, 28, 'stand-base'),
+  )
+  protectPart(
+    furnitureCylinder(
+      group,
+      metal,
+      edge,
+      poleR,
+      poleR,
+      Math.max(0.2, poleTop - baseH),
+      baseH + Math.max(0.2, poleTop - baseH) / 2,
+      12,
+      'stand-pole',
+    ),
+  )
+
+  const trayYs = [h - 0.42, h - 0.16]
+  const trayZ = 0.02
+  const cos = Math.cos(tilt)
+  const sin = Math.sin(tilt)
+  const shelfT = 0.02
+  const shelfD = Math.min(0.2, trayD * 0.7)
+  for (const y of trayYs) {
+    // 倾斜靠板：正面低、背面高
+    furnitureBox(group, wood, edge, trayW, trayD, trayT, 0, y, trayZ, tilt, 'stand-tray')
+    const frontY = y - (trayD / 2) * sin
+    const frontZ = trayZ + (trayD / 2) * cos
+    // 底部托板 + 前挡边，形成能“装册子”的兜
+    furnitureBox(
+      group,
+      wood,
+      edge,
+      trayW,
+      shelfT,
+      shelfD,
+      0,
+      frontY - shelfT / 2,
+      frontZ - shelfD / 2,
+      0,
+      'stand-shelf',
+    )
+    protectPart(
+      furnitureBox(
+        group,
+        metal,
+        edge,
+        trayW,
+        0.05,
+        0.014,
+        0,
+        frontY + 0.025,
+        frontZ - 0.007,
+        0,
+        'stand-lip',
+      ),
+    )
+  }
+
+  furnitureBox(
+    group,
+    wood,
+    edge,
+    Math.max(0.2, trayW * 0.82),
+    0.08,
+    0.02,
+    0,
+    h - 0.04,
+    0.02,
+    0,
+    'stand-header',
+  )
+  return group
+}
+
+/** 讲台：踢脚 + 台体 + 倾斜阅读台面 + 正面装饰板，高 1.1m */
+function lecternGroup(
+  width: number,
+  depth: number,
+  height: number,
+  ghost: boolean,
+): THREE.Group {
+  const group = new THREE.Group()
+  const { edge, wood, metal, fabricDark } = furnitureMats(ghost)
+  const w = Math.max(0.5, width)
+  const d = Math.max(0.4, depth)
+  const h = Math.max(0.9, height)
+  const baseH = 0.05
+  const bodyD = d * 0.72
+  const bodyH = Math.max(0.3, h - baseH - 0.08)
+  const topT = 0.04
+  const topTilt = -0.22
+
+  protectPart(
+    furnitureBox(
+      group,
+      fabricDark,
+      edge,
+      Math.max(0.3, w * 0.86),
+      baseH,
+      Math.max(0.25, d * 0.8),
+      0,
+      baseH / 2,
+      0,
+      0,
+      'lectern-base',
+    ),
+  )
+  furnitureBox(
+    group,
+    wood,
+    edge,
+    Math.max(0.3, w * 0.9),
+    bodyH,
+    bodyD,
+    0,
+    baseH + bodyH / 2,
+    0,
+    0,
+    'lectern-body',
+  )
+  protectPart(
+    furnitureBox(
+      group,
+      fabricDark,
+      edge,
+      Math.max(0.2, w * 0.6),
+      Math.max(0.15, bodyH * 0.5),
+      0.02,
+      0,
+      baseH + bodyH * 0.55,
+      bodyD / 2 + 0.011,
+      0,
+      'lectern-front',
+    ),
+  )
+  furnitureBox(
+    group,
+    wood,
+    edge,
+    w,
+    topT,
+    d,
+    0,
+    h - 0.07,
+    0,
+    topTilt,
+    'lectern-top',
+  )
+  protectPart(
+    furnitureBox(
+      group,
+      metal,
+      edge,
+      Math.max(0.1, w * 0.4),
+      0.03,
+      0.02,
+      0,
+      h - 0.12,
+      -d / 2 + 0.03,
+      0,
+      'lectern-lip',
+    ),
+  )
   return group
 }
 
@@ -1785,6 +2896,48 @@ export function buildInfra(
       break
     case 'table-square':
       group = tableSquareGroup(width, depth, height, ghost)
+      break
+    case 'meeting-table':
+      group = meetingTableGroup(width, depth, height, ghost)
+      break
+    case 'meeting-chair':
+      group = meetingChairGroup(width, depth, height, ghost)
+      break
+    case 'reception-desk':
+      group = receptionDeskGroup(width, depth, height, ghost)
+      break
+    case 'display-case':
+      group = displayCaseGroup(width, depth, height, ghost)
+      break
+    case 'display-screen':
+      group = displayScreenGroup(width, depth, height, ghost)
+      break
+    case 'plant':
+      group = plantGroup(width, depth, height, ghost)
+      break
+    case 'shelf':
+      group = shelfGroup(width, depth, height, ghost)
+      break
+    case 'display-plinth':
+      group = displayPlinthGroup(width, depth, height, ghost)
+      break
+    case 'display-column':
+      group = displayColumnGroup(width, depth, height, ghost)
+      break
+    case 'bar-table':
+      group = barTableGroup(width, depth, height, ghost)
+      break
+    case 'bar-stool':
+      group = barStoolGroup(width, depth, height, ghost)
+      break
+    case 'low-cabinet':
+      group = lowCabinetGroup(width, depth, height, ghost)
+      break
+    case 'brochure-stand':
+      group = brochureStandGroup(width, depth, height, ghost)
+      break
+    case 'lectern':
+      group = lecternGroup(width, depth, height, ghost)
       break
     default:
       group = wallGroup(width, depth, height, openings, ghost)

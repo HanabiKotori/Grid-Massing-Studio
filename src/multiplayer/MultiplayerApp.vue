@@ -1929,6 +1929,7 @@ onBeforeUnmount(() => {
         :quality-label="qualityLabel"
         :booth-labels-on="boothLabelsOn"
         :infra-labels-on="infraLabelsOn"
+        :furniture-labels-on="false"
         :dim-on="dimOn"
         :area-on="areaOn"
         :grid-on="gridOn"
