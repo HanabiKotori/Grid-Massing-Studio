@@ -10,16 +10,40 @@
     "buildCommand": "npm run build",
     "distDir": "dist",
     "owner": "www:www",
-    "keep": [".user.ini", ".htaccess"]
+    "keep": [
+      ".user.ini",
+      ".htaccess"
+    ]
   },
   "multiplayer": {
     "remotePath": "/www/wwwroot/多人",
     "localDir": "gameService",
-    "files": ["server.mjs", "package.json", "package-lock.json"],
+    "files": [
+      "server.mjs",
+      "package.json",
+      "package-lock.json"
+    ],
     "uploadEnv": false,
     "pm2Name": "server",
     "entry": "server.mjs",
     "installDeps": true,
     "restartMode": "auto"
+  },
+  "data": {
+    "remotePath": "/www/wwwroot/数据",
+    "localDir": "dataService",
+    "include": [
+      "server.mjs",
+      "schema.sql",
+      "package.json",
+      "package-lock.json",
+      "src"
+    ],
+    "uploadEnv": true,
+    "pm2Name": "dataService",
+    "entry": "server.mjs",
+    "installDeps": true,
+    "restartMode": "auto",
+    "healthUrl": "http://127.0.0.1:3020/api/health"
   }
 }

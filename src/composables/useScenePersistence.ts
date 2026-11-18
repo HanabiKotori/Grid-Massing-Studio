@@ -26,6 +26,16 @@ import type {
 } from '../core/types'
 import { WEATHER_LABELS, type WeatherKind } from '../core/weather'
 
+/** 云端存储桥接：由 App 注入，启用且就绪时自动保存 / 恢复走云端 */
+export interface SceneCloudBridge {
+  enabled: boolean
+  ready: () => boolean
+  save: (scene: unknown) => Promise<void>
+  fetch: () => Promise<unknown | null>
+  /** 云端与本地同时有数据时，询问用户是否用云端数据覆盖本地 */
+  confirmOverwrite: () => Promise<boolean>
+}
+
 interface ScenePersistenceOptions {
   venue: ShallowRef<Venue | null>
   venueName: Ref<string>
@@ -56,6 +66,8 @@ interface ScenePersistenceOptions {
   toast: (text: string) => void
   getStage: () => Stage | null
   resetSequences: (booths: number, infras: number) => void
+  /** 云存储模式（配置开关 + 登录状态） */
+  cloud?: SceneCloudBridge
 }
 
 /** 查到本地数据后，加载遮罩的最短展示时间 */
@@ -66,7 +78,7 @@ function wait(ms: number): Promise<void> {
 }
 
 /** 只有存在实际场景内容时才进入恢复流程；忽略首次打开自动保存的空场景 */
-function hasRestorableScene(scene: unknown): boolean {
+export function hasRestorableScene(scene: unknown): boolean {
   if (!scene || typeof scene !== 'object') return false
   const s = scene as {
     venue?: { points?: unknown }
@@ -89,7 +101,8 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
   let importedDuringRestore = false
 
   /** 自动保存状态，供状态栏显示 */
-  const saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  /** unsaved：云存储已开启但未登录 / 未选择位置，不写入任何存储 */
+  const saveState = ref<'idle' | 'saving' | 'saved' | 'error' | 'unsaved'>('idle')
   const savedAt = ref<number | null>(null)
 
   function buildSceneJson(): SceneJson {
@@ -109,14 +122,21 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
 
   async function saveProjectNow() {
     if (options.renderOnly.value) return
+    const cloudMode = !!options.cloud?.enabled
+
+    // 云存储开启时完全不用 IndexedDB：未登录 / 未选位置直接标记未保存
+    if (cloudMode && !options.cloud!.ready()) {
+      saveState.value = 'unsaved'
+      return
+    }
+
     saveState.value = 'saving'
+    const at = Date.now()
+    const scene = buildSceneJson()
+
     try {
-      const at = Date.now()
-      await saveStoredProject({
-        version: 1,
-        savedAt: at,
-        scene: buildSceneJson(),
-      })
+      if (cloudMode) await options.cloud!.save(scene)
+      else await saveStoredProject({ version: 1, savedAt: at, scene })
       savedAt.value = at
       saveState.value = 'saved'
     } catch (err) {
@@ -144,30 +164,69 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
       options.appBooting.value = false
       return
     }
+
+    const cloudMode = !!options.cloud?.enabled
+
     try {
-      const saved = await loadStoredProject()
-      if (
-        !saved ||
-        importedDuringRestore ||
-        !hasRestorableScene(saved.scene)
-      ) {
+      // 云模式未登录 / 未选位置：不启用自动恢复，也不读取本地 IndexedDB
+      if (cloudMode && !options.cloud!.ready()) {
         autosaveReady = true
         options.appBooting.value = false
         return
       }
 
-      // 确认有本地数据后，先让加载遮罩完整展示 2 秒，再恢复场景
+      let scene: unknown = null
+      let fromCloud = false
+
+      if (cloudMode) {
+        try {
+          const remote = await options.cloud!.fetch()
+          if (remote) {
+            const local = await loadStoredProject()
+            const hasLocal = !!local && hasRestorableScene(local.scene)
+            if (hasLocal) {
+              // 启动遮罩 z-index 低于确认弹窗：等待用户决定是否用云端覆盖本地
+              const overwrite = await options.cloud!.confirmOverwrite()
+              if (overwrite) {
+                scene = remote
+                fromCloud = true
+              } else {
+                scene = local.scene
+              }
+            } else {
+              scene = remote
+              fromCloud = true
+            }
+          }
+        } catch (err) {
+          console.warn('读取云端存档失败', err)
+          options.toast('云端存档读取失败，请检查网络或重新登录')
+        }
+      } else {
+        const saved = await loadStoredProject()
+        if (saved && hasRestorableScene(saved.scene)) scene = saved.scene
+      }
+
+      if (!scene || importedDuringRestore) {
+        autosaveReady = true
+        options.appBooting.value = false
+        return
+      }
+
+      // 确认有数据后，先让加载遮罩完整展示 2 秒，再恢复场景
       await wait(BOOT_RESTORE_DELAY)
       options.restoringProject.value = true
       let restored = false
       try {
-        restored = applySceneJson(saved.scene)
+        restored = applySceneJson(scene)
       } finally {
         options.restoringProject.value = false
         autosaveReady = true
         options.appBooting.value = false
       }
-      if (restored) options.toast('已恢复上次自动保存的场景')
+      if (restored) {
+        options.toast(fromCloud ? '已恢复云端存储的场景' : '已恢复上次自动保存的场景')
+      }
     } catch (err) {
       autosaveReady = true
       options.appBooting.value = false
@@ -361,6 +420,7 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
     onImportFile,
     importSceneJson,
     applySceneJson,
+    saveProjectNow,
     scheduleAutosave,
     restoreStoredProject,
     saveState,

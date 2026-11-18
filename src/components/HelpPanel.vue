@@ -33,7 +33,12 @@ const props = defineProps<{
   labelsOn: boolean
   areasOn: boolean
   canWalk: boolean
+  cloudEnabled?: boolean
 }>()
+
+/** 云端关闭时只说明 IndexedDB 自动保存 */
+const LOCAL_STORAGE_TIP =
+  '编辑内容会自动保存到浏览器 IndexedDB，刷新页面会自动恢复；导入 JSON 或载入示例会立即覆盖自动保存。重要方案仍建议额外导出备份。'
 
 const emit = defineEmits<{
   (e: 'quick', action: HelpQuickAction): void
@@ -76,7 +81,7 @@ const sections: HelpSection[] = [
         text: '欢迎页「载入示例」会载入内置 W1 场景：19 个展台、66 个设施，包含 25 扇窗户、10 个出入口、16 段内墙和 7 件家具。',
       },
     ],
-    tips: '编辑内容会自动保存到浏览器 IndexedDB，刷新页面会自动恢复；导入 JSON 或载入示例会立即覆盖自动保存。重要方案仍建议额外导出备份。',
+    tips: '编辑内容默认自动保存到浏览器 IndexedDB；开启云端存储后改为保存到所选云端位置（未登录或未选位置时不保存）。导入 JSON 或载入示例会立即覆盖自动保存，重要方案仍建议额外导出备份。',
   },
   {
     id: 'interface',
@@ -361,6 +366,7 @@ const sections: HelpSection[] = [
           { keys: 'Backspace', action: '绘制中撤回上一点；空闲时删除选中对象' },
           { keys: 'Delete', action: '删除选中的展台或设施' },
           { keys: '↑ ↓ ← →', action: '选中家具后按 0.01 m 步进微调位置' },
+          { keys: 'Ctrl / Cmd + S', action: '立即保存当前场景' },
           { keys: 'Ctrl / Cmd + C', action: '复制选中展台及其内部内容，或复制选中设施并进入放置' },
           { keys: 'Ctrl / Cmd + Z', action: '撤销；绘制中撤回上一点' },
           { keys: 'Ctrl / Cmd + Y', action: '重做' },
@@ -526,7 +532,9 @@ onMounted(() => closeEl.value?.focus())
                 </article>
               </div>
 
-              <div v-if="item.tips" class="help-tip">{{ item.tips }}</div>
+              <div v-if="item.tips" class="help-tip">
+                {{ item.id === 'start' && !cloudEnabled ? LOCAL_STORAGE_TIP : item.tips }}
+              </div>
 
               <div v-if="item.shortcuts" class="help-shortcut-groups">
                 <div

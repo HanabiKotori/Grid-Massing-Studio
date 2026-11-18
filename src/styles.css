@@ -1581,7 +1581,8 @@ input[type='range']::-moz-range-thumb {
   top: 24px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 30;
+  /* 位于云存储 / 确认弹窗之上，保证登录成功等提示可见 */
+  z-index: 300;
   box-sizing: border-box;
   width: max-content;
   max-width: min(560px, calc(100vw - 32px));

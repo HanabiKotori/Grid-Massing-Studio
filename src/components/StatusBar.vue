@@ -18,8 +18,12 @@ const props = defineProps<{
   renderOnly: boolean
   walking: boolean
   spaceNav: boolean
-  saveState: 'idle' | 'saving' | 'saved' | 'error'
+  saveState: 'idle' | 'saving' | 'saved' | 'error' | 'unsaved'
   savedAt: number | null
+  /** 当前持久化方式：本地 IndexedDB 或云端存储 */
+  storageMode?: 'local' | 'cloud'
+  /** 云存储未就绪时的红色提示（未登录 / 未选择位置） */
+  cloudHint?: string
 }>()
 
 const modeText = computed(() => {
@@ -44,13 +48,16 @@ const selectionText = computed(() => {
 const coord = computed(() => props.position ?? props.hover)
 
 const saveText = computed(() => {
-  if (props.saveState === 'saving') return '保存中…'
-  if (props.saveState === 'error') return '保存失败'
+  if (props.cloudHint) return props.cloudHint
+  const cloud = props.storageMode === 'cloud'
+  if (props.saveState === 'saving') return cloud ? '云端保存中…' : '保存中…'
+  if (props.saveState === 'error') return cloud ? '云端保存失败' : '保存失败'
   if (props.saveState === 'saved' && props.savedAt) {
     const d = new Date(props.savedAt)
-    return `已保存 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    return cloud ? `云端 ${time}` : `已保存 ${time}`
   }
-  return '无数据'
+  return cloud ? '云端未保存' : '无数据'
 })
 </script>
 
@@ -81,7 +88,7 @@ const saveText = computed(() => {
       <span class="wb-coord-unit">°</span>
     </span>
     <span class="sp" />
-    <span class="wb-save" :class="saveState">{{ saveText }}</span>
+    <span class="wb-save" :class="[saveState, { blocked: !!cloudHint }]">{{ saveText }}</span>
     <span class="vsep" />
     <span>{{ gridOn ? '1 m 网格 · 吸附 0.5 m' : '网格关闭' }}</span>
     <span class="vsep" />

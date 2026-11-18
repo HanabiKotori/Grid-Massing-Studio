@@ -14,9 +14,17 @@ interface MobileHelpSection {
   tip?: string
 }
 
+defineProps<{
+  cloudEnabled?: boolean
+}>()
+
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
+
+/** 云端关闭时只说明 IndexedDB 自动保存 */
+const LOCAL_STORAGE_TIP =
+  '编辑内容会自动保存到浏览器 IndexedDB，刷新后恢复；导入 JSON 或载入示例时新场景优先，重要方案仍建议额外导出备份。'
 
 const openId = ref('start')
 
@@ -51,7 +59,7 @@ const sections: MobileHelpSection[] = [
         text: '欢迎页「载入示例」会载入内置 W1 场景：19 个展台、66 个设施，包含 25 扇窗户、10 个出入口、16 段内墙和 7 件家具。',
       },
     ],
-    tip: '编辑内容会自动保存到浏览器 IndexedDB，刷新后恢复；手动导入 JSON 或载入示例时新场景优先。重要方案仍建议额外导出备份。',
+    tip: '编辑内容默认自动保存到浏览器 IndexedDB；开启云端存储后改为保存到所选云端位置（未登录或未选位置时不保存）。导入 JSON 或载入示例时新场景优先，重要方案仍建议额外导出备份。',
   },
   {
     id: 'layout',
@@ -262,7 +270,9 @@ function toggle(id: string) {
               <h3>{{ card.title }}</h3>
               <p>{{ card.text }}</p>
             </article>
-            <div v-if="item.tip" class="mobile-help-tip">{{ item.tip }}</div>
+            <div v-if="item.tip" class="mobile-help-tip">
+              {{ item.id === 'start' && !cloudEnabled ? LOCAL_STORAGE_TIP : item.tip }}
+            </div>
           </div>
         </section>
 

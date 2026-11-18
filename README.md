@@ -141,6 +141,22 @@ VITE_MULTIPLAYER_WS_URL=ws://localhost:3010
 
 完整环境变量、Nginx / 宝塔反向代理和 PM2 部署说明见 [`gameService/README.md`](./gameService/README.md)。
 
+### 云端存储（可选）
+
+默认使用浏览器 IndexedDB 自动保存。开启云端存储后，账号与场景保存在 MySQL 中，每个账号可选择 10 个存储位置：
+
+1. 启动云存储服务，配置方式见 [`dataService/README.md`](./dataService/README.md)；
+2. 在项目根目录 `.env.local` 中开启开关：
+
+```bash
+VITE_CLOUD_STORAGE_ENABLED=true
+VITE_DATA_SERVICE_URL=http://127.0.0.1:3020
+```
+
+3. 打开「数据 → 云端存储」注册 / 登录，保存到任一位置并设为自动保存。
+
+云端模式下自动保存写入所选位置；若本地 IndexedDB 已有数据，加载云端存档时会弹窗询问是否覆盖。把开关改回 `false` 即恢复原有 IndexedDB 模式。
+
 ### 高德实时天气
 
 在项目根目录 `.env.local` 中配置高德开放平台 Web 服务 Key：
@@ -232,6 +248,7 @@ VITE_AMAP_KEY=your_amap_web_service_key
 .
 ├─ index.html            # 单页应用入口（中文标题与内联 favicon）
 ├─ gameService/          # Node WebSocket 房间服务、环境变量与宝塔 / Nginx 说明
+├─ dataService/          # 云存储服务：账号、滑块验证码与 10 个场景存储位置
 ├─ src/
 │  ├─ main.ts            # 挂载根组件并注册 Vue Router
 │  ├─ Root.vue           # RouterView 根组件

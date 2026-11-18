@@ -49,10 +49,19 @@ interface EditorShortcutOptions {
   nudgeSelectedFurniture: (dx: number, dz: number) => void
   toggleGrid: () => void
   openMultiplayer: () => void
+  /** Ctrl / Cmd + S：立即保存当前场景 */
+  saveProject: () => void
 }
 
 export function useEditorShortcuts(options: EditorShortcutOptions) {
   function onKey(e: KeyboardEvent) {
+    // Ctrl / Cmd + S：任何模式下都立即保存，并阻止浏览器「保存网页」
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') {
+      e.preventDefault()
+      if (!e.repeat) options.saveProject()
+      return
+    }
+
     if (options.presentationOn.value) {
       if (e.key === 'Escape') {
         e.preventDefault()

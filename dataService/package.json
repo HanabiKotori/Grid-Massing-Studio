@@ -1,0 +1,19 @@
+{
+  "name": "grid-massing-data-service",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Grid Massing Studio cloud storage service: accounts, slider captcha and versioned scene slots",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.11.5"
+  }
+}

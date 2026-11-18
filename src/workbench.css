@@ -2280,6 +2280,11 @@ body {
   color: #e06c5a;
 }
 
+/* 云存储未登录 / 未选择位置：不写任何存储，右下角红色提示 */
+.wb-save.blocked {
+  color: #e06c5a;
+}
+
 /* ---------- 属性栏：行式布局（A 方案） ---------- */
 /* ---------- 属性栏：A 方案（完全重写，不继承旧样式） ---------- */
 
@@ -3133,6 +3138,7 @@ body {
 
 .app.wb .welcome-sub {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

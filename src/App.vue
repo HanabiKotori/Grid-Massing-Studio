@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import ActionDock from './components/ActionDock.vue'
 import AppTopBar from './components/AppTopBar.vue'
 import ExportDialog from './components/ExportDialog.vue'
+import CloudStorageDialog from './components/CloudStorageDialog.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import HelpMobilePanel from './components/HelpMobilePanel.vue'
 import HelpPanel from './components/HelpPanel.vue'
@@ -23,7 +24,11 @@ import {
   polygonsOverlap,
 } from './core/polygon'
 import { Stage, type ReportLayers } from './core/Stage'
-import { saveStoredProject } from './core/projectStore'
+import {
+  clearStoredProject,
+  loadStoredProject,
+  saveStoredProject,
+} from './core/projectStore'
 import sampleSceneJson from './data/sample-scene.json'
 import { exportBoothList, type SceneJson } from './core/sceneFile'
 import {
@@ -34,7 +39,11 @@ import {
 import type { WeatherKind } from './core/weather'
 import { useWeather } from './composables/useWeather'
 import { useEditorShortcuts } from './composables/useEditorShortcuts'
-import { useScenePersistence } from './composables/useScenePersistence'
+import {
+  hasRestorableScene,
+  useScenePersistence,
+} from './composables/useScenePersistence'
+import { useCloudStorage } from './composables/useCloudStorage'
 import { useStageSync } from './composables/useStageSync'
 import { useUnderlay } from './composables/useUnderlay'
 import { useInfraEditing } from './composables/useInfraEditing'
@@ -287,12 +296,64 @@ function setVenueRule(key: keyof VenueRules, value: number | boolean) {
   }
 }
 
+// ---------- 云端存储 ----------
+
+const cloud = useCloudStorage()
+const showCloudDialog = ref(false)
+const cloudOverwrite = ref<{ resolve: (ok: boolean) => void } | null>(null)
+const CLOUD_OVERWRITE_MESSAGE =
+  '检测到本地 IndexedDB 中已有场景数据。是否用云端存档覆盖当前场景？选择「保留本地」会继续使用本地场景。'
+
+function askCloudOverwrite(): Promise<boolean> {
+  return new Promise((resolve) => {
+    cloudOverwrite.value = { resolve }
+  })
+}
+
+function confirmCloudOverwrite() {
+  cloudOverwrite.value?.resolve(true)
+  cloudOverwrite.value = null
+}
+
+function cancelCloudOverwrite() {
+  cloudOverwrite.value?.resolve(false)
+  cloudOverwrite.value = null
+}
+
+const cloudModeActive = computed(
+  () => cloud.enabled && !!cloud.user.value && cloud.currentSlot.value !== null,
+)
+
+/** 登录时若已有未保存场景，先暂停自动保存，等待用户另存 / 覆盖 / 弃用 */
+const cloudScenePending = ref(false)
+
+const hasSceneContent = computed(
+  () =>
+    !!venue.value ||
+    booths.value.length > 0 ||
+    infras.value.length > 0 ||
+    !!underlay.value,
+)
+
+/** 欢迎页入口文案：未登录时引导登录 */
+const cloudWelcomeLabel = computed(() => (cloud.user.value ? '云端存储' : '登录云端'))
+
+/** 云模式未就绪时的状态栏红色提示；空字符串表示正常保存 */
+const cloudBlockedHint = computed(() => {
+  if (!cloud.enabled) return ''
+  if (!cloud.user.value) return '未保存 · 未登录'
+  if (cloudScenePending.value) return '未保存 · 请选择存储位置'
+  if (cloud.currentSlot.value === null) return '未保存 · 未选择位置'
+  return ''
+})
+
 const {
   buildSceneJson,
   downloadScene,
   onImportFile,
   importSceneJson,
   applySceneJson,
+  saveProjectNow,
   scheduleAutosave,
   restoreStoredProject,
   saveState,
@@ -327,6 +388,17 @@ const {
   toast,
   getStage: () => stage,
   resetSequences,
+  cloud: {
+    enabled: cloud.enabled,
+    // 有未处理场景时暂停自动保存，避免登录后直接覆盖云端存档
+    ready: () => cloud.ready.value && !cloudScenePending.value,
+    save: async (scene) => {
+      const ok = await cloud.saveAutosave(scene)
+      if (!ok) throw new Error(cloud.error.value || '云端保存失败')
+    },
+    fetch: () => cloud.fetchCurrentScene(),
+    confirmOverwrite: () => askCloudOverwrite(),
+  },
 })
 
 function clampHeight(v: number): number {
@@ -766,6 +838,117 @@ async function downloadInventoryXlsx() {
   }
 }
 
+/** Ctrl / Cmd + S：立即保存，并按当前存储方式给出反馈 */
+async function saveSceneManually() {
+  if (renderOnly.value) {
+    toast('只读模式已禁用保存')
+    return
+  }
+  if (cloud.enabled && !cloud.ready.value) {
+    // 未登录时直接打开登录框；已登录时打开位置选择面板
+    openCloudDialog()
+    toast(
+      !cloud.user.value
+        ? '请先登录云端存储'
+        : cloudScenePending.value
+          ? '请选择保存位置，或弃用当前场景'
+          : '请先选择云端存储位置',
+    )
+    return
+  }
+  if (saveState.value === 'saving') {
+    toast('正在保存…')
+    return
+  }
+  await saveProjectNow()
+  if (saveState.value === 'saved') {
+    toast(
+      cloudModeActive.value
+        ? `已保存到云端位置 ${cloud.currentSlot.value ?? ''}`
+        : '已保存到本地',
+    )
+  } else if (cloudModeActive.value) {
+    toast('云端保存失败，已保存到本地兜底')
+  } else {
+    toast('保存失败，请稍后重试')
+  }
+}
+
+/** 打开云端存储面板；配置关闭时给出明确提示 */
+function openCloudDialog() {
+  toolMenu.value = null
+  if (!cloud.enabled) {
+    toast('云端存储未启用：请在 .env 中设置 VITE_CLOUD_STORAGE_ENABLED=true 后重启')
+    return
+  }
+  showCloudDialog.value = true
+}
+
+/** 登录成功：若已有未保存场景，先暂停自动保存并提示用户处理 */
+function handleCloudLoginSuccess() {
+  if (!hasSceneContent.value) return
+  cloudScenePending.value = true
+}
+
+/** 弃用未保存场景：有云端存档则恢复，否则清空并取消自动保存目标 */
+async function discardCloudScene() {
+  const slot = cloud.currentSlot.value
+  cloudScenePending.value = false
+  if (slot !== null) {
+    try {
+      const detail = await cloud.fetchSlot(slot)
+      showCloudDialog.value = false
+      applySceneJson(detail.scene)
+      savedAt.value = Date.now()
+      saveState.value = 'saved'
+      toast('已弃用当前场景，已恢复云端存档')
+      return
+    } catch (err) {
+      console.warn('恢复云端存档失败', err)
+    }
+  }
+  showCloudDialog.value = false
+  deleteVenue()
+  underlay.value = null
+  venueName.value = '场馆白膜'
+  cloud.setCurrentSlot(null)
+  saveState.value = 'idle'
+  toast('已弃用当前场景')
+}
+
+/** 手动保存当前场景到云端位置，并把它设为自动保存位置 */
+async function saveSceneToCloud(slot: number) {
+  await cloud.saveSlot(slot, venueName.value || '未命名场景', buildSceneJson())
+  cloud.setCurrentSlot(slot)
+  cloudScenePending.value = false
+  // 手动保存不经过自动保存队列，这里同步状态栏
+  savedAt.value = Date.now()
+  saveState.value = 'saved'
+  toast(`已保存到云端位置 ${slot}，自动保存已切换到此位置`)
+}
+
+/** 加载云端场景：本地已有数据时先询问是否覆盖 */
+async function loadSceneFromCloud(slot: number) {
+  const detail = await cloud.fetchSlot(slot)
+  const local = await loadStoredProject()
+  if (local && hasRestorableScene(local.scene)) {
+    const overwrite = await askCloudOverwrite()
+    if (!overwrite) {
+      toast('已取消加载云端存档')
+      return
+    }
+  }
+  cloud.setCurrentSlot(slot)
+  cloudScenePending.value = false
+  applySceneJson(detail.scene)
+  showCloudDialog.value = false
+}
+
+async function deleteSceneFromCloud(slot: number) {
+  await cloud.removeSlot(slot)
+  toast(`已删除云端位置 ${slot}`)
+}
+
 /** 阵列复制：沿 X 或 Z 方向按间距复制 N 个，保留展商、Logo、标记等属性 */
 function arrayBooth(id: string, count: number, gap: number, axis: 'x' | 'z') {
   const src = booths.value.find((b) => b.id === id)
@@ -1087,7 +1270,7 @@ function closeMergeDialog() {
 }
 
 type PendingConfirm = {
-  kind: 'clear-data' | 'redraw-venue' | 'delete-booth'
+  kind: 'clear-data' | 'redraw-venue' | 'delete-booth' | 'cloud-logout'
   title: string
   message: string
   confirmLabel: string
@@ -1106,6 +1289,18 @@ function requestClearData() {
     message:
       '将清空场馆、展台、基础设施、家具和底图，并重置场馆名称。确定清空当前数据？',
     confirmLabel: '清空',
+    danger: true,
+  }
+}
+
+/** 退出云存储：确认后登出并清空当前场景，避免残留上一个账号的内容 */
+function requestCloudLogout() {
+  pendingConfirm.value = {
+    kind: 'cloud-logout',
+    title: '退出云存储',
+    message:
+      '退出登录会清空当前场景数据（场馆、展台、设施与底图），并删除浏览器的本地缓存。确定退出？',
+    confirmLabel: '退出并清空',
     danger: true,
   }
 }
@@ -1134,6 +1329,17 @@ function confirmPendingAction() {
   const action = pendingConfirm.value
   pendingConfirm.value = null
   if (!action) return
+  if (action.kind === 'cloud-logout') {
+    cloud.logout()
+    cloudScenePending.value = false
+    deleteVenue()
+    underlay.value = null
+    venueName.value = '场馆白膜'
+    showCloudDialog.value = false
+    void clearStoredProject()
+    toast('已退出云存储并清空当前场景')
+    return
+  }
   if (action.kind === 'redraw-venue') {
     startVenueDraw()
     return
@@ -1154,12 +1360,14 @@ async function openMultiplayer() {
     toast('请先创建场馆')
     return
   }
+  const snapshot = { version: 1, savedAt: Date.now(), scene: buildSceneJson() }
   try {
-    await saveStoredProject({
-      version: 1,
-      savedAt: Date.now(),
-      scene: buildSceneJson(),
-    })
+    // 云模式完全不用 IndexedDB，改为同一标签页的 sessionStorage 传递场景
+    if (cloud.enabled) {
+      sessionStorage.setItem('gms.multiplayer.scene', JSON.stringify(snapshot))
+    } else {
+      await saveStoredProject(snapshot)
+    }
     await router.push({ name: 'multiplayer' })
   } catch (err) {
     console.error(err)
@@ -1213,6 +1421,7 @@ const { onKey } = useEditorShortcuts({
     void sceneTreeRef.value?.locateSelected()
   },
   openMultiplayer,
+  saveProject: saveSceneManually,
 })
 
 onMounted(() => {
@@ -1306,7 +1515,11 @@ onMounted(() => {
   window.addEventListener('keydown', onKey)
   window.addEventListener('resize', onOrientationChange)
   window.addEventListener('orientationchange', onOrientationChange)
-  void restoreStoredProject()
+  // 云存储模式先恢复登录状态，再决定从云端还是本地恢复场景
+  void (async () => {
+    await cloud.bootstrap()
+    await restoreStoredProject()
+  })()
 
   // 演示 / 截图用：?sample=1 直接载入内置示例场景
   if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('sample') === '1') {
@@ -1501,6 +1714,7 @@ onBeforeUnmount(() => {
       :walk-active="walkState !== 'off'"
       :tool-menu="toolMenu"
       :tool-sub-menu="toolSubMenu"
+      :cloud-enabled="cloud.enabled"
       @update:venue-name="venueName = $event"
       @begin-rename="beginVenueRename"
       @finish-rename="finishVenueRename"
@@ -1511,6 +1725,7 @@ onBeforeUnmount(() => {
       @report="openExportDialog"
       @export="downloadScene"
       @export-csv="downloadInventoryXlsx"
+      @cloud-storage="openCloudDialog"
       @import="triggerImport"
       @clear-data="requestClearData"
       @open-weather="openWeather"
@@ -1713,6 +1928,9 @@ onBeforeUnmount(() => {
         <div class="welcome-sub">
           <button class="btn" @click="loadSample">载入示例</button>
           <button class="btn" @click="triggerImport">导入 JSON</button>
+          <button v-if="cloud.enabled" class="btn" @click="openCloudDialog">
+            {{ cloudWelcomeLabel }}
+          </button>
           <button class="btn" @click="showHelp = true">帮助</button>
         </div>
       </div>
@@ -1746,6 +1964,22 @@ onBeforeUnmount(() => {
     </Transition>
 
     <Transition name="dialog">
+      <CloudStorageDialog
+        v-if="showCloudDialog && cloud.enabled"
+        :controller="cloud"
+        :save-current="saveSceneToCloud"
+        :load-slot="loadSceneFromCloud"
+        :delete-slot="deleteSceneFromCloud"
+        :pending-scene="cloudScenePending"
+        @logout="requestCloudLogout"
+        @notify="toast"
+        @login-success="handleCloudLoginSuccess"
+        @discard-scene="discardCloudScene"
+        @close="showCloudDialog = false"
+      />
+    </Transition>
+
+    <Transition name="dialog">
       <ConfirmDialog
         v-if="pendingConfirm"
         :title="pendingConfirm.title"
@@ -1754,6 +1988,19 @@ onBeforeUnmount(() => {
         :danger="pendingConfirm.danger"
         @confirm="confirmPendingAction"
         @cancel="closeConfirmDialog"
+      />
+    </Transition>
+
+    <Transition name="dialog">
+      <ConfirmDialog
+        v-if="cloudOverwrite"
+        title="本地已有数据"
+        :message="CLOUD_OVERWRITE_MESSAGE"
+        confirm-label="覆盖并加载"
+        cancel-label="保留本地"
+        :danger="true"
+        @confirm="confirmCloudOverwrite"
+        @cancel="cancelCloudOverwrite"
       />
     </Transition>
 
@@ -1775,7 +2022,11 @@ onBeforeUnmount(() => {
       />
     </Transition>
 
-    <HelpMobilePanel v-if="showHelp && isMobile" @close="showHelp = false" />
+    <HelpMobilePanel
+      v-if="showHelp && isMobile"
+      :cloud-enabled="cloud.enabled"
+      @close="showHelp = false"
+    />
     <Transition name="dialog">
       <HelpPanel
         v-if="showHelp && !isMobile"
@@ -1783,6 +2034,7 @@ onBeforeUnmount(() => {
         :labels-on="labelsOn"
         :areas-on="areaOn"
         :can-walk="!!venue && mode === 'idle'"
+        :cloud-enabled="cloud.enabled"
         @quick="runHelpQuickAction"
         @close="showHelp = false"
       />
@@ -1824,6 +2076,8 @@ onBeforeUnmount(() => {
       :space-nav="spaceNavActive"
       :save-state="saveState"
       :saved-at="savedAt"
+      :storage-mode="cloudModeActive ? 'cloud' : 'local'"
+      :cloud-hint="cloudBlockedHint"
     />
 
     <MobileViewer
@@ -1851,6 +2105,7 @@ onBeforeUnmount(() => {
       :can-walk="!!venue && mode === 'idle'"
       :selected-ids="selectedIds"
       :selected-infra-id="selectedInfraId"
+      :cloud-enabled="cloud.enabled"
       @view-top="viewTop"
       @view-iso="viewIso"
       @fit-view="fitView"
@@ -1867,6 +2122,7 @@ onBeforeUnmount(() => {
       @import="triggerImport"
       @export="downloadScene"
       @report="openExportDialog"
+      @cloud-storage="openCloudDialog"
       @clear-data="requestClearData"
       @open-weather="openWeather"
       @open-help="openHelp"

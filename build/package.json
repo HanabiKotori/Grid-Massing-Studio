@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "deploy:web": "node deploy-web.mjs",
-    "deploy:multiplayer": "node deploy-multiplayer.mjs"
+    "deploy:multiplayer": "node deploy-multiplayer.mjs",
+    "deploy:data": "node deploy-data.mjs"
   },
   "dependencies": {
     "ssh2": "^1.16.0"

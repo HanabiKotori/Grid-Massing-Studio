@@ -32,6 +32,8 @@ const props = defineProps<{
   canWalk: boolean
   selectedIds: string[]
   selectedInfraId: string | null
+  /** 云端存储开关，关闭时不显示云端入口 */
+  cloudEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -51,6 +53,7 @@ const emit = defineEmits<{
   (e: 'import'): void
   (e: 'export'): void
   (e: 'report'): void
+  (e: 'cloud-storage'): void
   (e: 'clear-data'): void
   (e: 'open-weather'): void
   (e: 'open-help'): void
@@ -309,6 +312,15 @@ function onGrabDown(e: PointerEvent) {
             <WeatherIcon :kind="weatherOn ? weather : 'clear'" :size="15" />
             天气与光照
             <span class="num">{{ weatherOn ? '已启用' : '晴天' }}</span>
+          </button>
+
+          <button v-if="cloudEnabled" type="button" class="mv-row" @click="emit('cloud-storage')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M7 18.4a4.2 4.2 0 01-.6-8.4 5.3 5.3 0 0110.2-1.6A3.9 3.9 0 0117 18.4z" />
+              <path d="M12 11.4v6M9.6 13.8 12 11.4l2.4 2.4" />
+            </svg>
+            云端存储
+            <span class="num">10 个位置</span>
           </button>
 
           <button type="button" class="mv-row" @click="emit('import')">

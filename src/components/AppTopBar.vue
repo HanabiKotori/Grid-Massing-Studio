@@ -34,6 +34,8 @@ const props = defineProps<{
   walkActive: boolean
   toolMenu: ToolMenu | null
   toolSubMenu: 'names' | null
+  /** 云端存储开关，关闭时不显示云端入口 */
+  cloudEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -47,6 +49,7 @@ const emit = defineEmits<{
   (e: 'report'): void
   (e: 'export'): void
   (e: 'export-csv'): void
+  (e: 'cloud-storage'): void
   (e: 'import'): void
   (e: 'clear-data'): void
   (e: 'open-weather'): void
@@ -170,6 +173,7 @@ function cancelName() {
       :underlay-visible="underlayVisible"
       :weather-active="weatherActive"
       :walk-active="walkActive"
+      :cloud-enabled="cloudEnabled"
       @toggle-collapse="() => {}"
       @toggle-menu="(m) => emit('toggle-menu', m)"
       @toggle-name-submenu="emit('toggle-name-submenu')"
@@ -189,6 +193,7 @@ function cancelName() {
       @report="emit('report')"
       @export="emit('export')"
       @export-csv="emit('export-csv')"
+      @cloud-storage="emit('cloud-storage')"
       @import="emit('import')"
       @clear-data="emit('clear-data')"
       @open-weather="emit('open-weather')"

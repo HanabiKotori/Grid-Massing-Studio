@@ -27,6 +27,8 @@ defineProps<{
   multiplayer?: boolean
   /** 访客不能修改天气 */
   weatherDisabled?: boolean
+  /** 云端存储是否启用；关闭时完全不显示登录 / 云端入口 */
+  cloudEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -49,6 +51,7 @@ const emit = defineEmits<{
   (e: 'report'): void
   (e: 'export'): void
   (e: 'export-csv'): void
+  (e: 'cloud-storage'): void
   (e: 'import'): void
   (e: 'clear-data'): void
   (e: 'open-weather'): void
@@ -317,6 +320,19 @@ const QUALITY_OPTIONS: { value: QualityLevel; label: string }[] = [
         </div>
       </div>
 
+
+      <button
+        v-if="!multiplayer && !renderOnly && cloudEnabled"
+        class="tool-btn tool-with-key"
+        title="云端存储"
+        @click="emit('cloud-storage')"
+      >
+        <svg class="tool-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M7 18.4a4.2 4.2 0 01-.6-8.4 5.3 5.3 0 0110.2-1.6A3.9 3.9 0 0117 18.4z" />
+          <path d="M12 11.4v6M9.6 13.8 12 11.4l2.4 2.4" />
+        </svg>
+        <span class="tool-label">云端</span>
+      </button>
 
       <button
         v-if="!multiplayer"
