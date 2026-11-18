@@ -1,0 +1,13 @@
+{
+  "name": "demo-deploy",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "deploy:web": "node deploy-web.mjs",
+    "deploy:multiplayer": "node deploy-multiplayer.mjs"
+  },
+  "dependencies": {
+    "ssh2": "^1.16.0"
+  }
+}

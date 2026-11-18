@@ -14,3 +14,7 @@ dist-ssr
 # 本地临时产物
 docs/.edge-*/
 docs/.texture-temp/
+
+# 部署配置（含服务器密码，勿提交）
+build/deploy.config.json
+build/*.local.json

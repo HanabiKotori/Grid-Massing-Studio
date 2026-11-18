@@ -1,0 +1,25 @@
+{
+  "ssh": {
+    "host": "your-server-ip",
+    "port": 22,
+    "username": "root",
+    "password": "在这里填写服务器密码"
+  },
+  "web": {
+    "remotePath": "/www/wwwroot/your-site",
+    "buildCommand": "npm run build",
+    "distDir": "dist",
+    "owner": "www:www",
+    "keep": [".user.ini", ".htaccess"]
+  },
+  "multiplayer": {
+    "remotePath": "/www/wwwroot/多人",
+    "localDir": "multiplayerGame",
+    "files": ["server.mjs", "package.json", "package-lock.json"],
+    "uploadEnv": false,
+    "pm2Name": "server",
+    "entry": "server.mjs",
+    "installDeps": true,
+    "restartMode": "auto"
+  }
+}
