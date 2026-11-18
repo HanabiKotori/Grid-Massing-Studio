@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "jspdf": "^4.2.1",
     "polygon-clipping": "^0.15.7",
     "three": "^0.186.1",

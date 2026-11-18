@@ -124,7 +124,7 @@ pnpm preview
 
 ```bash
 # 终端 1：Node 房间服务
-cd multiplayerGame
+cd gameService
 npm install
 cp .env.example .env
 npm start
@@ -139,7 +139,7 @@ pnpm dev
 VITE_MULTIPLAYER_WS_URL=ws://localhost:3010
 ```
 
-完整环境变量、Nginx / 宝塔反向代理和 PM2 部署说明见 [`multiplayerGame/README.md`](./multiplayerGame/README.md)。
+完整环境变量、Nginx / 宝塔反向代理和 PM2 部署说明见 [`gameService/README.md`](./gameService/README.md)。
 
 ### 高德实时天气
 
@@ -231,7 +231,7 @@ VITE_AMAP_KEY=your_amap_web_service_key
 ```
 .
 ├─ index.html            # 单页应用入口（中文标题与内联 favicon）
-├─ multiplayerGame/      # Node WebSocket 房间服务、环境变量与宝塔 / Nginx 说明
+├─ gameService/          # Node WebSocket 房间服务、环境变量与宝塔 / Nginx 说明
 ├─ src/
 │  ├─ main.ts            # 挂载根组件并注册 Vue Router
 │  ├─ Root.vue           # RouterView 根组件

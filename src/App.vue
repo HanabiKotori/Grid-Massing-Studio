@@ -46,8 +46,8 @@ import {
   QUALITY_LABELS,
   useEditorState,
 } from './composables/useEditorState'
-import { BOOTH_KIND_LABELS, boothKindOf } from './core/booth'
 import { isFurnitureKind } from './core/infra'
+import { exportInventoryXlsx } from './core/xlsxExport'
 import { downloadPlanPdf as buildPlanPdf } from './core/planPdf'
 import type { FurniturePreset } from './core/furniturePreset'
 import type { Booth, Pt, VenueRules } from './core/types'
@@ -747,35 +747,23 @@ watch(
 
 // ---------- JSON 导入 / 导出 ----------
 
-const MARK_LABELS: Record<string, string> = { red: '红', yellow: '黄', gray: '灰' }
-
-/** 导出展位清单 CSV：Excel / Numbers 可直接打开 */
-function downloadBoothCsv() {
+/** 导出展位与家具清单：XLSX 内含 Logo 图片与家具汇总 */
+async function downloadInventoryXlsx() {
   if (!booths.value.length) {
     toast('还没有展台可导出')
     return
   }
-  const header = ['编号', '名称', '类型', '面积(m²)', '高度(m)', '展商', '标记', 'Logo']
-  const rows = booths.value.map((b) => [
-    b.name,
-    b.name,
-    BOOTH_KIND_LABELS[boothKindOf(b)] ?? '标准',
-    polygonArea(b.points).toFixed(1),
-    b.height.toFixed(2),
-    b.exhibitor ?? '',
-    MARK_LABELS[b.mark ?? (b.marked ? 'red' : '')] ?? '',
-    b.logo ? '有' : '',
-  ])
-  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`
-  const csv = [header, ...rows].map((r) => r.map(escape).join(',')).join('\r\n')
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${(venueName.value || '场馆').replace(/[\\/:*?"<>|]/g, '_')}-展位清单.csv`
-  a.click()
-  URL.revokeObjectURL(url)
-  toast(`已导出 ${rows.length} 条展位清单`)
+  try {
+    const { boothCount, furnitureCount, fileName } = await exportInventoryXlsx({
+      venueName: venueName.value,
+      booths: booths.value,
+      infras: infras.value,
+    })
+    toast(`已导出 ${boothCount} 个展台、${furnitureCount} 件家具 · ${fileName}`)
+  } catch (err) {
+    console.error(err)
+    toast('导出清单失败，请重试')
+  }
 }
 
 /** 阵列复制：沿 X 或 Z 方向按间距复制 N 个，保留展商、Logo、标记等属性 */
@@ -1522,7 +1510,7 @@ onBeforeUnmount(() => {
       @set-render="setRenderOnly"
       @report="openExportDialog"
       @export="downloadScene"
-      @export-csv="downloadBoothCsv"
+      @export-csv="downloadInventoryXlsx"
       @import="triggerImport"
       @clear-data="requestClearData"
       @open-weather="openWeather"

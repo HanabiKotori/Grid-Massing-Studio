@@ -69,7 +69,7 @@ const sections: HelpSection[] = [
       },
       {
         title: '5. 检查与导出',
-        text: '用俯视、轴测和漫游检查体量与动线；在「数据 → 平面图 PNG / 平面图 PDF」生成图纸，或导出场景 JSON 与展位清单 CSV。',
+        text: '用俯视、轴测和漫游检查体量与动线；在「数据 → 平面图 PNG / 平面图 PDF」生成图纸，或导出场景 JSON 与展位 / 家具清单 XLSX（含 Logo 图片）。',
       },
       {
         title: '示例场景',

@@ -14,7 +14,7 @@
   },
   "multiplayer": {
     "remotePath": "/www/wwwroot/多人",
-    "localDir": "multiplayerGame",
+    "localDir": "gameService",
     "files": ["server.mjs", "package.json", "package-lock.json"],
     "uploadEnv": false,
     "pm2Name": "server",

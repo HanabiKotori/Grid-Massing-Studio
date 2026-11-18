@@ -12,7 +12,7 @@
 ## 运行
 
 ```bash
-cd multiplayerGame
+cd gameService
 npm install
 cp .env.example .env
 npm start
@@ -43,7 +43,7 @@ curl http://127.0.0.1:3010/health
 | `MAX_SCENE_MB` | `40` | 单条 WebSocket 消息上限，场景含 Logo / 底图时需调大 |
 | `ALLOWED_ORIGINS` | 空 | 允许的页面来源，逗号分隔；留空不校验 |
 
-服务端只读取 `multiplayerGame/.env`，与启动目录无关。
+服务端只读取 `gameService/.env`，与启动目录无关。
 
 ## 前端配置
 

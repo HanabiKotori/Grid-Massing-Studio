@@ -55,7 +55,7 @@ async function main() {
   const ssh = requireSsh(config)
   const mp = config.multiplayer || {}
   const remotePath = requireRemotePath(mp.remotePath, 'multiplayer')
-  const localDir = path.resolve(projectRoot, mp.localDir || 'multiplayerGame')
+  const localDir = path.resolve(projectRoot, mp.localDir || 'gameService')
   const pm2Name = String(mp.pm2Name || 'grid-multiplayer')
   const entry = String(mp.entry || 'server.mjs')
   const installDeps = mp.installDeps !== false
