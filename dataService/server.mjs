@@ -11,6 +11,7 @@ import {
   verifyPassword,
 } from './src/auth.mjs'
 import { issueCaptcha, verifyCaptcha } from './src/captcha.mjs'
+import { registerShareRoutes } from './src/shares.mjs'
 
 const app = express()
 app.disable('x-powered-by')
@@ -282,6 +283,8 @@ app.delete('/api/storage/:slot', requireDatabase, requireAuth, async (req, res, 
     next(err)
   }
 })
+
+registerShareRoutes(app)
 
 app.use('/api', (req, res) => {
   res.status(404).json({ error: '接口不存在' })

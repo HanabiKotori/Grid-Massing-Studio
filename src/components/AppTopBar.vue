@@ -36,6 +36,11 @@ const props = defineProps<{
   toolSubMenu: 'names' | null
   /** 云端存储开关，关闭时不显示云端入口 */
   cloudEnabled?: boolean
+  /** 评审评论未读数 */
+  reviewUnread?: number
+  /** 当前项目是否已发布实时分享 */
+  shareLive?: boolean
+  shareViewers?: number
 }>()
 
 const emit = defineEmits<{
@@ -71,6 +76,8 @@ const emit = defineEmits<{
   (e: 'toggle-aisle'): void
   (e: 'toggle-grid'): void
   (e: 'toggle-underlay'): void
+  (e: 'toggle-review'): void
+  (e: 'open-share'): void
 }>()
 
 const nameDraft = ref('')
@@ -227,6 +234,35 @@ function cancelName() {
     </button>
 
     <span class="wb-sep" />
+
+    <button
+      type="button"
+      class="wb-btn wb-review-btn"
+      :disabled="!hasVenue"
+      :title="hasVenue ? '评审评论' : '请先创建场馆'"
+      @click="emit('toggle-review')"
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20.4 12c0 4.2-3.8 7.4-8.4 7.4-1 0-2-.15-2.9-.42L4 20.4l1.3-3.6A7 7 0 013.6 12c0-4.2 3.8-7.4 8.4-7.4s8.4 3.2 8.4 7.4z" />
+      </svg>
+      评论
+      <span v-if="reviewUnread" class="wb-unread">{{ reviewUnread > 99 ? '99+' : reviewUnread }}</span>
+    </button>
+    <button
+      type="button"
+      class="wb-btn"
+      :disabled="!hasVenue"
+      :title="hasVenue ? '分享查看链接' : '请先创建场馆'"
+      @click="emit('open-share')"
+    >
+      <span v-if="shareLive" class="wb-live-dot" />
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10 13.8a3.6 3.6 0 005.1 0l3.3-3.3a3.6 3.6 0 00-5.1-5.1L11.6 7" />
+        <path d="M14 10.2a3.6 3.6 0 00-5.1 0l-3.3 3.3a3.6 3.6 0 005.1 5.1l1.7-1.7" />
+      </svg>
+      分享
+      <span v-if="shareLive && shareViewers" class="wb-viewers">{{ shareViewers }}</span>
+    </button>
 
     <button type="button" class="wb-btn pri" @click="emit('export')">导出</button>
     <button

@@ -30,6 +30,8 @@ import type { WeatherKind } from './weather'
 
 export interface SceneJson {
   version?: number
+  /** 项目标识：分享链接与评审评论按它归组 */
+  projectKey?: string
   venueName?: string
   weather?: WeatherKind
   weatherOn?: boolean
@@ -45,6 +47,7 @@ export interface SceneJson {
 }
 
 export interface SceneFileInput {
+  projectKey?: string
   venue: Venue | null
   venueName: string
   weather: WeatherKind
@@ -282,6 +285,7 @@ export function buildSceneFile(input: SceneFileInput): SceneJson {
   const v = input.venue
   return {
     version: 1,
+    ...(input.projectKey ? { projectKey: input.projectKey } : {}),
     venueName: input.venueName.trim() || '场馆白膜',
     weather: input.weather,
     weatherOn: input.weatherOn,

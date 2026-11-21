@@ -17,6 +17,12 @@ const router = createRouter({
       meta: { title: '多人漫游 · Grid Massing Studio' },
     },
     {
+      path: '/share/:token',
+      name: 'share',
+      component: () => import('../share/ShareApp.vue'),
+      meta: { title: '分享查看 · Grid Massing Studio' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/',
     },

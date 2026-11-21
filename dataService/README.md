@@ -9,6 +9,8 @@
 - 随机 SVG 图片滑块验证码（缺口坐标只保存在服务端，5 分钟过期、最多 4 次尝试）；
 - 每个账号固定 10 个存储位置（slot 1-10），每个位置保存一份场景快照；
 - 登录状态下自动保存写入所选位置，支持手动保存 / 加载 / 删除；
+- 分享链接：实时 / 冻结快照、匿名评论、项目级评论聚合；
+- 实时通道：SSE 广播场景增量补丁、评论新增 / 状态变更 / 删除；
 - MySQL 表结构在启动时自动创建（`schema.sql` 也可手动执行）。
 
 ## 快速开始
@@ -50,7 +52,7 @@ curl http://127.0.0.1:3020/api/health
 服务启动时会：
 
 1. 使用配置的账号连接 MySQL，执行 `CREATE DATABASE IF NOT EXISTS`；
-2. 连接目标数据库，按 `schema.sql` 创建 `users` 与 `storage_slots` 表。
+2. 连接目标数据库，按 `schema.sql` 创建 `users`、`storage_slots`、`share_links`、`share_comments` 表。
 
 如果该账号没有建库权限，请先在 MySQL 中手动建库并授权，再执行 `schema.sql`：
 
@@ -78,6 +80,39 @@ SOURCE schema.sql;
 | DELETE | `/api/storage/:slot` | 删除指定位置 |
 
 `slot` 取值为 1-10，每个用户独立。
+
+## 分享与实时评审接口
+
+| 方法 | 路径 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| POST | `/api/shares` | 登录 | 发布实时链接：`{ title, scene, projectKey, liveMode, allowComment, allowDownload }` |
+| GET | `/api/shares` | 登录 | 当前用户的链接列表 |
+| GET | `/api/shares/:token` | 公开 | 链接元信息（不含场景） |
+| GET | `/api/shares/:token/scene` | 公开 | 场景快照 + 当前 revision |
+| PATCH | `/api/shares/:token` | owner | 改标题 / 权限；带 `scene` 时更新快照 |
+| DELETE | `/api/shares/:token` | owner | 撤销链接并关闭 SSE |
+| PATCH | `/api/shares/:token/live` | owner | 实时增量补丁：`{ baseRevision, patch }` |
+| GET | `/api/shares/:token/live?since=` | 公开 | 断线追平：同 revision 返回空，否则返回完整场景 |
+| GET / POST | `/api/shares/:token/comments` | 公开 | 评论列表 / 新建与回复 |
+| PATCH / DELETE | `/api/shares/:token/comments/:id` | owner 或作者 token | 编辑、解决、删除 |
+| GET | `/api/review/comments?projectKey=` | 登录 | 编辑器按项目聚合评论 |
+| POST | `/api/shares/:token/stream-ticket` | 公开 | 分享页 SSE 短时 ticket（60 秒） |
+| GET | `/api/shares/:token/stream` | ticket | 分享页 SSE：场景补丁、评论、在线人数 |
+| POST | `/api/review/stream-ticket` | 登录 | 编辑器项目流 ticket；需该项目下存在自己的有效链接 |
+| GET | `/api/review/stream` | ticket | 编辑器 SSE：项目内评论新增 / 更新 / 删除 |
+
+SSE 连接保存在进程内存中，建议单实例运行；多实例需要 Redis pub/sub。Nginx 需要关闭响应缓冲：
+
+```nginx
+location /api/ {
+  proxy_pass http://127.0.0.1:3020;
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_buffering off;
+  proxy_read_timeout 3600s;
+}
+```
 
 ## 前端配置
 

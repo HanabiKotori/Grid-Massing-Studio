@@ -174,6 +174,13 @@ export interface StageOptions {
   /** 拖拽拉出矩形：参数为两个对角点（已吸附到 1 m 网格） */
   onDrawRect?: (a: Pt, b: Pt) => void
   onPick?: (id: string | null, additive: boolean, kind?: 'booth' | 'infra') => void
+  /** 只读检查模式：点击模型回传世界坐标与命中对象，用于放置评论 */
+  onSceneClick?: (hit: {
+    point: Pt
+    y: number
+    boothId?: string
+    infraId?: string
+  }) => void
   onHover?: (p: Pt | null) => void
   onMoveBooth?: (id: string, dx: number, dz: number) => void
   onRotateBooth?: (id: string, deltaDeg: number) => void
@@ -941,6 +948,8 @@ export class Stage {
 
   private mode: StageMode = 'idle'
   private readOnly = false
+  /** 只读检查模式：保留点击拾取，不进入编辑 */
+  private inspectMode = false
   private draftPoints: Pt[] = []
   private down: { x: number; y: number; t: number } | null = null
   /** 按住空格：进入纯视角导航，禁止选中 / 拖动模型 */
@@ -3657,7 +3666,68 @@ export class Stage {
   /** 纯渲染模式：禁用拾取、拖动、绘制等编辑交互，保留相机操作 */
   setReadOnly(on: boolean) {
     this.readOnly = on
-    this.host.style.cursor = 'default'
+    this.host.style.cursor = this.inspectMode ? 'crosshair' : 'default'
+  }
+
+  /** 只读检查模式：允许点击模型回传落点，但不拖动、不绘制 */
+  setInspectMode(on: boolean) {
+    this.inspectMode = on
+    this.host.style.cursor = on ? 'crosshair' : 'default'
+  }
+
+  /** 世界坐标 → 画布内的屏幕坐标，用于评论引脚 */
+  worldToScreen(x: number, y: number, z: number) {
+    const v = new THREE.Vector3(x, y, z).project(this.camera)
+    const el = this.renderer.domElement
+    return {
+      x: (v.x * 0.5 + 0.5) * el.clientWidth,
+      y: (-v.y * 0.5 + 0.5) * el.clientHeight,
+      visible: v.z > -1 && v.z < 1,
+    }
+  }
+
+  getCameraBookmark() {
+    return {
+      position: this.camera.position.toArray() as [number, number, number],
+      target: this.controls.target.toArray() as [number, number, number],
+    }
+  }
+
+  applyCameraBookmark(bookmark: {
+    position: [number, number, number]
+    target: [number, number, number]
+  }) {
+    this.animateCamera(
+      new THREE.Vector3(...bookmark.position),
+      new THREE.Vector3(...bookmark.target),
+    )
+  }
+
+  private emitSceneClick(clientX: number, clientY: number) {
+    const boothId = this.pickBoothAt(clientX, clientY) ?? undefined
+    const infraId = this.pickInfraAt(clientX, clientY) ?? undefined
+    const rect = this.renderer.domElement.getBoundingClientRect()
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    this.raycaster.setFromCamera(ndc, this.camera)
+    const hits = this.raycaster.intersectObjects(
+      [...this.pickables, ...this.infraPickables],
+      true,
+    )
+    let point: THREE.Vector3 | null = hits[0]?.point ?? null
+    if (!point) {
+      const ground = new THREE.Vector3()
+      if (this.raycaster.ray.intersectPlane(this.groundPlane, ground)) point = ground
+    }
+    if (!point) return
+    this.opts.onSceneClick?.({
+      point: { x: point.x, z: point.z },
+      y: point.y,
+      ...(boothId ? { boothId } : {}),
+      ...(infraId ? { infraId } : {}),
+    })
   }
 
   // ---------- 底图 ----------
@@ -4291,7 +4361,17 @@ export class Stage {
       this.host.style.cursor = 'grab'
       return
     }
-    if (this.readOnly) return
+    if (this.readOnly) {
+      if (
+        this.inspectMode &&
+        down &&
+        Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 &&
+        performance.now() - down.t < 800
+      ) {
+        this.emitSceneClick(e.clientX, e.clientY)
+      }
+      return
+    }
 
     if (this.underlayDrag) {
       this.underlayDrag = null
@@ -4557,7 +4637,7 @@ export class Stage {
       return
     }
     if (this.readOnly) {
-      this.host.style.cursor = 'default'
+      this.host.style.cursor = this.inspectMode ? 'crosshair' : 'default'
       return
     }
     if (this.underlayDrag) {

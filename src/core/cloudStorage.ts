@@ -17,6 +17,21 @@ function resolveBaseUrl(): string {
 
 const BASE_URL = resolveBaseUrl().replace(/\/+$/, '')
 
+/** 供分享 / 评论模块复用同一套 dataService 地址与请求封装 */
+export const DATA_SERVICE_URL = BASE_URL
+
+export function dataServiceUrl(path: string): string {
+  return `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+export function dataServiceRequest<T>(
+  path: string,
+  init: RequestInit = {},
+  withAuth = false,
+): Promise<T> {
+  return request<T>(path, init, withAuth)
+}
+
 const TOKEN_KEY = 'gms.cloud.token'
 /** 云服务请求超时（毫秒）：避免数据服务不可达时阻塞编辑器启动 */
 const REQUEST_TIMEOUT = 6000

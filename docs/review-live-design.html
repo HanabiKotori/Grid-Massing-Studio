@@ -1,0 +1,1595 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>场馆白膜 · 分享链接与实时评审设计稿</title>
+<style>
+:root{
+  --bg:#08090a; --bg-1:#0b0c0e; --bg-2:#101113; --bg-3:#15161a; --bg-4:#1c1e22;
+  --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.12);
+  --tx:#ecedef; --tx-2:#9b9fa5; --tx-3:#63666c; --tx-4:#43464c;
+  --accent:#6f7ce8; --accent-2:#a7b0ff; --accent-soft:rgba(111,124,232,.14);
+  --sel:#e9a06a; --green:#5bbd8b; --amber:#e9a06a; --red:#eb5757;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","HarmonyOS Sans SC","MiSans","Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto 0;height:560px;background:radial-gradient(72% 100% at 50% 0%,rgba(111,124,232,.075),transparent 72%);pointer-events:none;z-index:0}
+.page{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:0 48px 120px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.sp{flex:1}
+.i{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
+
+/* head */
+.head{padding:74px 0 36px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-3)}
+.eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(111,124,232,.15)}
+h1{margin:18px 0 0;font-size:40px;line-height:1.15;font-weight:600;letter-spacing:-.025em}
+h1 em{font-style:normal;color:var(--tx-3)}
+.lede{margin:16px 0 0;max-width:720px;font-size:14.5px;line-height:1.7;color:var(--tx-2)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.chip{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid var(--line);border-radius:5px;background:var(--bg-2);font-size:11.5px;color:var(--tx-2)}
+.chip b{font-weight:500;color:var(--tx)}
+.chip .k{width:5px;height:5px;border-radius:1px;background:var(--tx-4)}
+.chip.good .k{background:var(--green)}
+.chip.warn .k{background:var(--sel)}
+
+/* toc */
+.toc{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:4px;height:48px;margin:0 -48px 8px;padding:0 48px;border-bottom:1px solid var(--line);background:rgba(8,9,10,.84);backdrop-filter:blur(16px) saturate(140%);overflow-x:auto;scrollbar-width:none}
+.toc::-webkit-scrollbar{display:none}
+.toc a{flex:none;display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:5px;font-size:12px;color:var(--tx-3);text-decoration:none}
+.toc a:hover{color:var(--tx-2);background:var(--bg-2)}
+.toc a.on{color:var(--tx);background:var(--bg-3)}
+.toc a i{font-family:var(--mono);font-size:9.5px;font-style:normal;color:var(--tx-4)}
+.toc a.on i{color:var(--accent)}
+
+/* section / proposal */
+.section{padding-top:64px;scroll-margin-top:56px}
+.section-head{display:flex;gap:40px;align-items:flex-end;justify-content:space-between;margin-bottom:28px}
+.section-head h2{margin:0;font-size:20px;font-weight:600;letter-spacing:-.015em}
+.section-head p{margin:0;max-width:540px;font-size:12.5px;line-height:1.75;color:var(--tx-3)}
+.proposal{margin-bottom:64px;scroll-margin-top:96px}
+.frame{position:relative;padding:22px;border:1px solid var(--line);border-radius:10px;background:radial-gradient(120% 90% at 50% -20%,rgba(111,124,232,.06),transparent 60%),var(--bg-1);overflow:hidden}
+.frame::after{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:24px 24px;mask-image:radial-gradient(90% 70% at 50% 40%,#000,transparent 78%);opacity:.5}
+.mock-scaler{position:relative;width:100%;overflow:hidden}
+.mock-scaler > .mock{transform-origin:top left}
+.notes{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:34px;padding-top:20px}
+.note h3{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.note h3 .idx{font-family:var(--mono);font-size:10px;color:var(--accent);margin-right:8px;letter-spacing:.08em}
+.note .tag{margin:6px 0 0;font-size:12.5px;color:var(--tx-3);line-height:1.65}
+.note .lbl{margin:16px 0 6px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-4)}
+.note ul{margin:0;padding:0;list-style:none}
+.note li{position:relative;padding-left:14px;margin-bottom:4px;font-size:12px;line-height:1.65;color:var(--tx-2)}
+.note li::before{content:"";position:absolute;left:2px;top:8px;width:4px;height:1px;background:var(--tx-4)}
+.note li.plus::before{background:var(--green)}
+.note li.minus::before{background:var(--sel)}
+.note dl{margin:0;display:grid;grid-template-columns:84px 1fr;row-gap:5px;font-size:12px}
+.note dt{color:var(--tx-4);font-family:var(--mono);font-size:10px;padding-top:2px}
+.note dd{margin:0;color:var(--tx-2)}
+
+/* mock base */
+.mock{position:relative;width:1200px;height:680px;display:flex;flex-direction:column;border-radius:8px;overflow:hidden;background:var(--bg-1);color:var(--tx);font-size:12px;line-height:1.4;box-shadow:0 0 0 1px rgba(255,255,255,.09),0 50px 90px -40px rgba(0,0,0,.95);user-select:none}
+.tb{position:relative;z-index:8;flex:none;display:flex;align-items:center;gap:10px;height:46px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--bg-1)}
+.tb-brand{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+.tb-brand .mark{width:17px;height:17px;color:var(--accent);display:block}
+.tb-brand .mark svg{width:17px;height:17px;stroke-width:1.3}
+.tb-venue{display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:4px;font-size:12px;color:var(--tx-2)}
+.caret{width:0;height:0;border:3.5px solid transparent;border-top-color:var(--tx-4);margin-top:3px}
+.tb-menu{display:flex;align-items:center;gap:2px;margin-left:4px}
+.tb-menu a{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:4px;font-size:12px;color:var(--tx-3);text-decoration:none}
+.tb-menu a.on{color:var(--tx);background:var(--bg-3)}
+.ibtn{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:4px;color:var(--tx-3);background:none;border:0;padding:0;font-family:inherit}
+.ibtn:hover{background:var(--bg-3);color:var(--tx)}
+.vsep{width:1px;height:18px;background:var(--line);margin:0 4px;flex:none}
+.btn{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:5px;border:1px solid var(--line-2);background:var(--bg-3);font-family:inherit;font-size:11.5px;color:var(--tx);white-space:nowrap}
+.btn.pri{background:var(--accent);border-color:transparent;color:#fff}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--tx-2)}
+.btn.sm{height:22px;padding:0 8px;font-size:10.5px;border-radius:4px}
+.btn .i{width:13px;height:13px}
+.ava{width:22px;height:22px;border-radius:50%;flex:none;background:linear-gradient(150deg,#3a3f52,#22252e);display:grid;place-items:center;font-size:9.5px;color:var(--tx-2);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.ava.sm{width:17px;height:17px;font-size:8px}
+.kbd{display:inline-flex;align-items:center;gap:2px;height:18px;padding:0 5px;border-radius:4px;border:1px solid var(--line);background:var(--bg-2);font-family:var(--mono);font-size:10px;color:var(--tx-3)}
+.status{display:flex;align-items:center;gap:12px;flex:none;height:26px;padding:0 12px;border-top:1px solid var(--line);background:var(--bg-1);font-family:var(--mono);font-size:10px;color:var(--tx-4)}
+.status .g{display:inline-flex;align-items:center;gap:5px}
+.status .on{color:var(--tx-2)}
+.status .vsep{height:10px}
+.vp{position:relative;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+.vp .scene{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hud{position:absolute;display:flex;align-items:center;gap:4px;z-index:4}
+.hud.tl{left:12px;top:10px}
+.hud.tr{right:12px;top:10px}
+.hud.bl{left:12px;bottom:10px}
+.hud.br{right:12px;bottom:10px}
+.hud-chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:5px;background:rgba(12,13,15,.78);border:1px solid var(--line);font-size:10.5px;color:var(--tx-2)}
+.hud-chip.on{color:var(--tx);border-color:var(--line-2)}
+.hud-chip .i{width:12px;height:12px}
+.hud-group{display:flex;align-items:center;gap:1px;padding:2px;border-radius:6px;background:rgba(12,13,15,.82);border:1px solid var(--line)}
+.hud-group button{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 7px;border:0;border-radius:4px;background:none;font-family:inherit;font-size:10.5px;color:var(--tx-3)}
+.hud-group button.on{background:rgba(255,255,255,.07);color:var(--tx)}
+.hud-group .i{width:12px;height:12px}
+.scalebar{display:flex;flex-direction:column;gap:3px}
+.scalebar i{display:block;height:5px;border-left:1px solid var(--tx-4);border-right:1px solid var(--tx-4);border-bottom:1px solid var(--tx-4)}
+.gizmo{width:46px;height:46px;display:block}
+.anno{position:absolute;z-index:30;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(111,124,232,.7);background:rgba(9,10,12,.92);font-family:var(--mono);font-size:9.5px;color:var(--accent-2);box-shadow:0 0 0 3px rgba(111,124,232,.1)}
+
+/* realtime atoms */
+.live-chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:11px;border:1px solid rgba(91,189,139,.3);background:rgba(91,189,139,.08);font-size:10px;color:#93d9b3;white-space:nowrap}
+.live-chip .dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(91,189,139,.13)}
+.sync-text{font-family:var(--mono);font-size:9.5px;color:var(--tx-4)}
+.live-pill{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:7;display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:13px;background:rgba(12,13,15,.92);border:1px solid rgba(111,124,232,.35);box-shadow:0 12px 30px -14px rgba(0,0,0,.9);font-size:10.5px;color:var(--tx-2);white-space:nowrap}
+.live-pill .pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.7s infinite}
+.live-pill b{font-weight:500;color:var(--tx)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(111,124,232,.45)}55%{box-shadow:0 0 0 5px rgba(111,124,232,0)}}
+.toast-live{position:absolute;right:14px;top:60px;z-index:24;display:flex;align-items:center;gap:9px;max-width:310px;padding:9px 10px;border-radius:8px;background:rgba(14,15,18,.97);border:1px solid var(--line-2);box-shadow:0 24px 60px -24px rgba(0,0,0,.95)}
+.toast-live b{display:block;font-size:10.5px;font-weight:500;color:var(--tx)}
+.toast-live span{display:block;margin-top:1px;font-size:9.5px;color:var(--tx-4)}
+.toast-live .btn{height:22px;font-size:10px;padding:0 7px}
+.new-badge{display:inline-flex;align-items:center;height:14px;padding:0 4px;border-radius:3px;background:rgba(91,189,139,.14);border:1px solid rgba(91,189,139,.28);font-size:8px;letter-spacing:.04em;color:#93d9b3}
+.role{display:inline-flex;align-items:center;height:14px;padding:0 4px;border-radius:3px;border:1px solid rgba(111,124,232,.28);background:var(--accent-soft);font-size:8px;letter-spacing:.03em;color:var(--accent-2)}
+.event-line{display:flex;align-items:center;gap:5px;margin-top:6px;padding-left:22px;font-size:9.5px;color:var(--tx-4)}
+.event-line .i{width:10px;height:10px;color:var(--green)}
+.moved-tag{margin-left:auto;padding:1px 4px;border-radius:3px;border:1px solid rgba(233,160,106,.26);font-size:8px;color:#d8a27b}
+.cm.new{background:rgba(91,189,139,.045);box-shadow:inset 2px 0 0 var(--green)}
+
+/* share viewer */
+.sh-top{display:flex;align-items:center;gap:10px;flex:none;position:relative;z-index:9;height:48px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--bg-1)}
+.sh-brand{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:-.01em}
+.sh-brand .mark{width:16px;height:16px;color:var(--accent)}
+.sh-brand .mark svg{width:16px;height:16px;stroke-width:1.3}
+.sh-title{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500}
+.sh-title .sub{color:var(--tx-3);font-weight:400}
+.ro{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:4px;border:1px solid var(--line);background:var(--bg-2);font-size:9px;letter-spacing:.06em;color:var(--tx-3);text-transform:uppercase}
+.ro .i{width:10px;height:10px}
+.sh-body{display:flex;flex:1;min-height:0}
+.sh-vp{position:relative;flex:1;min-width:0;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+.sh-vp .scene{position:absolute;inset:0;width:100%;height:100%}
+.sh-dock{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:3px;border-radius:8px;background:rgba(12,13,15,.9);border:1px solid var(--line-2);box-shadow:0 20px 40px -22px rgba(0,0,0,.9);z-index:5}
+.sh-dock button{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border:0;border-radius:4px;background:none;font-family:inherit;font-size:10.5px;color:var(--tx-3)}
+.sh-dock button.on{background:var(--accent-soft);color:var(--accent-2)}
+.sh-dock .zoom{font-family:var(--mono);font-size:10px;color:var(--tx-3);width:34px;text-align:center}
+
+/* comments */
+.cpanel{width:348px;flex:none;display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--line);background:var(--bg-1)}
+.cp-head{display:flex;align-items:center;gap:8px;flex:none;height:46px;padding:0 14px;border-bottom:1px solid var(--line)}
+.cp-head h3{margin:0;font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+.count{min-width:17px;height:17px;padding:0 5px;border-radius:9px;display:inline-grid;place-items:center;background:var(--bg-3);border:1px solid var(--line);font-family:var(--mono);font-size:9.5px;color:var(--tx-3)}
+.cp-filters{display:flex;align-items:center;gap:4px;flex:none;padding:9px 12px 7px;border-bottom:1px solid rgba(255,255,255,.04)}
+.fchip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:4px;font-size:10.5px;color:var(--tx-3)}
+.fchip b{font-family:var(--mono);font-size:9.5px;font-weight:400;color:var(--tx-4)}
+.fchip.on{background:var(--bg-3);color:var(--tx)}
+.fchip.on b{color:var(--tx-2)}
+.cp-list{flex:1;min-height:0;overflow:hidden}
+.cm{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.045);position:relative}
+.cm.on{background:rgba(111,124,232,.055);box-shadow:inset 2px 0 0 var(--accent)}
+.cm.resolved{opacity:.58}
+.cm-top{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--tx-4)}
+.cm-top b{font-size:11.5px;font-weight:500;color:var(--tx-2)}
+.cm-top .tm{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--tx-4)}
+.cm p{margin:5px 0 0;font-size:12px;line-height:1.6;color:var(--tx-2)}
+.cm-acts{display:flex;align-items:center;gap:12px;margin-top:7px;font-size:10px;color:var(--tx-3)}
+.cm-acts a{display:inline-flex;align-items:center;gap:4px;color:var(--tx-2);text-decoration:none}
+.cm-acts .i{width:11px;height:11px}
+.cm-link{margin-left:auto;padding:1px 5px;border:1px solid var(--line);border-radius:3px;font-family:var(--mono);font-size:9px;color:var(--tx-4)}
+.npin{width:16px;height:16px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--accent);color:#fff;font-family:var(--mono);font-size:8.5px;box-shadow:0 0 0 2px rgba(111,124,232,.16)}
+.npin.done{background:rgba(255,255,255,.12);color:var(--tx-3);box-shadow:none}
+.guest{display:inline-flex;align-items:center;height:14px;padding:0 4px;border-radius:3px;border:1px solid var(--line);font-size:8.5px;letter-spacing:.03em;color:var(--tx-4)}
+.reply{margin:9px 0 0 22px;padding-left:10px;border-left:1px solid var(--line)}
+.reply .cm-top b{color:var(--tx-3)}
+.reply p{font-size:11.5px;color:var(--tx-3)}
+.compose{flex:none;border-top:1px solid var(--line);padding:10px 12px 11px;background:var(--bg-1)}
+.compose-box{border:1px solid var(--line);border-radius:6px;background:var(--bg-2);padding:8px 9px;min-height:44px}
+.compose-box .ph{font-size:11.5px;color:var(--tx-4)}
+.compose-box .hint{margin-top:12px;font-size:10px;color:var(--tx-4)}
+.compose-foot{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:10px;color:var(--tx-4)}
+.cp-more{padding:9px 14px;border-top:1px dashed rgba(255,255,255,.06);font-size:10px;color:var(--tx-4)}
+
+/* editor */
+.e-body{display:flex;flex:1;min-height:0}
+.e-tree{width:236px;flex:none;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--bg-1)}
+.e-vp{position:relative;flex:1;min-width:0;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+.e-vp .scene{position:absolute;inset:0;width:100%;height:100%}
+.e-props{width:348px;flex:none;display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--line);background:var(--bg-1)}
+.panel-head{display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;flex:none;border-bottom:1px solid var(--line);font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--tx-2)}
+.state-badge{margin-left:auto;font-family:var(--mono);font-size:8.5px;font-weight:400;letter-spacing:.08em;padding:2px 5px;border-radius:3px;border:1px solid var(--line);color:var(--tx-4)}
+.list{flex:1;min-height:0;padding:2px 6px 8px;overflow:hidden}
+.grp{display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;margin-top:2px;font-size:11px;color:var(--tx-3)}
+.grp .tri{width:0;height:0;border:4px solid transparent;border-left-color:var(--tx-4);margin-right:1px}
+.grp.open .tri{transform:rotate(90deg)}
+.grp b{font-weight:500;color:var(--tx-2)}
+.row{display:flex;align-items:center;gap:8px;height:27px;padding:0 8px;border-radius:4px;font-size:12px;color:var(--tx-2)}
+.row .sw{width:6px;height:6px;border-radius:1.5px;background:var(--bg-4);flex:none}
+.row .num{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--tx-4)}
+.row.on{background:var(--accent-soft);color:var(--tx);box-shadow:inset 2px 0 0 var(--sel)}
+.row.on .num{color:var(--tx-2)}
+.panel-foot{flex:none;display:flex;align-items:center;gap:8px;height:29px;padding:0 12px;border-top:1px solid var(--line);font-family:var(--mono);font-size:9.5px;color:var(--tx-4)}
+.panel-foot b{font-weight:500;color:var(--tx-2)}
+.cbadge{min-width:14px;height:14px;padding:0 4px;border-radius:7px;display:inline-grid;place-items:center;background:var(--accent-soft);color:var(--accent-2);font-family:var(--mono);font-size:8.5px;flex:none}
+.row .cbadge{margin-left:auto}
+.row .cbadge + .num{margin-left:0}
+.e-scroll{flex:1;min-height:0;overflow:hidden}
+.prop{border-bottom:1px solid var(--line)}
+.prop.review{background:linear-gradient(180deg,rgba(111,124,232,.05),transparent 62%)}
+.prop-head{display:flex;align-items:center;gap:7px;height:34px;padding:0 12px;flex:none}
+.prop-head h2{margin:0;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--tx-2)}
+.prop-head .i{width:12px;height:12px;color:var(--tx-4)}
+.prop-head .chev{font-family:var(--mono);font-size:12px;color:var(--tx-4)}
+.prop-body{padding-bottom:8px}
+.prop-sub{display:flex;align-items:center;gap:6px;padding:0 12px 7px;font-size:9.5px;color:var(--tx-4)}
+.prop-sub a{color:var(--accent-2);text-decoration:none}
+.prop-body .cm{padding:9px 12px}
+.prop-body .cm p{font-size:11.5px}
+.prop-foot{padding:7px 12px 2px;font-size:9.5px;color:var(--tx-4)}
+.fields2{display:grid;grid-template-columns:1fr 1fr;gap:7px 10px;padding:2px 12px 10px}
+.fld2 span{display:block;font-size:9px;color:var(--tx-4);margin-bottom:3px}
+.fld2 i{display:flex;align-items:center;height:24px;padding:0 7px;border:1px solid var(--line);border-radius:4px;background:var(--bg-2);font-family:var(--mono);font-size:10.5px;font-style:normal;color:var(--tx-2)}
+.tabbar{display:flex;align-items:center;gap:2px;height:36px;padding:0 8px;flex:none;border-bottom:1px solid var(--line)}
+.tab{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:0;border-radius:4px;background:none;font-family:inherit;font-size:11.5px;color:var(--tx-3)}
+.tab.on{background:var(--bg-3);color:var(--tx)}
+.tab .b{min-width:15px;height:15px;padding:0 4px;border-radius:8px;display:inline-grid;place-items:center;background:var(--accent-soft);color:var(--accent-2);font-family:var(--mono);font-size:8.5px}
+.tab .live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);margin-left:1px}
+.rt-head{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;flex:none;border-bottom:1px solid var(--line)}
+.rt-head h3{margin:0;font-size:11.5px;font-weight:600;letter-spacing:.01em}
+.src-filter{display:flex;align-items:center;gap:5px;padding:0 12px 8px;flex:none}
+.src-tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:4px;border:1px solid var(--line);font-size:9px;color:var(--tx-4);white-space:nowrap}
+.src-tag.on{border-color:rgba(111,124,232,.3);background:var(--accent-soft);color:var(--accent-2)}
+.cm-group{display:flex;align-items:center;gap:6px;height:26px;padding:0 14px;background:rgba(255,255,255,.018);font-size:9.5px;letter-spacing:.03em;color:var(--tx-4)}
+.cm-group span{margin-left:auto;font-family:var(--mono);font-size:8.5px}
+.e-timeline{display:flex;align-items:center;gap:10px;height:44px;padding:0 12px;flex:none;border-top:1px solid var(--line);background:var(--bg-1)}
+.tl-track{position:relative;flex:1;height:26px}
+.tl-track .band{position:absolute;inset:9px 0;border-radius:3px;background:linear-gradient(90deg,#0e1219 0%,#171d27 17%,#2f323a 33%,#5b5f68 50%,#2f323a 67%,#171d27 83%,#0e1219 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)}
+.tl-track .tick{position:absolute;top:6px;bottom:6px;width:1px;background:rgba(255,255,255,.17)}
+.tl-track .cursor{position:absolute;top:2px;bottom:2px;width:1px;background:var(--accent)}
+.tl-track .cursor::after{content:"";position:absolute;left:-3.5px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(111,124,232,.22)}
+.panel-progress{padding:8px 12px 10px;border-top:1px solid var(--line);background:rgba(255,255,255,.014)}
+.pp-row{display:flex;align-items:center;justify-content:space-between;font-size:9.5px;color:var(--tx-4)}
+.pp-row b{font-family:var(--mono);font-weight:400;color:var(--tx-3)}
+.pp-bar{margin:6px 0 5px;height:3px;border-radius:2px;background:var(--bg-4);overflow:hidden}
+.pp-bar i{display:block;height:100%;background:var(--green)}
+.pp-row.sub{font-size:8.5px}
+
+/* responsive */
+@media (max-width:1080px){
+  .page{padding:0 28px 90px}
+  .toc{margin:0 -28px 8px;padding:0 28px}
+  .notes{grid-template-columns:1fr 1fr}
+  h1{font-size:32px}
+}
+@media (max-width:760px){
+  .page{padding:0 18px 70px}
+  .toc{margin:0 -18px 8px;padding:0 18px}
+  .head{padding:52px 0 26px}
+  h1{font-size:27px}
+  .section-head{display:block}
+  .section-head p{margin-top:8px}
+  .notes{grid-template-columns:1fr;gap:22px}
+  .frame{padding:12px}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="head">
+    <div class="eyebrow"><span class="dot"></span>Share link &amp; live review · final</div>
+    <h1>分享链接与实时评审<br /><em>作者直播建模，评论双向同步</em></h1>
+    <p class="lede">
+      作者在编辑器里修改模型，分享页实时跟随；访客的评论、作者的回复与解决状态，双向即时可见。
+      本稿汇总已确认需求，给出最终的编辑器、分享页、发布弹窗与移动端设计，以及实时状态和锚点规则。
+    </p>
+    <div class="chips">
+      <span class="chip good"><span class="k"></span><b>已定</b>新页面查看，不复用预览</span>
+      <span class="chip good"><span class="k"></span><b>已定</b>接受匿名评论</span>
+      <span class="chip good"><span class="k"></span><b>已定</b>不开放漫游</span>
+      <span class="chip good"><span class="k"></span><b>已定</b>无口令 / 有效期</span>
+      <span class="chip warn"><span class="k"></span>场景实时跟随</span>
+      <span class="chip warn"><span class="k"></span>评论双向实时</span>
+    </div>
+  </header>
+
+  <nav class="toc" id="toc">
+    <a href="#req" data-t="req" class="on"><i>00</i>需求汇总</a>
+    <a href="#editor" data-t="editor"><i>E</i>编辑器回显</a>
+    <a href="#share" data-t="share"><i>S</i>分享页</a>
+    <a href="#dialog" data-t="dialog"><i>D</i>发布弹窗</a>
+    <a href="#mobile" data-t="mobile"><i>M</i>移动端</a>
+    <a href="#states" data-t="states"><i>01</i>状态与锚点</a>
+    <a href="#flow" data-t="flow"><i>02</i>同步时序</a>
+    <a href="#spec" data-t="spec"><i>03</i>交付规范</a>
+  </nav>
+
+  <!-- ================= 需求 ================= -->
+  <section class="section" id="req">
+    <div class="section-head">
+      <h2>需求汇总 / 一页看清</h2>
+      <p>只保留已确认的范围。实时是默认能力，冻结版本作为归档补充。</p>
+    </div>
+
+    <div class="req-grid">
+      <div class="req-card">
+        <div class="lbl-xs">角色</div>
+        <h3>作者 / 访客</h3>
+        <ul>
+          <li><b>作者</b>：唯一可编辑模型；可发布 / 冻结链接、回复、解决、删除评论</li>
+          <li><b>访客</b>：只读模型；匿名昵称；可新增、回复、解决自己的评论</li>
+          <li>不做多人同时编辑，不做访客漫游</li>
+        </ul>
+      </div>
+      <div class="req-card">
+        <div class="lbl-xs">实时链路</div>
+        <h3>场景单向 + 评论双向</h3>
+        <ul>
+          <li>作者编辑 → 增量 patch → 分享页 250 ms 内更新</li>
+          <li>访客评论 → 作者未读 / 预览页 300 ms 内出现</li>
+          <li>作者回复 / 解决 → 所有访客即时看到</li>
+        </ul>
+      </div>
+      <div class="req-card">
+        <div class="lbl-xs">链接模式</div>
+        <h3>实时链接 / 冻结链接</h3>
+        <ul>
+          <li><b>实时</b>（默认）：跟随作者，不刷新</li>
+          <li><b>冻结</b>：发布时的快照，用于归档 / 验收</li>
+          <li>两种链接共用评论表与锚点结构</li>
+        </ul>
+      </div>
+      <div class="req-card">
+        <div class="lbl-xs">回显</div>
+        <h3>编辑器画布 + 属性栏</h3>
+        <ul>
+          <li>画布引脚与对象位置同步</li>
+          <li>右侧「属性 / 评审」Tab，未读角标</li>
+          <li>新评论到达：角标 + 聚合提示，不抢焦点</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="req-note">
+      <span class="lbl-xs">非目标</span>
+      <p>多人同时编辑、访客漫游、口令与有效期、评论富文本 / 附件、跨项目评论。实时采用 SSE + REST，不引入 CRDT。</p>
+    </div>
+  </section>
+
+  <!-- ================= 编辑器 ================= -->
+  <section class="section" id="editor">
+    <div class="section-head">
+      <h2>编辑器 / 实时回显</h2>
+      <p>在「属性 / 评审」Tab 上承接实时评论；顶栏显示直播状态与在线人数。</p>
+    </div>
+
+    <article class="proposal">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="700">
+            <div class="tb">
+              <div class="tb-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <div class="tb-venue">W1 展馆 <span class="caret"></span></div>
+              <nav class="tb-menu"><a>文件</a><a class="on">视图</a><a>显示</a><a>数据</a><a>帮助</a></nav>
+              <div class="sp"></div>
+              <span class="kbd">⌘K</span>
+              <button class="ibtn"><i data-ic="undo"></i></button>
+              <button class="ibtn"><i data-ic="redo"></i></button>
+              <span class="vsep"></span>
+              <button class="btn ghost"><i data-ic="comment"></i>评论<span class="mono" style="color:var(--accent-2)">5</span><span class="unread-dot"></span></button>
+              <button class="btn"><span class="live-dot2"></span>分享<span class="mono" style="color:var(--tx-3);font-size:9.5px">3 人在看</span></button>
+              <button class="btn pri">导出</button>
+              <div class="ava">L</div>
+            </div>
+
+            <div class="e-body">
+              <aside class="e-tree">
+                <div class="panel-head">场景结构<span class="sp"></span><span class="kbd">L</span></div>
+                <div class="list">
+                  <div class="row"><span class="sw" style="background:#4a4f5c"></span>W1 展馆<span class="num">130 × 70 m</span></div>
+                  <div class="grp open"><span class="tri"></span><b>展台</b><span class="num">19</span></div>
+                  <div class="row"><span class="sw"></span>W1A01<span class="num">48 m²</span></div>
+                  <div class="row"><span class="sw"></span>W1A02<span class="cbadge">1</span><span class="num">64 m²</span></div>
+                  <div class="row on"><span class="sw" style="background:var(--sel)"></span>W1A03<span class="cbadge">3</span><span class="num">48 m²</span></div>
+                  <div class="row"><span class="sw"></span>W1A04<span class="cbadge">1</span><span class="num">56 m²</span></div>
+                  <div class="grp open"><span class="tri"></span><b>基础设施</b><span class="num">66</span></div>
+                  <div class="row"><span class="sw" style="background:#4a4438"></span>出入口 01<span class="cbadge">1</span><span class="num">5.0 m</span></div>
+                  <div class="row"><span class="sw" style="background:#4a4438"></span>窗户 04<span class="num">2 × 2</span></div>
+                  <div class="grp"><span class="tri"></span><b>家具</b><span class="num">7</span></div>
+                </div>
+                <div class="panel-foot">合计 <b>7,280 m²</b><span class="sp"></span>覆盖率 <b>61%</b></div>
+              </aside>
+
+              <div class="e-vp">
+                <svg class="scene" data-scene="liveEditor"></svg>
+                <div class="hud tl"><span class="hud-chip on">编辑模式</span><span class="hud-chip"><span class="live-dot2"></span>实时分享中</span></div>
+                <div class="hud tr">
+                  <div class="hud-group">
+                    <button><i data-ic="grid"></i>俯视</button>
+                    <button class="on"><i data-ic="cube"></i>轴测</button>
+                    <button><i data-ic="expand"></i>适配</button>
+                  </div>
+                </div>
+                <div class="hud bl"><div class="scalebar"><i style="width:56px"></i><span class="mono" style="font-size:9px;color:#6b6f76">10 m</span></div></div>
+                <div class="hud br"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+                <div class="toast-live" style="right:14px;top:64px">
+                  <span class="ava sm">王</span>
+                  <div><b>王工 在 W1A03 新增评论</b><span>刚刚 · 客户评审</span></div>
+                  <button class="btn sm">查看</button>
+                </div>
+              </div>
+
+              <aside class="e-props">
+                <div class="tabbar">
+                  <button class="tab">属性</button>
+                  <button class="tab on">评审<span class="b">5</span><span class="live-dot2"></span></button>
+                  <span class="sp"></span>
+                  <button class="ibtn"><i data-ic="more"></i></button>
+                </div>
+
+                <div class="rt-head">
+                  <h3>评审评论</h3><span class="count">5</span>
+                  <span class="sp"></span>
+                  <span class="live-chip"><span class="dot"></span>实时</span>
+                </div>
+                <div class="cp-filters" style="padding-top:2px">
+                  <span class="fchip on">全部 <b>5</b></span>
+                  <span class="fchip">未解决 <b>3</b></span>
+                  <span class="fchip">我的 <b>2</b></span>
+                </div>
+                <div class="src-filter">
+                  <span class="src-tag on">客户评审 · v12</span>
+                  <span class="src-tag">内审版 · v9</span>
+                  <span class="sp"></span>
+                  <span class="sync-text">已同步 · 刚刚</span>
+                </div>
+
+                <div class="e-scroll">
+                  <div class="cm-group">展台 W1A03 <span>3</span></div>
+                  <article class="cm new on">
+                    <div class="cm-top"><span class="npin">1</span><b>王工</b><span class="guest">访客</span><span class="new-badge">新</span><span class="tm">刚刚</span></div>
+                    <p>入口开口方向反了，观众会从背面进入。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">客户评审</span></div>
+                  </article>
+                  <article class="cm">
+                    <div class="cm-top"><span class="npin">2</span><b>李设计</b><span class="role">作者</span><span class="tm">18 分钟前</span><span class="moved-tag">对象已移动</span></div>
+                    <p>标准展台顶板建议去掉，视线会挡住主舞台。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">内审版</span></div>
+                  </article>
+                  <article class="cm resolved">
+                    <div class="cm-top"><span class="npin done">3</span><b>陈工</b><span class="tm">1 小时前</span></div>
+                    <p>这段过道只有 1.2 m，消防可能不通过。</p>
+                    <div class="event-line"><i data-ic="check"></i>李设计 已解决 · 刚刚</div>
+                  </article>
+                  <div class="prop-foot">已显示 3 / 5 · 查看全部</div>
+                </div>
+
+                <div class="panel-progress">
+                  <div class="pp-row"><span>本次评审</span><b>已解决 3 / 6</b></div>
+                  <div class="pp-bar"><i style="width:50%"></i></div>
+                  <div class="pp-row sub"><span>剩余 3 条未解决</span><span>实时同步</span></div>
+                </div>
+                <div class="compose">
+                  <div class="compose-box" style="min-height:38px"><div class="ph">回复或添加评论…</div></div>
+                  <div class="compose-foot">
+                    <span class="ava sm">L</span><span>李设计</span>
+                    <span class="sp"></span><span class="kbd">⌘↵</span>
+                    <button class="btn pri sm">发送</button>
+                  </div>
+                </div>
+              </aside>
+            </div>
+
+            <div class="e-timeline">
+              <button class="ibtn"><i data-ic="play"></i></button>
+              <span class="mono" style="font-size:11px">14:20</span>
+              <div class="tl-track"><div class="band"></div><span class="tick" style="left:42%"></span><span class="cursor" style="left:59%"></span></div>
+              <span style="font-size:9.5px;color:var(--tx-4)">50×</span>
+            </div>
+            <div class="status">
+              <span class="g on">就绪</span><span class="vsep"></span>
+              <span class="g">1 m 网格</span>
+              <span class="sp"></span>
+              <span class="g"><span class="live-dot2"></span>实时 · 3 人在看</span><span class="vsep"></span>
+              <span class="g">未解决 3</span><span class="vsep"></span>
+              <span class="g">对象 92</span>
+            </div>
+
+            <span class="anno" style="left:700px;top:6px">1</span>
+            <span class="anno" style="left:830px;top:56px">2</span>
+            <span class="anno" style="left:830px;top:148px">3</span>
+            <span class="anno" style="left:830px;top:596px">4</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">E</span>编辑器 · 实时回显</h3>
+          <p class="tag">作者的主场。编辑不被打断，评论到达只更新角标与列表，不抢焦点。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 顶栏「分享 · 3 人在看」直播态</li>
+            <li>② 评审 Tab 未读角标 + 实时点</li>
+            <li>③ 新评论高亮插入，作者可直接回复</li>
+            <li>④ 回复 / 解决即时同步到所有访客</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">结构</div>
+          <dl>
+            <dt>236 px</dt><dd>场景结构 + 评论徽标</dd>
+            <dt>自适应</dt><dd>画布 + 引脚 + 直播提示</dd>
+            <dt>348 px</dt><dd>属性 / 评审 Tab</dd>
+            <dt>44 px</dt><dd>时间轴（保留原样）</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">规则</div>
+          <ul>
+            <li class="plus">新评论不改变当前选中与滚动位置</li>
+            <li class="plus">解决 / 回复乐观更新，失败回滚</li>
+            <li class="minus">多标签页编辑时需 409 冲突提示</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+    <!-- ================= 分享页 ================= -->
+  </section>
+
+  <section class="section" id="share">
+    <div class="section-head">
+      <h2>分享页 / 实时评审</h2>
+      <p>常驻评论栏保留；顶栏只增加实时状态，作者编辑时给出轻量提示，不遮挡模型。</p>
+    </div>
+
+    <article class="proposal">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="680">
+            <div class="sh-top">
+              <div class="sh-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <span class="vsep"></span>
+              <div class="sh-title">W1 展馆 · 秋季车展 <span class="ro"><i data-ic="eye"></i>只读</span></div>
+              <div class="sp"></div>
+              <span class="live-chip"><span class="dot"></span>实时 · 3 人</span>
+              <span class="sync-text">已同步 · 刚刚</span>
+              <div class="hud-group">
+                <button class="on"><i data-ic="grid"></i>俯视</button>
+                <button><i data-ic="cube"></i>轴测</button>
+                <button><i data-ic="expand"></i>适配</button>
+              </div>
+              <span class="vsep"></span>
+              <button class="btn pri"><i data-ic="link"></i>复制链接</button>
+              <div class="ava">L</div>
+            </div>
+
+            <div class="sh-body">
+              <div class="sh-vp">
+                <svg class="scene" data-scene="liveShare"></svg>
+                <div class="hud tl">
+                  <span class="hud-chip on"><i data-ic="eye"></i>只读</span>
+                  <span class="hud-chip">130 × 70 m</span>
+                </div>
+                <div class="live-pill"><span class="pulse"></span><b>作者正在编辑</b> W1A03<span class="mono" style="color:var(--tx-4)">实时</span></div>
+                <div class="hud bl">
+                  <div class="scalebar"><i style="width:62px"></i><span class="mono" style="font-size:9px;color:#6b6f76">10 m</span></div>
+                </div>
+                <div class="hud br"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+                <div class="sh-dock">
+                  <button>−</button><span class="zoom">86%</span><button>+</button>
+                  <span class="vsep" style="height:14px"></span>
+                  <button><i data-ic="expand"></i></button>
+                  <button class="on"><i data-ic="comment"></i>评论</button>
+                </div>
+                <div class="toast-live" style="left:14px;top:64px">
+                  <span class="ava sm">李</span>
+                  <div><b>李设计 回复了 1 条评论</b><span>刚刚 · W1A03 入口</span></div>
+                </div>
+              </div>
+
+              <aside class="cpanel">
+                <div class="cp-head">
+                  <h3>评论</h3><span class="count">5</span>
+                  <span class="sp"></span>
+                  <span class="live-chip"><span class="dot"></span>实时</span>
+                  <button class="ibtn"><i data-ic="filter"></i></button>
+                  <button class="ibtn"><i data-ic="close"></i></button>
+                </div>
+                <div class="cp-filters">
+                  <span class="fchip on">全部 <b>5</b></span>
+                  <span class="fchip">未解决 <b>3</b></span>
+                  <span class="fchip">我的 <b>1</b></span>
+                </div>
+
+                <div class="cp-list">
+                  <article class="cm new on">
+                    <div class="cm-top"><span class="npin">1</span><b>王工</b><span class="guest">访客</span><span class="new-badge">新</span><span class="tm">刚刚</span></div>
+                    <p>入口开口方向反了，观众会从背面进入。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">W1A03</span></div>
+                    <div class="reply">
+                      <div class="cm-top"><span class="npin done">1</span><b>李设计</b><span class="role">作者</span><span class="tm">刚刚</span></div>
+                      <p>收到，这版把开口转到南侧，模型已更新。</p>
+                    </div>
+                  </article>
+
+                  <article class="cm">
+                    <div class="cm-top"><span class="npin">2</span><b>李设计</b><span class="role">作者</span><span class="tm">30 秒前</span><span class="moved-tag">对象已移动</span></div>
+                    <p>标准展台顶板建议去掉，视线会挡住主舞台。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">W1A02</span></div>
+                  </article>
+
+                  <article class="cm resolved">
+                    <div class="cm-top"><span class="npin done">3</span><b>陈工</b><span class="guest">访客</span><span class="tm">1 小时前</span></div>
+                    <p>这段过道只有 1.2 m，消防可能不通过。</p>
+                    <div class="event-line"><i data-ic="check"></i>李设计 已解决 · 刚刚</div>
+                  </article>
+
+                  <article class="cm">
+                    <div class="cm-top"><span class="npin">4</span><b>客户 A</b><span class="guest">访客</span><span class="tm">09:40</span></div>
+                    <p>咖啡洽谈区可以再加两组圆桌。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">W1D01</span></div>
+                  </article>
+                </div>
+
+                <div class="compose">
+                  <div class="compose-box">
+                    <div class="ph">添加评论…</div>
+                    <div class="hint">点击画布指定位置 · 评论即时同步给作者</div>
+                  </div>
+                  <div class="compose-foot">
+                    <span class="ava sm">王</span><span>王工 · 访客</span>
+                    <span class="sp"></span>
+                    <span class="kbd">⌘↵</span>
+                    <button class="btn pri sm">发送</button>
+                  </div>
+                </div>
+              </aside>
+            </div>
+
+            <span class="anno" style="left:660px;top:12px">1</span>
+            <span class="anno" style="left:600px;top:66px">2</span>
+            <span class="anno" style="left:838px;top:190px">3</span>
+            <span class="anno" style="left:838px;top:596px">4</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">S</span>分享页 · 实时评论栏</h3>
+          <p class="tag">访客看不到编辑控件；场景更新、评论、回复、解决状态都在原页面内完成，不刷新。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 顶栏实时状态 + 在线人数</li>
+            <li>② 作者编辑时的轻量提示，不遮挡模型</li>
+            <li>③ 新评论与作者回复实时出现</li>
+            <li>④ 解决状态同步，输入区始终可用</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">结构</div>
+          <dl>
+            <dt>48 px</dt><dd>顶栏：只读、实时、视图、复制链接</dd>
+            <dt>自适应</dt><dd>画布 + 引脚 + 直播提示</dd>
+            <dt>348 px</dt><dd>评论栏：筛选、列表、输入</dd>
+            <dt>0</dt><dd>无编辑面板、无漫游、无时间轴</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">规则</div>
+          <ul>
+            <li class="plus">更新时保持相机、选中与滚动位置</li>
+            <li class="plus">评论锚点跟随对象，不随模型漂移</li>
+            <li class="minus">弱网显示「重连中」，不隐藏最后画面</li>
+            <li class="minus">展开输入时不因更新抢焦点</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <!-- ================= 发布弹窗 ================= -->
+    <article class="proposal" id="dialog">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="680">
+            <div class="sh-top">
+              <div class="sh-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <span class="vsep"></span>
+              <div class="sh-title">W1 展馆 · 秋季车展 <span class="ro"><i data-ic="eye"></i>只读</span></div>
+              <div class="sp"></div>
+              <span class="live-chip"><span class="dot"></span>实时 · 3 人</span>
+              <button class="btn pri"><i data-ic="link"></i>复制链接</button>
+            </div>
+
+            <div class="b-canvas">
+              <svg class="scene" data-scene="liveDialog"></svg>
+              <div class="dim"></div>
+
+              <div class="dlg">
+                <div class="dlg-head">
+                  <div>
+                    <div class="dlg-title">分享查看链接</div>
+                    <div class="dlg-sub">作者修改后链接自动更新，访客无需刷新</div>
+                  </div>
+                  <span class="sp"></span>
+                  <span class="live-chip"><span class="dot"></span>实时 · 3 人在看</span>
+                  <button class="ibtn"><i data-ic="close"></i></button>
+                </div>
+
+                <div class="dlg-body">
+                  <div class="dlg-scene">
+                    <div class="thumb"><svg data-scene="liveDialog"></svg></div>
+                    <div class="dlg-scene-meta">
+                      <b>W1 展馆 · 秋季车展</b>
+                      <span>130 × 70 m · 19 个展台 · 66 个设施</span>
+                      <span class="ok"><span class="live-dot2"></span>实时同步中 · 3 人正在查看</span>
+                    </div>
+                  </div>
+
+                  <label class="dlg-field">
+                    <span class="lbl">链接标题</span>
+                    <div class="inp">W1 展馆 · 秋季车展</div>
+                  </label>
+
+                  <div class="dlg-rows">
+                    <div class="dlg-row">
+                      <div><b>实时同步</b><span>作者修改模型后，链接内容自动更新，访客无需刷新</span></div>
+                      <span class="sp"></span>
+                      <span class="toggle on"><i></i></span>
+                    </div>
+                    <div class="dlg-row">
+                      <div><b>允许匿名评论</b><span>访客填写昵称后即可在画布上留评论</span></div>
+                      <span class="sp"></span>
+                      <span class="toggle on"><i></i></span>
+                    </div>
+                    <div class="dlg-row">
+                      <div><b>允许导出图片</b><span>开放俯视汇报图下载，默认关闭</span></div>
+                      <span class="sp"></span>
+                      <span class="toggle"><i></i></span>
+                    </div>
+                  </div>
+
+                  <div class="dlg-link">
+                    <span class="lbl">链接</span>
+                    <div class="linkrow">
+                      <div class="inp">https://…/#/share/9fK2mQ4xTb1L</div>
+                      <button class="btn">复制</button>
+                    </div>
+                  </div>
+
+                  <div class="dlg-note">冻结版本会生成新的快照链接，评论位置固定在该版本，适合归档或验收。</div>
+                </div>
+
+                <div class="dlg-foot">
+                  <button class="btn ghost"><i data-ic="pin"></i>冻结当前版本</button>
+                  <span class="sp"></span>
+                  <button class="btn ghost">取消</button>
+                  <button class="btn pri">复制实时链接</button>
+                </div>
+              </div>
+
+              <span class="anno" style="left:890px;top:90px">2</span>
+              <span class="anno" style="left:890px;top:268px">1</span>
+              <span class="anno" style="left:890px;top:505px">3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">D</span>发布弹窗 · 实时优先</h3>
+          <p class="tag">默认发布实时链接；冻结版本作为次要动作，避免和「更新快照」混淆。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 实时同步开关，默认开启</li>
+            <li>② 在线人数与同步状态</li>
+            <li>③ 冻结当前版本生成独立快照</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">状态</div>
+          <dl>
+            <dt>首次</dt><dd>主按钮「发布并复制链接」</dd>
+            <dt>已发布</dt><dd>主按钮「复制实时链接」</dd>
+            <dt>关闭实时</dt><dd>按钮变为「发布冻结链接」</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">取舍</div>
+          <ul>
+            <li class="plus">实时是默认心智，减少一次发布动作</li>
+            <li class="plus">冻结链接保留验收 / 归档场景</li>
+            <li class="minus">两个链接概念需要在文案上讲清</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <style>
+    /* requirement summary */
+    .req-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .req-card{border:1px solid var(--line);border-radius:8px;padding:14px;background:rgba(255,255,255,.014)}
+    .req-card h3{margin:6px 0 8px;font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+    .req-card ul{margin:0;padding:0;list-style:none}
+    .req-card li{position:relative;padding-left:10px;font-size:11.5px;line-height:1.7;color:var(--tx-3);margin-bottom:3px}
+    .req-card li::before{content:"";position:absolute;left:0;top:9px;width:3px;height:1px;background:var(--tx-4)}
+    .req-card b{color:var(--tx-2);font-weight:500}
+    .lbl-xs{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx-4)}
+    .req-note{display:flex;gap:16px;align-items:flex-start;margin-top:18px;padding:12px 14px;border:1px solid var(--line);border-radius:7px;background:var(--bg-1)}
+    .req-note p{margin:0;font-size:11.5px;line-height:1.7;color:var(--tx-3)}
+
+    /* live atoms in mock */
+    .live-dot2{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(91,189,139,.12);display:inline-block;flex:none}
+    .unread-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px rgba(111,124,232,.18);display:inline-block;flex:none}
+    .panel-progress{padding:8px 12px 10px;border-top:1px solid var(--line);background:rgba(255,255,255,.014)}
+    .pp-row{display:flex;align-items:center;justify-content:space-between;font-size:9.5px;color:var(--tx-4)}
+    .pp-row b{font-family:var(--mono);font-weight:400;color:var(--tx-3)}
+    .pp-bar{margin:6px 0 5px;height:3px;border-radius:2px;background:var(--bg-4);overflow:hidden}
+    .pp-bar i{display:block;height:100%;background:var(--green)}
+    .pp-row.sub{font-size:8.5px}
+
+    /* dialog */
+    .dim{position:absolute;inset:0;z-index:10;background:rgba(4,5,7,.62);backdrop-filter:blur(3px) saturate(80%)}
+    .b-canvas{position:relative;flex:1;min-height:0;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+    .b-canvas .scene{position:absolute;inset:0;width:100%;height:100%}
+    .dlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:11;width:560px;border-radius:12px;overflow:hidden;border:1px solid var(--line-2);background:#0e0f12;box-shadow:0 44px 90px -30px rgba(0,0,0,.96),0 1px 0 rgba(255,255,255,.05) inset}
+    .dlg-head{display:flex;align-items:flex-start;gap:8px;padding:16px 18px 12px}
+    .dlg-title{font-size:14px;font-weight:600;letter-spacing:-.01em}
+    .dlg-sub{margin-top:3px;font-size:10.5px;color:var(--tx-3)}
+    .dlg-body{padding:0 18px}
+    .dlg-scene{display:flex;gap:12px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg-2)}
+    .thumb{width:88px;height:58px;flex:none;border-radius:5px;overflow:hidden;border:1px solid var(--line);background:#0b0d10}
+    .thumb svg{display:block;width:100%;height:100%}
+    .dlg-scene-meta{display:flex;flex-direction:column;justify-content:center;gap:3px;font-size:11px;color:var(--tx-2)}
+    .dlg-scene-meta b{font-size:11.5px;font-weight:500;color:var(--tx)}
+    .dlg-scene-meta span{font-size:10px;color:var(--tx-3)}
+    .dlg-scene-meta .ok{display:inline-flex;align-items:center;gap:5px;color:#93d9b3}
+    .lbl{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-4)}
+    .dlg-field{margin-top:12px;display:flex;flex-direction:column;gap:5px}
+    .inp{display:flex;align-items:center;height:30px;padding:0 9px;border-radius:5px;border:1px solid var(--line);background:var(--bg-2);font-size:11.5px;color:var(--tx-2)}
+    .dlg-rows{margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+    .dlg-row{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bg-2)}
+    .dlg-row + .dlg-row{border-top:1px solid var(--line)}
+    .dlg-row b{display:block;font-size:11.5px;font-weight:500;color:var(--tx)}
+    .dlg-row span{display:block;font-size:10px;color:var(--tx-4);margin-top:1px}
+    .toggle{width:30px;height:17px;border-radius:9px;background:var(--bg-4);position:relative;flex:none}
+    .toggle i{position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#8b8f98}
+    .toggle.on{background:var(--accent)}
+    .toggle.on i{left:15px;background:#fff}
+    .dlg-link{margin-top:12px}
+    .linkrow{display:flex;gap:6px;margin-top:5px}
+    .linkrow .inp{flex:1;font-family:var(--mono);font-size:10.5px;color:var(--tx-3)}
+    .dlg-note{margin-top:10px;font-size:9.5px;line-height:1.6;color:var(--tx-4)}
+    .dlg-foot{display:flex;align-items:center;gap:8px;margin-top:14px;padding:12px 18px;border-top:1px solid var(--line);background:var(--bg-1)}
+    .dlg-foot .btn.ghost{color:var(--tx-3)}
+    @media (max-width:1080px){.req-grid{grid-template-columns:1fr 1fr}}
+    @media (max-width:760px){.req-grid{grid-template-columns:1fr}.req-note{display:block}}
+  </style>
+  <!-- ================= 移动端 ================= -->
+  <section class="section" id="mobile">
+    <div class="section-head">
+      <h2>移动端 / 实时评论抽屉</h2>
+      <p>与桌面共用同一套实时状态；更新时不重置滚动与输入焦点。</p>
+    </div>
+
+    <article class="proposal">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="680">
+            <div class="phones">
+              <div class="pcol">
+                <div class="phone">
+                  <div class="screen">
+                    <div class="p-status"><span>9:41</span><span class="r"><span>5G</span><span class="bar"></span></span></div>
+                    <div class="p-head">
+                      <div class="t"><b>W1 展馆 · 秋季车展</b><span><span class="live-dot2"></span>实时 · 3 人正在查看</span></div>
+                      <button class="ibtn"><i data-ic="share"></i></button>
+                      <button class="ibtn"><i data-ic="more"></i></button>
+                    </div>
+                    <div class="p-body">
+                      <div class="p-vp">
+                        <svg class="scene" data-scene="liveMob1"></svg>
+                        <div class="p-hud"><span>俯视</span><span>适配</span></div>
+                        <div class="p-live"><span class="pulse"></span>作者正在编辑 W1A03</div>
+                        <div class="p-metrics3">
+                          <div><span>面积</span><b>7,280 m²</b></div>
+                          <div><span>展台</span><b>19</b></div>
+                          <div><span>覆盖</span><b>61%</b></div>
+                        </div>
+                        <div class="p-cbar">
+                          <span class="stack"><span class="ava sm">王</span><span class="ava sm">李</span><span class="ava sm">陈</span></span>
+                          <div><b>5 条评论</b><span>3 条未解决</span></div>
+                          <span class="sp"></span>
+                          <button class="btn pri sm"><i data-ic="comment"></i>查看</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="cap"><b>M1 · 查看态</b>实时徽标与作者编辑提示都在画布内，评论收成底部一条。</div>
+              </div>
+
+              <div class="pcol">
+                <div class="phone">
+                  <div class="screen">
+                    <div class="p-status"><span>9:42</span><span class="r"><span>5G</span><span class="bar"></span></span></div>
+                    <div class="p-head">
+                      <div class="t"><b>评论 · 5</b><span>W1A03 入口方向</span></div>
+                      <button class="ibtn"><i data-ic="back"></i></button>
+                      <button class="ibtn"><i data-ic="close"></i></button>
+                    </div>
+                    <div class="p-body">
+                      <div class="p-vp" style="flex:0 0 34%">
+                        <svg class="scene" data-scene="liveMob2"></svg>
+                        <div class="p-hud"><span>定位 W1A03</span></div>
+                      </div>
+                      <div class="p-csheet">
+                        <div class="p-grab"><i></i></div>
+                        <div class="p-cs-head">
+                          <span class="fchip on">全部</span><span class="fchip">未解决</span>
+                          <span class="sp"></span><span class="live-chip"><span class="dot"></span>实时</span>
+                        </div>
+                        <div class="p-cs-list">
+                          <article class="cm new on">
+                            <div class="cm-top"><span class="npin">1</span><b>王工</b><span class="guest">访客</span><span class="new-badge">新</span><span class="tm">刚刚</span></div>
+                            <p>入口开口方向反了，观众会从背面进入。</p>
+                            <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a></div>
+                            <div class="reply">
+                              <div class="cm-top"><span class="npin done">1</span><b>李设计</b><span class="role">作者</span><span class="tm">刚刚</span></div>
+                              <p>已把开口转到南侧，模型同步更新。</p>
+                            </div>
+                          </article>
+                          <article class="cm resolved">
+                            <div class="cm-top"><span class="npin done">3</span><b>陈工</b><span class="guest">访客</span><span class="tm">1 小时前</span></div>
+                            <p>过道 1.2 m，消防可能不通过。</p>
+                            <div class="event-line"><i data-ic="check"></i>李设计 已解决 · 刚刚</div>
+                          </article>
+                          <div class="p-more">还有 3 条 · 查看全部 5 条</div>
+                        </div>
+                        <div class="p-cs-compose">
+                          <div class="compose-box"><div class="ph">添加评论…</div></div>
+                          <div class="compose-foot"><span>王工 · 访客</span><span class="sp"></span><button class="btn pri sm">发送</button></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="cap"><b>M2 · 评论态</b>上方保留定位画面，下方实时插入新评论与作者回复，不重置滚动。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">M</span>移动端 · 实时规则</h3>
+          <p class="tag">只读查看 + 评论；没有漫游、没有编辑、没有时间轴。</p>
+          <div class="lbl">规则</div>
+          <ul>
+            <li>画布至少 55%，抽屉最高 60%</li>
+            <li>新评论插入不改变滚动位置</li>
+            <li>输入中收到更新不抢焦点</li>
+            <li>弱网显示「重连中」，保留最后画面</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">结构</div>
+          <dl>
+            <dt>30 px</dt><dd>系统状态条</dd>
+            <dt>42 px</dt><dd>标题 + 实时状态</dd>
+            <dt>自适应</dt><dd>3D 画布 + 引脚</dd>
+            <dt>46 px</dt><dd>收起态评论条</dd>
+            <dt>60%</dt><dd>展开态抽屉</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">取舍</div>
+          <ul>
+            <li class="plus">与桌面共用引脚、卡片与状态</li>
+            <li class="plus">客户在微信里打开即可评论</li>
+            <li class="minus">实时更新时 3D 手势可能被打断</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= 状态与锚点 ================= -->
+  <section class="section" id="states">
+    <div class="section-head">
+      <h2>实时状态 / 评论锚点</h2>
+      <p>所有状态都用同一套原子组件，文案固定；锚点跟随对象，不跟随场景指纹。</p>
+    </div>
+
+    <div class="state-grid">
+      <div class="state-card">
+        <div class="state-head"><span class="lbl-xs">连接</span><span class="mono">OK</span></div>
+        <div class="state-demo"><span class="live-chip"><span class="dot"></span>实时 · 3 人</span><span class="sync-text">已同步 · 刚刚</span></div>
+        <p>默认状态。场景与评论都通过同一连接推送。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl-xs">同步中</span><span class="mono">250 ms</span></div>
+        <div class="state-demo"><span class="live-chip warn"><span class="dot"></span>正在同步</span></div>
+        <p>作者刚提交修改，等待下一帧应用。按钮仍可用。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl-xs">重连中</span><span class="mono">退避 1 / 2 / 5 s</span></div>
+        <div class="state-demo"><span class="live-chip warn"><span class="dot"></span>连接中断</span><span class="sync-text">最后同步 12s 前</span></div>
+        <p>保留最后画面；恢复后先拉一次全量，再继续增量。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl-xs">冻结</span><span class="mono">v12</span></div>
+        <div class="state-demo"><span class="live-chip off"><span class="dot"></span>已冻结 · v12</span></div>
+        <p>快照链接不再跟随作者；评论仍可继续。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl-xs">新评论</span><span class="mono">300 ms</span></div>
+        <div class="state-demo state-comment"><span class="npin">1</span><b>王工</b><span class="guest">访客</span><span class="new-badge">新</span></div>
+        <p>卡片高亮 2 秒后回落，引脚同时出现。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl-xs">作者回复</span><span class="mono">SSE</span></div>
+        <div class="state-demo state-comment"><span class="npin done">1</span><b>李设计</b><span class="role">作者</span></div>
+        <p>所有访客即时看到；未读计数不增加。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl-xs">已解决</span><span class="mono">作者</span></div>
+        <div class="state-demo state-comment"><i data-ic="check" style="color:var(--green);width:12px;height:12px"></i><span style="font-size:10.5px;color:var(--tx-2)">李设计 已解决 · 刚刚</span></div>
+        <p>卡片降权，引脚变灰；可取消解决恢复。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl-xs">锚点失效</span><span class="mono">对象删除</span></div>
+        <div class="state-demo state-comment"><span class="npin done">3</span><span class="moved-tag" style="margin-left:0">锚点失效</span></div>
+        <p>评论保留可读，引脚隐藏或降级为虚点。</p>
+      </div>
+    </div>
+
+    <table class="anchor-table">
+      <thead>
+        <tr><th>场景变化</th><th>引脚</th><th>卡片状态</th><th>处理</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>对象移动 / 旋转</td><td>跟随对象当前位置</td><td>正常</td><td>按对象相对偏移重算</td></tr>
+        <tr><td>对象缩放</td><td>跟随并贴边</td><td>正常</td><td>偏移超出包围盒时贴边</td></tr>
+        <tr><td>对象删除</td><td>隐藏 / 灰点</td><td>锚点失效</td><td>卡片可读，不可定位</td></tr>
+        <tr><td>场馆重绘</td><td>世界坐标保留</td><td>场馆已重绘</td><td>提示用户确认位置</td></tr>
+        <tr><td>新增对象</td><td>无影响</td><td>—</td><td>不触发任何评论状态</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <style>
+    /* phones */
+    .phones{display:flex;gap:30px;justify-content:center;align-items:flex-start;padding:12px 0 4px}
+    .pcol{width:300px;flex:none}
+    .pcol .cap{margin-top:12px;font-size:10.5px;line-height:1.6;color:var(--tx-4)}
+    .pcol .cap b{display:block;color:var(--tx-2);font-weight:500;font-size:11px}
+    .phone{position:relative;width:300px;height:600px;border-radius:26px;padding:7px;background:linear-gradient(180deg,#1a1c20,#0d0e10);box-shadow:0 0 0 1px rgba(255,255,255,.09),0 40px 70px -34px rgba(0,0,0,.95)}
+    .screen{position:relative;width:100%;height:100%;overflow:hidden;border-radius:20px;background:var(--bg-1);font-size:11px;display:flex;flex-direction:column}
+    .p-status{display:flex;align-items:center;justify-content:space-between;height:30px;padding:0 16px;font-family:var(--mono);font-size:10px;color:var(--tx-2);flex:none}
+    .p-status .r{display:flex;align-items:center;gap:5px}
+    .p-status .bar{width:14px;height:7px;border:1px solid var(--tx-3);border-radius:2px;position:relative}
+    .p-status .bar::after{content:"";position:absolute;inset:1px;right:5px;background:var(--tx-2);border-radius:1px}
+    .p-head{display:flex;align-items:center;gap:6px;height:42px;padding:0 10px;border-bottom:1px solid var(--line);flex:none}
+    .p-head .t{flex:1;min-width:0}
+    .p-head .t b{display:block;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .p-head .t span{display:flex;align-items:center;gap:4px;font-size:9px;color:var(--tx-4);margin-top:1px}
+    .p-head .ibtn{width:24px;height:24px}
+    .p-body{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+    .p-vp{position:relative;flex:1;min-height:0;overflow:hidden;background:radial-gradient(72% 58% at 50% 44%,#0e1116,#07080a 72%)}
+    .p-vp .scene{position:absolute;inset:0;width:100%;height:100%}
+    .p-hud{position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:4}
+    .p-hud span{display:inline-flex;align-items:center;height:22px;padding:0 7px;border-radius:4px;background:rgba(12,13,15,.82);border:1px solid var(--line);font-size:9.5px;color:var(--tx-2)}
+    .p-live{position:absolute;left:10px;top:8px;z-index:5;display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 7px;border-radius:11px;background:rgba(12,13,15,.9);border:1px solid rgba(111,124,232,.32);font-size:9px;color:var(--tx-2)}
+    .p-live .pulse{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse 1.7s infinite}
+    .p-metrics3{position:absolute;left:10px;right:10px;bottom:64px;z-index:4;display:grid;grid-template-columns:repeat(3,1fr);overflow:hidden;border:1px solid var(--line);border-radius:8px;background:rgba(12,13,15,.86);backdrop-filter:blur(8px)}
+    .p-metrics3 div{padding:6px 8px;border-right:1px solid var(--line)}
+    .p-metrics3 div:last-child{border-right:0}
+    .p-metrics3 span{display:block;font-size:8px;letter-spacing:.04em;text-transform:uppercase;color:var(--tx-4)}
+    .p-metrics3 b{display:block;margin-top:1px;font-family:var(--mono);font-size:10px;font-weight:400;color:var(--tx-2)}
+    .p-cbar{position:absolute;left:10px;right:10px;bottom:10px;z-index:5;display:flex;align-items:center;gap:8px;height:46px;padding:0 10px;border-radius:10px;background:rgba(12,13,15,.93);border:1px solid var(--line-2);box-shadow:0 18px 40px -20px rgba(0,0,0,.9)}
+    .p-cbar .stack{display:flex}
+    .p-cbar .stack .ava{margin-left:-5px;box-shadow:0 0 0 2px #0d0e10}
+    .p-cbar .stack .ava:first-child{margin-left:0}
+    .p-cbar div b{display:block;font-size:10.5px;font-weight:500;color:var(--tx)}
+    .p-cbar div span{display:block;font-size:9px;color:var(--tx-3)}
+    .p-cbar .btn.sm{height:24px;font-size:10px}
+    .p-csheet{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;margin-top:-10px;z-index:5;border-top:1px solid var(--line-2);border-radius:12px 12px 0 0;background:#101113;box-shadow:0 -18px 40px -20px rgba(0,0,0,.9)}
+    .p-grab{display:grid;place-items:center;height:16px;flex:none}
+    .p-grab i{width:30px;height:3px;border-radius:2px;background:var(--bg-4)}
+    .p-cs-head{display:flex;align-items:center;gap:4px;padding:0 12px 6px;flex:none}
+    .p-cs-head .fchip{height:20px;font-size:9.5px;padding:0 6px}
+    .p-cs-head .live-chip{height:18px;font-size:8.5px;padding:0 6px}
+    .p-cs-list{flex:1;min-height:0;overflow:hidden}
+    .p-cs-list .cm{padding:8px 12px}
+    .p-cs-list .cm p{font-size:10.5px;margin-top:3px}
+    .p-cs-list .cm-acts{margin-top:5px;font-size:9px}
+    .p-cs-list .reply{margin-left:16px;padding-left:8px}
+    .p-cs-list .reply p{font-size:10px}
+    .p-cs-compose{flex:none;padding:7px 10px 10px;border-top:1px solid var(--line)}
+    .p-cs-compose .compose-box{min-height:32px;padding:7px 8px}
+    .p-cs-compose .compose-box .ph{font-size:10px}
+    .p-cs-compose .compose-foot{margin-top:5px;font-size:9px}
+    .p-cs-compose .btn.sm{height:22px;font-size:9.5px}
+    .p-more{padding:8px 12px;font-size:9px;color:var(--tx-4)}
+
+    /* states */
+    .state-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .state-card{border:1px solid var(--line);border-radius:8px;padding:12px;background:rgba(255,255,255,.014)}
+    .state-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+    .state-head .mono{font-size:8.5px;color:var(--tx-4)}
+    .state-demo{display:flex;align-items:center;gap:6px;min-height:26px}
+    .state-card p{margin:8px 0 0;font-size:10.5px;line-height:1.6;color:var(--tx-4)}
+    .state-comment{font-size:10.5px;color:var(--tx-2)}
+    .live-chip.warn{border-color:rgba(233,160,106,.28);background:rgba(233,160,106,.07);color:#d8a27b}
+    .live-chip.warn .dot{background:var(--amber);box-shadow:0 0 0 3px rgba(233,160,106,.13)}
+    .live-chip.off{border-color:var(--line);background:var(--bg-2);color:var(--tx-4)}
+    .live-chip.off .dot{background:var(--tx-4);box-shadow:none}
+    .anchor-table{width:100%;border-collapse:collapse;margin-top:22px;font-size:11.5px;table-layout:fixed}
+    .anchor-table th{padding:0 12px 8px;text-align:left;font-family:var(--mono);font-size:9px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--tx-4);border-bottom:1px solid var(--line)}
+    .anchor-table th:nth-child(1){width:22%}
+    .anchor-table th:nth-child(2){width:28%}
+    .anchor-table th:nth-child(3){width:20%}
+    .anchor-table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.045);color:var(--tx-3);line-height:1.55}
+    .anchor-table td:first-child{color:var(--tx-2)}
+    @media (max-width:1080px){.state-grid{grid-template-columns:1fr 1fr}}
+    @media (max-width:760px){.state-grid{grid-template-columns:1fr}}
+  </style>
+  <!-- ================= 同步时序 ================= -->
+  <section class="section" id="flow">
+    <div class="section-head">
+      <h2>同步时序 / 三条链路</h2>
+      <p>场景单向广播，评论双向同步；都用 SSE 下行 + REST 上行，断线后可全量恢复。</p>
+    </div>
+
+    <div class="flow-board">
+      <div class="flow-row">
+        <div class="flow-label"><span class="lbl-xs">01 · 场景直播</span><h4>作者编辑 → 访客</h4></div>
+        <div class="flow-track">
+          <span class="node actor">作者修改</span><span class="arrow">→</span>
+          <span class="node">250 ms 合并 diff</span><span class="arrow">→</span>
+          <span class="node">PATCH /shares/:token/live</span><span class="arrow">→</span>
+          <span class="node server">revision + 1</span><span class="arrow">→</span>
+          <span class="node event">SSE scene.patch</span><span class="arrow">→</span>
+          <span class="node">访客增量更新</span>
+        </div>
+      </div>
+      <div class="flow-row">
+        <div class="flow-label"><span class="lbl-xs">02 · 评论上行</span><h4>访客评论 → 作者</h4></div>
+        <div class="flow-track">
+          <span class="node actor">访客发表</span><span class="arrow">→</span>
+          <span class="node">POST /comments</span><span class="arrow">→</span>
+          <span class="node server">持久化 + 分配 id</span><span class="arrow">→</span>
+          <span class="node event">SSE comment.created</span><span class="arrow">→</span>
+          <span class="node">作者未读 +1</span><span class="arrow">→</span>
+          <span class="node">卡片高亮 2 s</span>
+        </div>
+      </div>
+      <div class="flow-row">
+        <div class="flow-label"><span class="lbl-xs">03 · 状态回传</span><h4>作者回复 / 解决 → 访客</h4></div>
+        <div class="flow-track">
+          <span class="node actor">作者操作</span><span class="arrow">→</span>
+          <span class="node">PATCH /comments/:id</span><span class="arrow">→</span>
+          <span class="node server">更新状态</span><span class="arrow">→</span>
+          <span class="node event">SSE comment.updated</span><span class="arrow">→</span>
+          <span class="node">所有访客原地更新</span>
+        </div>
+      </div>
+      <div class="flow-row">
+        <div class="flow-label"><span class="lbl-xs">04 · 断线恢复</span><h4>重连 → 全量对齐</h4></div>
+        <div class="flow-track">
+          <span class="node">SSE 断开</span><span class="arrow">→</span>
+          <span class="node">重新申请 ticket</span><span class="arrow">→</span>
+          <span class="node">GET scene?since=rev</span><span class="arrow">→</span>
+          <span class="node server">返回 patch 或全量</span><span class="arrow">→</span>
+          <span class="node event">恢复增量</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-foot">
+      <span class="kbd">单写者</span><span>场景只有作者可写，无 OT / CRDT</span>
+      <span class="vsep"></span>
+      <span class="kbd">幂等</span><span>评论事件带 clientId，回显去重</span>
+      <span class="vsep"></span>
+      <span class="kbd">降级</span><span>SSE 不可用时 2 s 轮询，不阻塞编辑</span>
+    </div>
+  </section>
+
+  <!-- ================= 交付规范 ================= -->
+  <section class="section" id="spec">
+    <div class="section-head">
+      <h2>交付规范 / 尺寸、时延与验收</h2>
+      <p>可直接作为前端实现与联调依据；数值与现有工作台保持一致。</p>
+    </div>
+
+    <div class="spec-grid">
+      <div class="spec-block">
+        <h3>布局尺寸</h3>
+        <div class="kv">
+          <span>编辑器顶栏</span><b>46 px</b>
+          <span>场景结构</span><b>236 px</b>
+          <span>属性 / 评审栏</span><b>348 px</b>
+          <span>时间轴 / 状态栏</span><b>44 / 26 px</b>
+          <span>分享页顶栏</span><b>48 px</b>
+          <span>分享页评论栏</span><b>348 px</b>
+          <span>底部 dock</span><b>38 px</b>
+          <span>移动端</span><b>300 × 600 画板</b>
+        </div>
+      </div>
+
+      <div class="spec-block">
+        <h3>时延与连接</h3>
+        <div class="kv">
+          <span>场景合并</span><b>250 ms</b>
+          <span>评论同步</span><b>≤ 300 ms</b>
+          <span>SSE keepalive</span><b>20 s</b>
+          <span>stream ticket</span><b>60 s</b>
+          <span>重连退避</span><b>1 / 2 / 5 s</b>
+          <span>轮询兜底</span><b>2 s</b>
+          <span>断线全量阈值</span><b>落后 &gt; 30 s</b>
+        </div>
+      </div>
+
+      <div class="spec-block">
+        <h3>状态文案</h3>
+        <div class="copy-list">
+          <code>实时 · 3 人在看</code>
+          <code>已同步 · 刚刚</code>
+          <code>正在同步…</code>
+          <code>连接中断，正在重连</code>
+          <code>作者正在编辑 W1A03</code>
+          <code>对象已移动</code>
+          <code>锚点失效</code>
+          <code>已冻结 · v12</code>
+          <code>冻结当前版本</code>
+        </div>
+      </div>
+
+      <div class="spec-block">
+        <h3>前端改造点</h3>
+        <ul class="plain-list">
+          <li><b>Stage</b>：单对象 upsert / remove，避免全量重建</li>
+          <li><b>场景</b>：diff、250 ms 合并、revision 冲突处理</li>
+          <li><b>实时</b>：SSE 客户端、ticket 刷新、重连与全量恢复</li>
+          <li><b>评论</b>：乐观更新、clientId 去重、未读游标</li>
+          <li><b>锚点</b>：对象相对偏移，移动 / 删除时重算</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="accept">
+      <div class="accept-head"><span class="lbl-xs">验收清单</span><span class="mono">6 项</span></div>
+      <ol class="checklist">
+        <li>作者移动展台，分享页 250 ms 内跟随，相机与选中不跳。</li>
+        <li>访客新增评论，编辑器未读 +1，卡片高亮，但不抢焦点。</li>
+        <li>作者在编辑器回复 / 解决，分享页原地更新，无需刷新。</li>
+        <li>访客刷新或断网重连后，场景与评论回到最新状态。</li>
+        <li>评论随对象移动；对象删除后标记「锚点失效」，不漂移。</li>
+        <li>冻结版本不再跟随作者，评论仍可继续；实时链接可撤销。</li>
+      </ol>
+    </div>
+
+    <div class="order">
+      <span class="lbl-xs">落地顺序</span>
+      <div class="order-track">
+        <span class="order-node"><i>01</i>数据模型与 patch 协议</span>
+        <span class="arrow">→</span>
+        <span class="order-node"><i>02</i>SSE + ticket + 评论广播</span>
+        <span class="arrow">→</span>
+        <span class="order-node"><i>03</i>分享页实时应用</span>
+        <span class="arrow">→</span>
+        <span class="order-node"><i>04</i>编辑器未读与回显</span>
+        <span class="arrow">→</span>
+        <span class="order-node"><i>05</i>锚点跟随与移动端</span>
+      </div>
+    </div>
+  </section>
+
+  <style>
+    /* flow */
+    .flow-board{border:1px solid var(--line);border-radius:10px;background:var(--bg-1);padding:4px 18px}
+    .flow-row{display:grid;grid-template-columns:160px 1fr;gap:20px;align-items:center;padding:16px 0;border-top:1px solid rgba(255,255,255,.05)}
+    .flow-row:first-child{border-top:0}
+    .flow-label h4{margin:5px 0 0;font-size:12.5px;font-weight:500;color:var(--tx-2)}
+    .flow-track{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+    .node{display:inline-flex;align-items:center;height:26px;padding:0 9px;border:1px solid var(--line);border-radius:5px;background:var(--bg-2);font-size:10.5px;color:var(--tx-3);white-space:nowrap}
+    .node.actor{border-color:var(--line-2);background:var(--bg-3);color:var(--tx)}
+    .node.server{border-color:rgba(111,124,232,.28);background:var(--accent-soft);color:var(--accent-2)}
+    .node.event{border-color:rgba(91,189,139,.26);background:rgba(91,189,139,.07);color:#93d9b3}
+    .arrow{font-family:var(--mono);font-size:10px;color:var(--tx-4)}
+    .flow-foot{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:16px;font-size:10.5px;color:var(--tx-4)}
+    .flow-foot .kbd{color:var(--tx-3)}
+
+    /* spec */
+    .spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:34px}
+    .spec-block h3{margin:0 0 12px;font-size:13px;font-weight:600;letter-spacing:-.01em}
+    .kv{display:grid;grid-template-columns:130px 1fr;row-gap:7px;font-size:11.5px}
+    .kv span{color:var(--tx-4)}
+    .kv b{font-family:var(--mono);font-weight:400;color:var(--tx-2)}
+    .copy-list{display:flex;flex-wrap:wrap;gap:6px}
+    .copy-list code{padding:3px 7px;border:1px solid var(--line);border-radius:4px;background:var(--bg-2);font-family:var(--mono);font-size:10px;color:var(--tx-3)}
+    .plain-list{margin:0;padding:0;list-style:none}
+    .plain-list li{position:relative;padding-left:12px;font-size:11.5px;line-height:1.7;color:var(--tx-3)}
+    .plain-list li::before{content:"";position:absolute;left:0;top:9px;width:3px;height:1px;background:var(--tx-4)}
+    .plain-list b{color:var(--tx-2);font-weight:500}
+    .accept{margin-top:34px;padding:16px 18px;border:1px solid var(--line);border-radius:8px;background:var(--bg-1)}
+    .accept-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .accept-head .mono{font-size:9px;color:var(--tx-4)}
+    .checklist{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:4px 24px}
+    .checklist li{position:relative;padding-left:18px;font-size:11.5px;line-height:1.7;color:var(--tx-3)}
+    .checklist li::before{content:"✓";position:absolute;left:0;top:0;font-family:var(--mono);font-size:10px;color:var(--green)}
+    .order{margin-top:26px}
+    .order-track{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .order-node{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg-2);font-size:11px;color:var(--tx-3)}
+    .order-node i{font-family:var(--mono);font-size:9px;font-style:normal;color:var(--accent)}
+    @media (max-width:1080px){.flow-row{grid-template-columns:1fr}.spec-grid{grid-template-columns:1fr}.checklist{grid-template-columns:1fr}}
+  </style>
+
+</div>
+
+<script>
+(function () {
+  var ICONS = {
+    cube: '<path d="M12 2.8l8.4 4.7v9L12 21.2l-8.4-4.7v-9z"/><path d="M12 2.8v9.4M12 12.2l8.4-4.7M12 12.2L3.6 7.5"/>',
+    grid: '<path d="M3.6 3.6h16.8v16.8H3.6z"/><path d="M9.2 3.6v16.8M14.8 3.6v16.8M3.6 9.2h16.8M3.6 14.8h16.8"/>',
+    expand: '<path d="M9 3.6H3.6V9M15 3.6h5.4V9M15 20.4h5.4V15M9 20.4H3.6V15"/>',
+    eye: '<path d="M2.6 12S6.1 5.9 12 5.9 21.4 12 21.4 12 17.9 18.1 12 18.1 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="2.7"/>',
+    comment: '<path d="M20.4 12c0 4.2-3.8 7.4-8.4 7.4-1 0-2-.15-2.9-.42L4 20.4l1.3-3.6A7 7 0 013.6 12c0-4.2 3.8-7.4 8.4-7.4s8.4 3.2 8.4 7.4z"/>',
+    link: '<path d="M10 13.8a3.6 3.6 0 005.1 0l3.3-3.3a3.6 3.6 0 00-5.1-5.1L11.6 7"/><path d="M14 10.2a3.6 3.6 0 00-5.1 0l-3.3 3.3a3.6 3.6 0 005.1 5.1l1.7-1.7"/>',
+    check: '<path d="M4.8 12.6l4.6 4.6 9.8-10"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    filter: '<path d="M3.6 6.4h16.8M6.4 12h11.2M9.2 17.6h5.6"/>',
+    pin: '<path d="M12 21s6.4-5.6 6.4-11A6.4 6.4 0 105.6 10c0 5.4 6.4 11 6.4 11z"/><circle cx="12" cy="10" r="2.2"/>',
+    share: '<path d="M12 3.6v10.8"/><path d="M8.2 7.4L12 3.6l3.8 3.8"/><path d="M5.4 12.6v6.4a1.4 1.4 0 001.4 1.4h10.4a1.4 1.4 0 001.4-1.4v-6.4"/>',
+    more: '<circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
+    undo: '<path d="M4.2 9.4h9.2a5.3 5.3 0 010 10.6H8.4"/><path d="M7.8 5.8L4.2 9.4l3.6 3.6"/>',
+    redo: '<path d="M19.8 9.4h-9.2a5.3 5.3 0 000 10.6h5"/><path d="M16.2 5.8l3.6 3.6-3.6 3.6"/>',
+    play: '<path d="M8.2 5.6l10 6.4-10 6.4z"/>',
+    download: '<path d="M12 3.6v11.2"/><path d="M7.8 10.6L12 14.8l4.2-4.2"/><path d="M4.6 18.4h14.8"/>',
+    back: '<path d="M14.5 5.5L8 12l6.5 6.5"/>',
+    chevdown: '<path d="M5 8.5l7 7 7-7"/>'
+  };
+  document.querySelectorAll('[data-ic]').forEach(function (n) {
+    var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('class', 'i');
+    s.setAttribute('viewBox', '0 0 24 24');
+    s.innerHTML = ICONS[n.dataset.ic] || '';
+    n.parentNode.replaceChild(s, n);
+  });
+
+  var NS = 'http://www.w3.org/2000/svg';
+  var K = Math.sqrt(3) / 2;
+  function P(x, y, z) { return [(x - y) * K, (x + y) * 0.5 - (z || 0)]; }
+  function mk(name, attrs) {
+    var n = document.createElementNS(NS, name);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+  function pts(arr) {
+    return arr.map(function (p) { return P(p[0], p[1], p[2] || 0); })
+      .map(function (p) { return p[0].toFixed(2) + ',' + p[1].toFixed(2); }).join(' ');
+  }
+
+  var VENUE = { x: -26, y: -16, w: 52, d: 32, h: 7 };
+  var BOOTHS = [
+    { x: -22, y: -12, w: 9, d: 7, h: 3.2, lab: 'W1A01' },
+    { x: -11, y: -12, w: 7, d: 7, h: 2.6, lab: 'W1A02' },
+    { x: -2, y: -12, w: 10, d: 7, h: 4.0, lab: 'W1A03' },
+    { x: 10, y: -12, w: 8, d: 7, h: 2.4, lab: 'W1A04' },
+    { x: -22, y: -3.5, w: 6, d: 6, h: 2.8 },
+    { x: -13, y: -3.5, w: 5, d: 6, h: 2.2 },
+    { x: 2, y: -3.5, w: 8, d: 6, h: 3.6, lab: 'W1B03' },
+    { x: 12, y: -3.5, w: 6, d: 6, h: 2.0 },
+    { x: -22, y: 5, w: 8, d: 8, h: 3.0 },
+    { x: -11, y: 5, w: 5, d: 8, h: 2.4 },
+    { x: 6, y: 5, w: 7, d: 8, h: 2.8, lab: '咖啡区' },
+    { x: 15, y: 5, w: 6, d: 8, h: 2.2 }
+  ];
+
+  var SCENES = {
+    liveEditor: { vb: '-44 -31 88 55', grid: 2, sel: 2, pins: [[-14, -8, 5.2, 1, 'active'], [0, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved'], [16, 7, 3.8, 4, 'open']], moved: [{ from: [6, -9, 5.6], to: [0, -9, 5.6] }] },
+    liveShare: { vb: '-44 -31 88 55', grid: 2, sel: 2, pins: [[-14, -8, 5.2, 1, 'active'], [0, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved'], [16, 7, 3.8, 4, 'open']], moved: [{ from: [6, -9, 5.6], to: [0, -9, 5.6] }] },
+    liveDialog: { vb: '-44 -31 88 55', grid: 4, sel: 2, pins: [] },
+    liveMob1: { vb: '-34 -22 68 42', grid: 2, sel: 2, meet: 1, pinScale: 2.2, pins: [[-14, -8, 5.2, 1, 'open'], [0, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved']], moved: [{ from: [6, -9, 5.6], to: [0, -9, 5.6] }] },
+    liveMob2: { vb: '-34 -22 68 42', grid: 2, sel: 2, meet: 1, pinScale: 2, pins: [[-14, -8, 5.2, 1, 'active'], [0, -9, 5.6, 2, 'open']], moved: [{ from: [6, -9, 5.6], to: [0, -9, 5.6] }] }
+  };
+
+  function drawPins(svg, cfg) {
+    var sc = cfg.pinScale || 1;
+    (cfg.moved || []).forEach(function (m) {
+      var a = P(m.from[0], m.from[1], m.from[2]);
+      var b = P(m.to[0], m.to[1], m.to[2]);
+      svg.appendChild(mk('circle', {
+        cx: a[0], cy: a[1], r: 1.3 * sc, fill: 'none',
+        stroke: 'rgba(233,160,106,.42)', 'stroke-width': '.18', 'stroke-dasharray': '1 1'
+      }));
+      svg.appendChild(mk('line', {
+        x1: a[0], y1: a[1], x2: b[0], y2: b[1],
+        stroke: 'rgba(233,160,106,.3)', 'stroke-width': '.16', 'stroke-dasharray': '1 1'
+      }));
+    });
+    (cfg.pins || []).forEach(function (p) {
+      var xy = P(p[0], p[1], p[2]);
+      var n = p[3], st = p[4] || 'open';
+      var on = st !== 'resolved';
+      if (st === 'active') {
+        svg.appendChild(mk('circle', { cx: xy[0], cy: xy[1], r: 2.8 * sc, fill: 'rgba(111,124,232,.13)' }));
+        svg.appendChild(mk('circle', { cx: xy[0], cy: xy[1], r: 2.1 * sc, fill: 'none', stroke: 'rgba(111,124,232,.42)', 'stroke-width': '.2' }));
+      }
+      svg.appendChild(mk('circle', {
+        cx: xy[0], cy: xy[1], r: 1.32 * sc,
+        fill: on ? '#6f7ce8' : 'rgba(255,255,255,.10)',
+        stroke: on ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.22)',
+        'stroke-width': '.18'
+      }));
+      var t = mk('text', {
+        x: xy[0], y: xy[1] + 0.06, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        'font-size': (1.22 * sc).toFixed(2), 'font-family': 'ui-monospace,monospace',
+        fill: on ? '#fff' : '#8b8f98'
+      });
+      t.textContent = n;
+      svg.appendChild(t);
+    });
+  }
+
+  var sceneSeq = 0;
+  function drawScene(svg, key) {
+    var cfg = SCENES[key] || SCENES.liveShare;
+    var uid = 'lv' + key + '-' + (sceneSeq++);
+    svg.setAttribute('viewBox', cfg.vb);
+    svg.setAttribute('preserveAspectRatio', cfg.meet ? 'xMidYMid meet' : 'xMidYMid slice');
+    svg.innerHTML = '';
+
+    var defs = mk('defs');
+    var clip = mk('clipPath', { id: uid + '-clip' });
+    clip.appendChild(mk('polygon', {
+      points: pts([[VENUE.x, VENUE.y], [VENUE.x + VENUE.w, VENUE.y],
+        [VENUE.x + VENUE.w, VENUE.y + VENUE.d], [VENUE.x, VENUE.y + VENUE.d]])
+    }));
+    defs.appendChild(clip);
+    svg.appendChild(defs);
+
+    svg.appendChild(mk('polygon', {
+      points: pts([[VENUE.x, VENUE.y], [VENUE.x + VENUE.w, VENUE.y],
+        [VENUE.x + VENUE.w, VENUE.y + VENUE.d], [VENUE.x, VENUE.y + VENUE.d]]),
+      fill: 'rgba(255,255,255,.022)'
+    }));
+
+    var g = mk('g', { 'clip-path': 'url(#' + uid + '-clip)' });
+    for (var x = VENUE.x; x <= VENUE.x + VENUE.w; x += cfg.grid) {
+      var a = P(x, VENUE.y), b = P(x, VENUE.y + VENUE.d);
+      g.appendChild(mk('line', {
+        x1: a[0], y1: a[1], x2: b[0], y2: b[1],
+        stroke: x === 0 ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.042)', 'stroke-width': '.28'
+      }));
+    }
+    for (var y = VENUE.y; y <= VENUE.y + VENUE.d; y += cfg.grid) {
+      var c = P(VENUE.x, y), d = P(VENUE.x + VENUE.w, y);
+      g.appendChild(mk('line', {
+        x1: c[0], y1: c[1], x2: d[0], y2: d[1],
+        stroke: y === 0 ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.042)', 'stroke-width': '.28'
+      }));
+    }
+    svg.appendChild(g);
+
+    var ring = [[VENUE.x, VENUE.y], [VENUE.x + VENUE.w, VENUE.y],
+      [VENUE.x + VENUE.w, VENUE.y + VENUE.d], [VENUE.x, VENUE.y + VENUE.d]];
+    svg.appendChild(mk('polygon', {
+      points: ring.map(function (p) { return P(p[0], p[1], VENUE.h); }).map(function (p) {
+        return p[0].toFixed(2) + ',' + p[1].toFixed(2);
+      }).join(' '),
+      fill: 'none', stroke: 'rgba(255,255,255,.17)', 'stroke-width': '.45', 'stroke-dasharray': '2 1.6'
+    }));
+    ring.forEach(function (p) {
+      var t = P(p[0], p[1], VENUE.h), bt = P(p[0], p[1], 0);
+      svg.appendChild(mk('line', {
+        x1: bt[0], y1: bt[1], x2: t[0], y2: t[1], stroke: 'rgba(255,255,255,.13)', 'stroke-width': '.4'
+      }));
+    });
+
+    var order = BOOTHS.map(function (b, i) {
+      return { b: b, i: i, z: (b.x + b.w / 2) + (b.y + b.d / 2) };
+    }).sort(function (p, q) { return p.z - q.z; });
+
+    order.forEach(function (it) {
+      var b = it.b, x = b.x, y = b.y, w = b.w, d = b.d, h = b.h;
+      var on = cfg.sel === it.i;
+      var fTop = on ? 'rgba(233,160,106,.34)' : '#2a2f36';
+      var fA = on ? 'rgba(233,160,106,.18)' : '#1d2126';
+      var fB = on ? 'rgba(233,160,106,.10)' : '#171a1f';
+      var stroke = on ? '#e9a06a' : 'rgba(255,255,255,.10)';
+      var sw = on ? '0.55' : '0.3';
+
+      svg.appendChild(mk('polygon', {
+        points: pts([[x, y + d, 0], [x + w, y + d, 0], [x + w, y + d, h], [x, y + d, h]]),
+        fill: fA, stroke: stroke, 'stroke-width': sw
+      }));
+      svg.appendChild(mk('polygon', {
+        points: pts([[x + w, y, 0], [x + w, y + d, 0], [x + w, y + d, h], [x + w, y, h]]),
+        fill: fB, stroke: stroke, 'stroke-width': sw
+      }));
+      svg.appendChild(mk('polygon', {
+        points: pts([[x, y, h], [x + w, y, h], [x + w, y + d, h], [x, y + d, h]]),
+        fill: fTop, stroke: stroke, 'stroke-width': sw
+      }));
+
+      if (b.lab) {
+        var lp = P(x + w / 2, y + d / 2, h);
+        var lt = mk('text', {
+          x: lp[0], y: lp[1] + 0.5, 'text-anchor': 'middle',
+          'font-size': '1.18', 'font-family': 'ui-monospace,monospace',
+          fill: on ? '#f4c9a6' : 'rgba(255,255,255,.34)'
+        });
+        lt.textContent = b.lab;
+        svg.appendChild(lt);
+      }
+    });
+
+    drawPins(svg, cfg);
+  }
+
+  document.querySelectorAll('[data-scene]').forEach(function (s) {
+    drawScene(s, s.dataset.scene);
+  });
+
+  document.querySelectorAll('[data-gizmo]').forEach(function (s) {
+    s.setAttribute('viewBox', '0 0 44 44');
+    var cx = 22, cy = 24, L = 14;
+    var ax = [
+      { d: [cx - L * 0.87, cy + L * 0.5], k: '#c96b5e', t: 'X', tx: -6, ty: 5 },
+      { d: [cx + L * 0.87, cy + L * 0.5], k: '#5e9c6b', t: 'Z', tx: 5, ty: 5 },
+      { d: [cx, cy - L], k: '#6f7ce8', t: 'Y', tx: 0, ty: -3 }
+    ];
+    ax.forEach(function (a) {
+      s.appendChild(mk('line', {
+        x1: cx, y1: cy, x2: a.d[0], y2: a.d[1], stroke: a.k, 'stroke-width': '1.8', 'stroke-linecap': 'round'
+      }));
+      var t = mk('text', {
+        x: a.d[0] + a.tx, y: a.d[1] + a.ty, fill: a.k,
+        'font-size': '5.6', 'font-family': 'ui-monospace,monospace', 'text-anchor': 'middle'
+      });
+      t.textContent = a.t;
+      s.appendChild(t);
+    });
+    s.appendChild(mk('circle', { cx: cx, cy: cy, r: 1.6, fill: 'rgba(255,255,255,.4)' }));
+  });
+
+  function fit() {
+    document.querySelectorAll('.mock-scaler').forEach(function (w) {
+      var inner = w.querySelector('.mock');
+      if (!inner) return;
+      var bw = parseFloat(inner.dataset.w) || 1200;
+      var bh = parseFloat(inner.dataset.h) || 680;
+      var s = Math.min(1, w.clientWidth / bw);
+      inner.style.width = bw + 'px';
+      inner.style.height = bh + 'px';
+      inner.style.transform = 'scale(' + s + ')';
+      w.style.height = (bh * s) + 'px';
+    });
+  }
+  fit();
+  window.addEventListener('resize', fit, { passive: true });
+
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[data-t]'));
+  var map = {};
+  links.forEach(function (l) { map[l.dataset.t] = l; });
+  var targets = [];
+  ['req', 'editor', 'share', 'dialog', 'mobile', 'states', 'flow', 'spec'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) targets.push(el);
+  });
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (l) { l.classList.remove('on'); });
+        if (map[e.target.id]) map[e.target.id].classList.add('on');
+      });
+    }, { rootMargin: '-60px 0px -70% 0px', threshold: 0 });
+    targets.forEach(function (t) { io.observe(t); });
+  }
+})();
+</script>
+</body>
+</html>

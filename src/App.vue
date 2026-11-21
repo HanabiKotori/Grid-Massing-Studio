@@ -9,6 +9,14 @@ import ConfirmDialog from './components/ConfirmDialog.vue'
 import HelpMobilePanel from './components/HelpMobilePanel.vue'
 import HelpPanel from './components/HelpPanel.vue'
 import Inspector from './components/Inspector.vue'
+import CommentLayer from './review/CommentLayer.vue'
+import ReviewPanel from './review/ReviewPanel.vue'
+import ShareDialog from './review/ShareDialog.vue'
+import { useReviewComments } from './review/useReviewComments'
+import { useLiveShare } from './review/useLiveShare'
+import { resolveAnchor } from './review/anchors'
+import { shareApi, type ShareComment, type ShareMeta } from './core/shareApi'
+import './review/review.css'
 import MobileViewer from './components/MobileViewer.vue'
 import SceneTree from './components/SceneTree.vue'
 import StatusBar from './components/StatusBar.vue'
@@ -66,6 +74,8 @@ import { checkCompliance } from './core/compliance'
 const {
   hostEl,
   venue,
+  projectKey,
+  resetProjectKey,
   venueName,
   editingVenueName,
   booths,
@@ -361,6 +371,7 @@ const {
   dispose: disposeScenePersistence,
 } = useScenePersistence({
   venue,
+  projectKey,
   venueName,
   booths,
   infras,
@@ -400,6 +411,314 @@ const {
     confirmOverwrite: () => askCloudOverwrite(),
   },
 })
+
+// ---------- 分享与评审评论 ----------
+
+const rightTab = ref<'props' | 'review'>('props')
+const showShareDialog = ref(false)
+const shareExisting = ref<ShareMeta | null>(null)
+const shareBusy = ref(false)
+const shareError = ref('')
+const selectedCommentId = ref<number | null>(null)
+const reviewToast = ref('')
+let reviewToastTimer = 0
+
+const reviewLoggedIn = computed(() => cloud.enabled && !!cloud.user.value)
+const reviewAuthorName = computed(() => cloud.user.value?.username || '作者')
+/** 没有场馆轮廓时不开放分享与评论 */
+const canShareScene = computed(() => !!venue.value)
+
+watch(canShareScene, (has) => {
+  if (!has && rightTab.value === 'review') rightTab.value = 'props'
+})
+
+const liveShare = useLiveShare({
+  scene: () => buildSceneJson(),
+  share: shareExisting,
+  enabled: computed(
+    () =>
+      reviewLoggedIn.value &&
+      canShareScene.value &&
+      !!shareExisting.value?.liveMode,
+  ),
+  onError: (message) => {
+    shareError.value = message
+  },
+})
+
+const {
+  comments: reviewComments,
+  unread: reviewUnread,
+  loading: reviewLoading,
+  connected: reviewConnected,
+  refresh: refreshReview,
+  markSeen: markReviewSeen,
+  resolve: resolveReview,
+  reply: replyReview,
+  remove: removeReview,
+} = useReviewComments({
+  projectKey,
+  enabled: computed(() => reviewLoggedIn.value && canShareScene.value),
+  authorName: () => cloud.user.value?.username || '作者',
+  onNewComment: (comment) => {
+    if (comment.authorRole !== 'visitor') return
+    reviewToast.value = `${comment.authorName} 新增了评论`
+    window.clearTimeout(reviewToastTimer)
+    reviewToastTimer = window.setTimeout(() => (reviewToast.value = ''), 3600)
+  },
+  onError: (message) => toast(message),
+  isPanelOpen: () => rightTab.value === 'review',
+})
+
+function shareStorageKey(key: string) {
+  return `gms.share.${key}`
+}
+
+async function restoreShareLink() {
+  const key = projectKey.value
+  shareExisting.value = null
+  if (!key) return
+  let token = ''
+  try {
+    token = localStorage.getItem(shareStorageKey(key)) || ''
+  } catch {
+    return
+  }
+  if (!token) return
+  try {
+    const meta = await shareApi.getShare(token)
+    if (meta.revoked) {
+      try {
+        localStorage.removeItem(shareStorageKey(key))
+      } catch {
+        // ignore
+      }
+      return
+    }
+    shareExisting.value = meta
+    liveShare.reset(buildSceneJson(), meta.revision)
+    void refreshReview()
+  } catch {
+    // 链接不存在或 dataService 暂不可达：保留本地 token，下次再试
+  }
+}
+
+async function openShareDialog() {
+  if (!canShareScene.value) {
+    toast('请先创建场馆后再分享')
+    return
+  }
+  shareError.value = ''
+  showShareDialog.value = true
+  if (!shareExisting.value) return
+  try {
+    const meta = await shareApi.getShare(shareExisting.value.token)
+    if (meta.revoked) {
+      shareExisting.value = null
+      try {
+        localStorage.removeItem(shareStorageKey(projectKey.value))
+      } catch {
+        // ignore
+      }
+      shareError.value = '该分享链接已被撤销'
+      return
+    }
+    shareExisting.value = meta
+  } catch (err) {
+    shareError.value = err instanceof Error ? err.message : '读取分享链接失败'
+  }
+}
+
+function shareUrl(): string {
+  const share = shareExisting.value
+  if (!share) return ''
+  const base = `${window.location.origin}${window.location.pathname}${window.location.search}`
+  return `${base}#/share/${share.token}`
+}
+
+async function copyShareLink() {
+  const url = shareUrl()
+  if (!url) return
+  try {
+    await navigator.clipboard.writeText(url)
+  } catch {
+    try {
+      const input = document.createElement('input')
+      input.value = url
+      document.body.appendChild(input)
+      input.select()
+      document.execCommand('copy')
+      input.remove()
+    } catch {
+      // 剪贴板不可用时仍然提示，链接可在弹窗中手动复制
+    }
+  }
+  toast('分享链接已复制')
+}
+
+async function publishShare(payload: {
+  title: string
+  liveMode: boolean
+  allowComment: boolean
+  allowDownload: boolean
+}) {
+  if (!reviewLoggedIn.value) {
+    showShareDialog.value = false
+    openCloudDialog()
+    return
+  }
+  if (!canShareScene.value) {
+    shareError.value = '请先创建场馆'
+    return
+  }
+  shareBusy.value = true
+  shareError.value = ''
+  try {
+    const scene = buildSceneJson()
+    const meta = await shareApi.createShare({
+      title: payload.title,
+      scene,
+      projectKey: projectKey.value,
+      liveMode: payload.liveMode,
+      allowComment: payload.allowComment,
+      allowDownload: payload.allowDownload,
+    })
+    shareExisting.value = meta
+    try {
+      localStorage.setItem(shareStorageKey(projectKey.value), meta.token)
+    } catch {
+      // ignore
+    }
+    liveShare.reset(scene, meta.revision)
+    void refreshReview()
+    await copyShareLink()
+    showShareDialog.value = false
+    toast('分享链接已发布')
+  } catch (err) {
+    shareError.value = err instanceof Error ? err.message : '发布分享链接失败'
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function updateShareSettings(payload: {
+  title: string
+  liveMode: boolean
+  allowComment: boolean
+  allowDownload: boolean
+}) {
+  const share = shareExisting.value
+  if (!share) return
+  shareBusy.value = true
+  shareError.value = ''
+  try {
+    const meta = await shareApi.updateShare(share.token, {
+      title: payload.title,
+      liveMode: payload.liveMode,
+      allowComment: payload.allowComment,
+      allowDownload: payload.allowDownload,
+    })
+    shareExisting.value = meta
+    if (meta.liveMode) liveShare.reset(buildSceneJson(), meta.revision)
+    toast('分享设置已保存')
+  } catch (err) {
+    shareError.value = err instanceof Error ? err.message : '保存分享设置失败'
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function freezeShare() {
+  const share = shareExisting.value
+  if (!share) return
+  shareBusy.value = true
+  shareError.value = ''
+  try {
+    const scene = buildSceneJson()
+    const meta = await shareApi.updateShare(share.token, { scene, liveMode: false })
+    shareExisting.value = meta
+    liveShare.reset(scene, meta.revision)
+    toast('已冻结当前版本')
+  } catch (err) {
+    shareError.value = err instanceof Error ? err.message : '冻结版本失败'
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+async function revokeShare() {
+  const share = shareExisting.value
+  if (!share) return
+  shareBusy.value = true
+  shareError.value = ''
+  try {
+    await shareApi.revokeShare(share.token)
+    try {
+      localStorage.removeItem(shareStorageKey(projectKey.value))
+    } catch {
+      // ignore
+    }
+    shareExisting.value = null
+    void refreshReview()
+    showShareDialog.value = false
+    toast('分享链接已撤销')
+  } catch (err) {
+    shareError.value = err instanceof Error ? err.message : '撤销链接失败'
+  } finally {
+    shareBusy.value = false
+  }
+}
+
+function toggleReview() {
+  if (!canShareScene.value) {
+    toast('请先创建场馆后再查看评审')
+    return
+  }
+  rightTab.value = rightTab.value === 'review' ? 'props' : 'review'
+  if (rightTab.value === 'review') markReviewSeen()
+}
+
+function reviewObjectLabel(comment: ShareComment): string {
+  const resolved = resolveAnchor(comment.anchor, booths.value, infras.value)
+  return resolved.valid ? `定位 ${resolved.label}` : '锚点失效'
+}
+
+function selectReviewComment(comment: ShareComment) {
+  selectedCommentId.value = comment.id
+  const resolved = resolveAnchor(comment.anchor, booths.value, infras.value)
+  if (!resolved.valid) {
+    toast('该评论对应的对象已被删除')
+    return
+  }
+  if (comment.anchor.object?.kind === 'booth') {
+    handlePick(comment.anchor.object.id, false, 'booth')
+    stage?.focusBooth(comment.anchor.object.id)
+  } else if (comment.anchor.object?.kind === 'infra') {
+    selectInfra(comment.anchor.object.id)
+    stage?.focusInfra(comment.anchor.object.id)
+  } else if (comment.anchor.camera) {
+    stage?.applyCameraBookmark(comment.anchor.camera)
+  }
+}
+
+function onReviewReply(payload: { comment: ShareComment; content: string }) {
+  void replyReview(payload.comment, payload.content)
+}
+
+function onReviewResolve(comment: ShareComment) {
+  void resolveReview(comment, !comment.resolvedAt)
+}
+
+function loginForShare() {
+  showShareDialog.value = false
+  openCloudDialog()
+}
+
+function openReviewFromToast() {
+  reviewToast.value = ''
+  rightTab.value = 'review'
+  markReviewSeen()
+}
 
 function clampHeight(v: number): number {
   if (!Number.isFinite(v)) return 6
@@ -797,8 +1116,16 @@ const {
 // IndexedDB 自动保存：名称、场景、底图、天气和太阳时间一起保留
 watch(
   [venue, booths, infras, underlay, venueName, weather, weatherOn, presets],
-  () => scheduleAutosave(),
+  () => {
+    scheduleAutosave()
+    liveShare.schedulePush()
+  },
 )
+
+watch(projectKey, () => {
+  if (appBooting.value) return
+  void restoreShareLink()
+})
 
 // 只有用户拖动时间轴时才落盘：播放推进不写盘，拖动结束 1.2s 后保存一次
 watch(sunProgress, () => {
@@ -1348,9 +1675,16 @@ function confirmPendingAction() {
     if (action.payload) deleteBooth(action.payload)
     return
   }
+  try {
+    localStorage.removeItem(shareStorageKey(projectKey.value))
+  } catch {
+    // ignore
+  }
+  shareExisting.value = null
   deleteVenue()
   underlay.value = null
   venueName.value = '场馆白膜'
+  resetProjectKey()
   toast('已清空场景数据')
 }
 
@@ -1519,6 +1853,7 @@ onMounted(() => {
   void (async () => {
     await cloud.bootstrap()
     await restoreStoredProject()
+    await restoreShareLink()
   })()
 
   // 演示 / 截图用：?sample=1 直接载入内置示例场景
@@ -1641,6 +1976,8 @@ onBeforeUnmount(() => {
   disposeHistory()
   disposeScenePersistence()
   disposeStageSync()
+  liveShare.dispose()
+  window.clearTimeout(reviewToastTimer)
   const w = window as unknown as { gridMassing?: typeof gridMassingApi }
   if (w.gridMassing === gridMassingApi) delete w.gridMassing
   stage?.dispose()
@@ -1661,7 +1998,17 @@ onBeforeUnmount(() => {
       'render-only': renderOnly,
       }"
   >
-  <div ref="hostEl" class="viewport" />
+  <div ref="hostEl" class="viewport">
+    <CommentLayer
+      :get-stage="() => stage"
+      :comments="reviewComments"
+      :booths="booths"
+      :infras="infras"
+      :active-id="selectedCommentId"
+      :visible="!renderOnly && !isMobile && walkState === 'off' && !presentationOn && !showWelcome && canShareScene && mode === 'idle'"
+      @select="selectReviewComment"
+    />
+  </div>
 
   <WalkMinimap
     v-if="walkState === 'walk' && !presentationOn"
@@ -1697,7 +2044,7 @@ onBeforeUnmount(() => {
       :can-undo="canUndo"
       :can-redo="canRedo"
       :render-only="renderOnly"
-      :has-venue="!!venue"
+      :has-venue="canShareScene"
       :presenting="presentationOn"
       :quality="quality"
       :quality-label="qualityLabel"
@@ -1715,7 +2062,12 @@ onBeforeUnmount(() => {
       :tool-menu="toolMenu"
       :tool-sub-menu="toolSubMenu"
       :cloud-enabled="cloud.enabled"
+      :review-unread="canShareScene ? reviewUnread : 0"
+      :share-live="canShareScene && !!shareExisting?.liveMode"
+      :share-viewers="canShareScene ? shareExisting?.viewerCount ?? 0 : 0"
       @update:venue-name="venueName = $event"
+      @toggle-review="toggleReview"
+      @open-share="openShareDialog"
       @begin-rename="beginVenueRename"
       @finish-rename="finishVenueRename"
       @cancel-rename="cancelVenueRename"
@@ -1812,9 +2164,51 @@ onBeforeUnmount(() => {
       <div class="coord-item"><span>旋转</span><b>{{ rotateDisplay }}</b><i>°</i></div>
     </div>
 
-    <aside v-if="!isMobile && !showWelcome" class="wb-right">
+    <aside v-if="!isMobile && !showWelcome" class="wb-right has-tabs">
+      <div class="wb-right-tabs">
+        <button
+          type="button"
+          :class="{ on: rightTab === 'props' }"
+          @click="rightTab = 'props'"
+        >
+          属性
+        </button>
+        <button
+          type="button"
+          :class="{ on: rightTab === 'review' }"
+          :disabled="!canShareScene"
+          :title="canShareScene ? '评审评论' : '请先创建场馆'"
+          @click="toggleReview"
+        >
+          评审
+          <span v-if="reviewUnread" class="b">{{ reviewUnread > 99 ? '99+' : reviewUnread }}</span>
+          <span v-if="reviewConnected" class="live-dot" />
+        </button>
+      </div>
+
+      <ReviewPanel
+        v-if="rightTab === 'review'"
+        :comments="reviewComments"
+        :selected-id="selectedCommentId"
+        mode="owner"
+        :logged-in="reviewLoggedIn"
+        :connected="reviewConnected"
+        :loading="reviewLoading"
+        :author-label="reviewAuthorName"
+        :object-label="reviewObjectLabel"
+        closable
+        @select="selectReviewComment"
+        @locate="selectReviewComment"
+        @resolve="onReviewResolve"
+        @reply="onReviewReply"
+        @remove="removeReview"
+        @refresh="refreshReview"
+        @close="rightTab = 'props'"
+      />
+
       <Inspector
-      :venue="venue"
+        v-else
+        :venue="venue"
       :venue-name="venueName"
       :booths="booths"
       :underlay="underlay"
@@ -2003,6 +2397,28 @@ onBeforeUnmount(() => {
         @cancel="cancelCloudOverwrite"
       />
     </Transition>
+
+    <ShareDialog
+      :open="showShareDialog"
+      :venue-name="venueName"
+      :has-venue="canShareScene"
+      :existing="shareExisting"
+      :logged-in="reviewLoggedIn"
+      :cloud-enabled="cloud.enabled"
+      :busy="shareBusy"
+      :error="shareError"
+      @close="showShareDialog = false"
+      @publish="publishShare"
+      @update="updateShareSettings"
+      @freeze="freezeShare"
+      @revoke="revokeShare"
+      @login="loginForShare"
+    />
+
+    <div v-if="reviewToast" class="review-toast" @click="openReviewFromToast">
+      <span>{{ reviewToast }}</span>
+      <button type="button">查看</button>
+    </div>
 
     <Transition name="dialog">
       <WeatherPanel

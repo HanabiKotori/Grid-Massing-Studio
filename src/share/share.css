@@ -1,0 +1,499 @@
+.share-app {
+  --surface: #0b0c0e;
+  --surface-2: #101113;
+  --ink: #ecedef;
+  --ink-2: #9b9fa5;
+  --ink-3: #63666c;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.13);
+  --accent: #6f7ce8;
+  --accent-ink: #a2acf7;
+  --accent-soft: rgba(111, 124, 232, 0.15);
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Consolas,
+    monospace;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #08090a;
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "HarmonyOS Sans SC", "MiSans", "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.share-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: none;
+  height: 48px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  z-index: 20;
+}
+
+.share-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  flex: none;
+}
+
+.share-brand svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+
+.share-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+  flex: none;
+}
+
+.share-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-ro {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  flex: none;
+}
+
+.share-sp {
+  flex: 1;
+}
+
+.share-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-2);
+  font-size: 10px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.share-live i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.share-live.on {
+  border-color: rgba(91, 189, 139, 0.3);
+  background: rgba(91, 189, 139, 0.08);
+  color: #93d9b3;
+}
+
+.share-live.on i {
+  background: #5bbd8b;
+  box-shadow: 0 0 0 3px rgba(91, 189, 139, 0.12);
+}
+
+.share-sync {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.share-views {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(12, 13, 15, 0.82);
+}
+
+.share-views button {
+  height: 22px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.share-views button:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+}
+
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--surface-2);
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.share-btn.pri {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+}
+
+.share-btn.on {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.share-name {
+  width: 92px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 10.5px;
+}
+
+.share-name:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.share-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.share-canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: radial-gradient(72% 62% at 50% 42%, #0d1015, #07080a 74%);
+}
+
+.share-viewport > canvas:not(.stage-axis-gizmo) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+/* 3D 名称气泡沿用编辑器的浅底深字，不继承分享页的白色 --ink */
+.share-app .booth-label {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(20, 22, 28, 0.14);
+  color: #1a1c20;
+  box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.55);
+}
+
+.share-app .booth-label-name {
+  color: #1a1c20;
+}
+
+.share-app .booth-label-exhibitor {
+  color: #5f646d;
+}
+
+/* Stage 自带的临时坐标轴指示器：位置与编辑器一致，只固定尺寸避免被画布规则拉伸 */
+.share-viewport canvas.stage-axis-gizmo {
+  width: 82px !important;
+  height: 82px !important;
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .share-viewport canvas.stage-axis-gizmo {
+    width: 70px !important;
+    height: 70px !important;
+  }
+}
+
+.share-hud {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.share-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(12, 13, 15, 0.8);
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.share-chip b {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.share-dock {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgba(12, 13, 15, 0.92);
+  box-shadow: 0 20px 40px -22px rgba(0, 0, 0, 0.92);
+}
+
+.share-dock button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.share-dock button.on {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.share-dock button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.share-livepill {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgba(111, 124, 232, 0.35);
+  border-radius: 13px;
+  background: rgba(12, 13, 15, 0.92);
+  box-shadow: 0 12px 30px -14px rgba(0, 0, 0, 0.9);
+  font-size: 10px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.share-livepill .pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: share-pulse 1.7s infinite;
+}
+
+.share-livepill b {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+@keyframes share-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(111, 124, 232, 0.45);
+  }
+  55% {
+    box-shadow: 0 0 0 5px rgba(111, 124, 232, 0);
+  }
+}
+
+.share-toast {
+  position: absolute;
+  left: 12px;
+  top: 46px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgba(14, 15, 18, 0.97);
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.95);
+  font-size: 10.5px;
+  color: var(--ink-2);
+}
+
+.share-toast b {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.share-review {
+  width: 348px;
+  flex: none;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.share-loading,
+.share-error {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: #08090a;
+}
+
+.share-loading div,
+.share-error div {
+  max-width: 360px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.share-loading b,
+.share-error b {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.share-loading span,
+.share-error span {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+.share-error button {
+  margin-top: 12px;
+}
+
+.share-fab {
+  display: none;
+}
+
+@media (min-width: 901px) {
+  .share-review .rp-icon[title="关闭"] {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .share-top {
+    height: 46px;
+    padding: 0 10px;
+    gap: 6px;
+  }
+  .share-brand span:last-child,
+  .share-sync,
+  .share-name {
+    display: none;
+  }
+  .share-views {
+    display: none;
+  }
+  .share-review {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    width: auto;
+    max-height: 62vh;
+    border-left: 0;
+    border-top: 1px solid var(--line-strong);
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -24px 60px -24px rgba(0, 0, 0, 0.95);
+    transform: translateY(105%);
+    transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .share-review.open {
+    transform: translateY(0);
+  }
+  .share-fab {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    z-index: 36;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 13px;
+    border: 1px solid var(--line-strong);
+    border-radius: 18px;
+    background: rgba(12, 13, 15, 0.94);
+    color: var(--ink);
+    font: inherit;
+    font-size: 11px;
+    box-shadow: 0 16px 36px -18px rgba(0, 0, 0, 0.95);
+  }
+  .share-dock {
+    display: none;
+  }
+}

@@ -1,4 +1,5 @@
 import { computed, ref, shallowRef } from 'vue'
+import { newProjectKey } from '../core/projectKey'
 import type { QualityLevel, WalkState, WalkView } from '../core/Stage'
 import type { WalkTourInfo } from '../core/walkTour'
 import { polygonArea } from '../core/polygon'
@@ -30,6 +31,8 @@ export function useEditorState() {
   const hostEl = ref<HTMLDivElement | null>(null)
   // 场景数据始终整体替换，不原地修改；shallowRef 避免为大量嵌套对象创建深度代理
   const venue = shallowRef<Venue | null>(null)
+  /** 项目标识：场景 JSON、分享链接与评论共用 */
+  const projectKey = ref(newProjectKey())
   const venueName = ref('场馆白膜')
   const editingVenueName = ref(false)
   const booths = shallowRef<Booth[]>([])
@@ -202,6 +205,10 @@ export function useEditorState() {
     hover.value = p
   }
 
+  function resetProjectKey() {
+    projectKey.value = newProjectKey()
+  }
+
   function dispose() {
     window.clearTimeout(toastTimer)
   }
@@ -209,6 +216,7 @@ export function useEditorState() {
   return {
     hostEl,
     venue,
+    projectKey,
     venueName,
     editingVenueName,
     booths,
@@ -285,6 +293,7 @@ export function useEditorState() {
     focusAdd,
     toast,
     handleStageHover,
+    resetProjectKey,
     dispose,
   }
 }

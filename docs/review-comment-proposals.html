@@ -1,0 +1,2340 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>场馆白膜 · 分享链接与评审评论设计方案</title>
+<style>
+:root{
+  --bg:#08090a;
+  --bg-1:#0b0c0e;
+  --bg-2:#101113;
+  --bg-3:#15161a;
+  --bg-4:#1c1e22;
+  --line:rgba(255,255,255,.07);
+  --line-2:rgba(255,255,255,.12);
+  --tx:#ecedef;
+  --tx-2:#9b9fa5;
+  --tx-3:#63666c;
+  --tx-4:#43464c;
+  --accent:#6f7ce8;
+  --accent-2:#a7b0ff;
+  --accent-soft:rgba(111,124,232,.14);
+  --sel:#e9a06a;
+  --green:#5bbd8b;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","HarmonyOS Sans SC","MiSans","Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg);
+  color:var(--tx);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";
+  position:fixed;
+  inset:0 0 auto 0;
+  height:560px;
+  background:radial-gradient(72% 100% at 50% 0%,rgba(111,124,232,.075),transparent 72%);
+  pointer-events:none;
+  z-index:0;
+}
+.page{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:0 48px 120px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.sp{flex:1}
+.i{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- head ---------- */
+.head{padding:76px 0 40px}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--tx-3);
+}
+.eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(111,124,232,.15)}
+h1{margin:18px 0 0;font-size:40px;line-height:1.15;font-weight:600;letter-spacing:-.025em}
+h1 em{font-style:normal;color:var(--tx-3)}
+.lede{margin:16px 0 0;max-width:700px;font-size:14.5px;line-height:1.7;color:var(--tx-2)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;
+  height:26px;padding:0 10px;
+  border:1px solid var(--line);border-radius:5px;
+  background:var(--bg-2);
+  font-size:11.5px;color:var(--tx-2);
+}
+.chip b{font-weight:500;color:var(--tx)}
+.chip .k{width:5px;height:5px;border-radius:1px;background:var(--tx-4)}
+.chip.good .k{background:var(--green)}
+.chip.warn .k{background:var(--sel)}
+
+/* ---------- toc ---------- */
+.toc{
+  position:sticky;top:0;z-index:40;
+  display:flex;align-items:center;gap:4px;
+  height:48px;margin:0 -48px 8px;padding:0 48px;
+  border-bottom:1px solid var(--line);
+  background:rgba(8,9,10,.82);
+  backdrop-filter:blur(16px) saturate(140%);
+  overflow-x:auto;scrollbar-width:none;
+}
+.toc::-webkit-scrollbar{display:none}
+.toc a{
+  flex:none;display:inline-flex;align-items:center;gap:7px;
+  height:26px;padding:0 9px;border-radius:5px;
+  font-size:12px;color:var(--tx-3);text-decoration:none;
+  transition:color .14s,background .14s;
+}
+.toc a:hover{color:var(--tx-2);background:var(--bg-2)}
+.toc a.on{color:var(--tx);background:var(--bg-3)}
+.toc a i{font-family:var(--mono);font-size:9.5px;font-style:normal;color:var(--tx-4)}
+.toc a.on i{color:var(--accent)}
+
+/* ---------- section ---------- */
+.section{padding-top:64px;scroll-margin-top:56px}
+.proposal{scroll-margin-top:96px}
+.section-head{display:flex;gap:40px;align-items:flex-end;justify-content:space-between;margin-bottom:28px}
+.section-head h2{margin:0;font-size:20px;font-weight:600;letter-spacing:-.015em}
+.section-head p{margin:0;max-width:520px;font-size:12.5px;line-height:1.75;color:var(--tx-3)}
+
+/* ---------- proposal ---------- */
+.proposal{margin-bottom:64px}
+.frame{
+  position:relative;padding:22px;border:1px solid var(--line);border-radius:10px;
+  background:
+    radial-gradient(120% 90% at 50% -20%,rgba(111,124,232,.06),transparent 60%),
+    var(--bg-1);
+  overflow:hidden;
+}
+.frame::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px),
+                   linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px);
+  background-size:24px 24px;
+  mask-image:radial-gradient(90% 70% at 50% 40%,#000,transparent 78%);
+  opacity:.5;
+}
+.mock-scaler{position:relative;width:100%;overflow:hidden}
+.mock-scaler > .mock{transform-origin:top left}
+
+/* ---------- mock base ---------- */
+.mock{
+  position:relative;width:1200px;height:680px;display:flex;flex-direction:column;
+  border-radius:8px;overflow:hidden;
+  background:var(--bg-1);color:var(--tx);
+  font-size:12px;line-height:1.4;
+  box-shadow:0 0 0 1px rgba(255,255,255,.09),0 50px 90px -40px rgba(0,0,0,.95);
+  user-select:none;
+}
+.tb{
+  position:relative;z-index:8;flex:none;
+  display:flex;align-items:center;gap:10px;
+  height:46px;padding:0 12px;
+  border-bottom:1px solid var(--line);background:var(--bg-1);
+}
+.caret{width:0;height:0;border:3.5px solid transparent;border-top-color:var(--tx-4);margin-top:3px}
+.gizmo{width:46px;height:46px;display:block}
+.tb-brand{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+.tb-brand .mark{width:17px;height:17px;color:var(--accent);display:block}
+.tb-brand .mark svg{width:17px;height:17px;stroke-width:1.3}
+.tb-venue{
+  display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:4px;
+  font-size:12px;color:var(--tx-2);border:1px solid transparent;
+}
+.tb-menu{display:flex;align-items:center;gap:2px;margin-left:4px}
+.tb-menu a{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:4px;font-size:12px;color:var(--tx-3);text-decoration:none}
+.tb-menu a.on{color:var(--tx);background:var(--bg-3)}
+.tb-sp{flex:1}
+.tb-right{display:flex;align-items:center;gap:6px}
+.ibtn{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:4px;color:var(--tx-3);background:none;border:0;padding:0;font-family:inherit}
+.ibtn:hover{background:var(--bg-3);color:var(--tx)}
+.vsep{width:1px;height:18px;background:var(--line);margin:0 4px;flex:none}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  height:26px;padding:0 10px;border-radius:5px;
+  border:1px solid var(--line-2);background:var(--bg-3);
+  font-family:inherit;font-size:11.5px;color:var(--tx);
+}
+.btn.pri{background:var(--accent);border-color:transparent;color:#fff}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--tx-2)}
+.btn.sm{height:22px;padding:0 8px;font-size:10.5px;border-radius:4px}
+.btn .i{width:13px;height:13px}
+.ava{
+  width:22px;height:22px;border-radius:50%;flex:none;
+  background:linear-gradient(150deg,#3a3f52,#22252e);
+  display:grid;place-items:center;font-size:9.5px;color:var(--tx-2);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);
+}
+.ava.sm{width:17px;height:17px;font-size:8px}
+.kbd{
+  display:inline-flex;align-items:center;gap:2px;height:18px;padding:0 5px;border-radius:4px;
+  border:1px solid var(--line);background:var(--bg-2);
+  font-family:var(--mono);font-size:10px;color:var(--tx-3);
+}
+
+/* status */
+.status{
+  display:flex;align-items:center;gap:12px;flex:none;
+  height:26px;padding:0 12px;border-top:1px solid var(--line);background:var(--bg-1);
+  font-family:var(--mono);font-size:10px;color:var(--tx-4);
+}
+.status .g{display:inline-flex;align-items:center;gap:5px}
+.status .on{color:var(--tx-2)}
+.status .vsep{height:10px}
+
+/* viewport & hud */
+.vp{position:relative;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+.vp .scene{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hud{position:absolute;display:flex;align-items:center;gap:4px;z-index:4}
+.hud.tl{left:12px;top:10px}
+.hud.tr{right:12px;top:10px}
+.hud.bl{left:12px;bottom:10px}
+.hud.br{right:12px;bottom:10px}
+.hud.bc{left:50%;transform:translateX(-50%);bottom:12px}
+.hud-chip{
+  display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:5px;
+  background:rgba(12,13,15,.78);border:1px solid var(--line);
+  font-size:10.5px;color:var(--tx-2);
+}
+.hud-chip.on{color:var(--tx);border-color:var(--line-2)}
+.hud-chip .i{width:12px;height:12px}
+.hud-group{
+  display:flex;align-items:center;gap:1px;padding:2px;border-radius:6px;
+  background:rgba(12,13,15,.82);border:1px solid var(--line);
+}
+.hud-group button{
+  display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 7px;
+  border:0;border-radius:4px;background:none;font-family:inherit;
+  font-size:10.5px;color:var(--tx-3);
+}
+.hud-group button.on{background:rgba(255,255,255,.07);color:var(--tx)}
+.hud-group .i{width:12px;height:12px}
+.scalebar{display:flex;flex-direction:column;gap:3px}
+.scalebar i{display:block;height:5px;border-left:1px solid var(--tx-4);border-right:1px solid var(--tx-4);border-bottom:1px solid var(--tx-4)}
+
+/* annotations */
+.anno{
+  position:absolute;z-index:25;width:18px;height:18px;border-radius:50%;
+  display:grid;place-items:center;
+  border:1px solid rgba(111,124,232,.7);background:rgba(9,10,12,.92);
+  font-family:var(--mono);font-size:9.5px;color:var(--accent-2);
+  box-shadow:0 0 0 3px rgba(111,124,232,.1);
+}
+
+/* ---------- share viewer ---------- */
+.sh-top{
+  display:flex;align-items:center;gap:10px;flex:none;position:relative;z-index:9;
+  height:48px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--bg-1);
+}
+.sh-brand{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:-.01em}
+.sh-brand .mark{width:16px;height:16px;color:var(--accent)}
+.sh-brand .mark svg{width:16px;height:16px;stroke-width:1.3}
+.sh-title{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500}
+.sh-title .sub{color:var(--tx-3);font-weight:400}
+.ro{
+  display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:4px;
+  border:1px solid var(--line);background:var(--bg-2);
+  font-size:9px;letter-spacing:.06em;color:var(--tx-3);text-transform:uppercase;
+}
+.ro .i{width:10px;height:10px}
+.sh-live{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--tx-3);padding:0 4px}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(91,189,139,.14)}
+.sh-body{display:flex;flex:1;min-height:0}
+.sh-vp{position:relative;flex:1;min-width:0;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+.sh-vp .scene{position:absolute;inset:0;width:100%;height:100%}
+.sh-dock{
+  position:absolute;left:50%;bottom:14px;transform:translateX(-50%);
+  display:flex;align-items:center;gap:2px;padding:3px;
+  border-radius:8px;background:rgba(12,13,15,.9);border:1px solid var(--line-2);
+  box-shadow:0 20px 40px -22px rgba(0,0,0,.9);z-index:5;
+}
+.sh-dock button{
+  display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;
+  border:0;border-radius:4px;background:none;font-family:inherit;
+  font-size:10.5px;color:var(--tx-3);
+}
+.sh-dock button.on{background:var(--accent-soft);color:var(--accent-2)}
+.sh-dock .zoom{font-family:var(--mono);font-size:10px;color:var(--tx-3);width:34px;text-align:center}
+
+/* comment panel */
+.cpanel{
+  width:348px;flex:none;display:flex;flex-direction:column;min-height:0;
+  border-left:1px solid var(--line);background:var(--bg-1);
+}
+.cp-head{display:flex;align-items:center;gap:8px;flex:none;height:46px;padding:0 14px;border-bottom:1px solid var(--line)}
+.cp-head h3{margin:0;font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+.count{
+  min-width:17px;height:17px;padding:0 5px;border-radius:9px;
+  display:inline-grid;place-items:center;
+  background:var(--bg-3);border:1px solid var(--line);
+  font-family:var(--mono);font-size:9.5px;color:var(--tx-3);
+}
+.cp-filters{display:flex;align-items:center;gap:4px;flex:none;padding:9px 12px 7px;border-bottom:1px solid rgba(255,255,255,.04)}
+.fchip{
+  display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:4px;
+  font-size:10.5px;color:var(--tx-3);
+}
+.fchip b{font-family:var(--mono);font-size:9.5px;font-weight:400;color:var(--tx-4)}
+.fchip.on{background:var(--bg-3);color:var(--tx)}
+.fchip.on b{color:var(--tx-2)}
+.cp-list{flex:1;min-height:0;overflow:hidden}
+.cm{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.045);position:relative}
+.cm.on{background:rgba(111,124,232,.055);box-shadow:inset 2px 0 0 var(--accent)}
+.cm.resolved{opacity:.55}
+.cm-top{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--tx-4)}
+.cm-top b{font-size:11.5px;font-weight:500;color:var(--tx-2)}
+.cm-top .tm{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--tx-4)}
+.cm p{margin:5px 0 0;font-size:12px;line-height:1.6;color:var(--tx-2);letter-spacing:-.002em}
+.cm-acts{display:flex;align-items:center;gap:12px;margin-top:7px;font-size:10px;color:var(--tx-3)}
+.cm-acts a{display:inline-flex;align-items:center;gap:4px;color:var(--tx-2);text-decoration:none}
+.cm-acts .i{width:11px;height:11px}
+.cm-link{
+  margin-left:auto;padding:1px 5px;border:1px solid var(--line);border-radius:3px;
+  font-family:var(--mono);font-size:9px;color:var(--tx-4);
+}
+.npin{
+  width:16px;height:16px;border-radius:50%;flex:none;display:grid;place-items:center;
+  background:var(--accent);color:#fff;font-family:var(--mono);font-size:8.5px;
+  box-shadow:0 0 0 2px rgba(111,124,232,.16);
+}
+.npin.done{background:rgba(255,255,255,.12);color:var(--tx-3);box-shadow:none}
+.guest{
+  display:inline-flex;align-items:center;height:14px;padding:0 4px;border-radius:3px;
+  border:1px solid var(--line);font-size:8.5px;letter-spacing:.03em;color:var(--tx-4);
+}
+.reply{margin:9px 0 0 22px;padding-left:10px;border-left:1px solid var(--line)}
+.reply .cm-top b{color:var(--tx-3)}
+.reply p{font-size:11.5px;color:var(--tx-3)}
+.compose{flex:none;border-top:1px solid var(--line);padding:10px 12px 11px;background:var(--bg-1)}
+.compose-box{border:1px solid var(--line);border-radius:6px;background:var(--bg-2);padding:8px 9px;min-height:44px}
+.compose-box .ph{font-size:11.5px;color:var(--tx-4)}
+.compose-box .hint{margin-top:12px;font-size:10px;color:var(--tx-4)}
+.compose-foot{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:10px;color:var(--tx-4)}
+.compose-foot .sp{flex:1}
+.cp-empty{padding:40px 20px;text-align:center;font-size:11.5px;color:var(--tx-4)}
+.cp-more{padding:10px 14px;border-top:1px dashed rgba(255,255,255,.06);font-size:10px;color:var(--tx-4)}
+
+/* sub-label */
+.lbl-xs{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx-4)}
+
+/* ---------- notes ---------- */
+.notes{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:34px;padding-top:20px}
+.note h3{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.note h3 .idx{font-family:var(--mono);font-size:10px;color:var(--accent);margin-right:8px;letter-spacing:.08em}
+.note .tag{margin:6px 0 0;font-size:12.5px;color:var(--tx-3);line-height:1.65}
+.note .lbl{margin:16px 0 6px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-4)}
+.note ul{margin:0;padding:0;list-style:none}
+.note li{position:relative;padding-left:14px;margin-bottom:4px;font-size:12px;line-height:1.65;color:var(--tx-2)}
+.note li::before{content:"";position:absolute;left:2px;top:8px;width:4px;height:1px;background:var(--tx-4)}
+.note li.plus::before{background:var(--green)}
+.note li.minus::before{background:var(--sel)}
+.note dl{margin:0;display:grid;grid-template-columns:84px 1fr;row-gap:5px;font-size:12px}
+.note dt{color:var(--tx-4);font-family:var(--mono);font-size:10px;padding-top:2px}
+.note dd{margin:0;color:var(--tx-2)}
+
+/* ---------- responsive ---------- */
+@media (max-width:1080px){
+  .page{padding:0 28px 90px}
+  .toc{margin:0 -28px 8px;padding:0 28px}
+  .notes{grid-template-columns:1fr 1fr}
+  h1{font-size:32px}
+}
+@media (max-width:760px){
+  .page{padding:0 18px 70px}
+  .toc{margin:0 -18px 8px;padding:0 18px}
+  .head{padding:52px 0 26px}
+  h1{font-size:27px}
+  .section-head{display:block}
+  .section-head p{margin-top:8px}
+  .notes{grid-template-columns:1fr;gap:22px}
+  .frame{padding:12px}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="head">
+    <div class="eyebrow"><span class="dot"></span>Review link &amp; comments · v1</div>
+    <h1>分享链接与评审评论<br /><em>三版查看页 × 三版编辑器回显</em></h1>
+    <p class="lede">
+      前置条件：dataService 与 MySQL 已开启。分享出去的是只读快照，访客匿名评论，回到编辑器后评论以引脚和属性栏卡片出现。
+      下面六个方向都基于同一套数据与锚点，只改变信息的位置和任务的重心，可直接对应到 Vue 组件。
+    </p>
+    <div class="chips">
+      <span class="chip good"><span class="k"></span><b>已定</b>接受匿名评论</span>
+      <span class="chip good"><span class="k"></span><b>已定</b>不开放漫游</span>
+      <span class="chip good"><span class="k"></span><b>已定</b>无口令 / 有效期</span>
+      <span class="chip"><span class="k"></span>快照不可变，显式更新</span>
+      <span class="chip warn"><span class="k"></span>评论锚定 3D 世界坐标</span>
+    </div>
+  </header>
+
+  <nav class="toc" id="toc">
+    <a href="#sa" data-t="sa"><i>S-A</i>常驻评论栏</a>
+    <a href="#sb" data-t="sb"><i>S-B</i>悬浮评审</a>
+    <a href="#sc" data-t="sc"><i>S-C</i>底部时间线</a>
+    <a href="#ea" data-t="ea"><i>E-A</i>属性栏内嵌</a>
+    <a href="#eb" data-t="eb"><i>E-B</i>属性 / 评审</a>
+    <a href="#ec" data-t="ec"><i>E-C</i>评审模式</a>
+    <a href="#dialog" data-t="dialog"><i>01</i>发布弹窗</a>
+    <a href="#mobile" data-t="mobile"><i>02</i>移动端</a>
+    <a href="#tokens" data-t="tokens"><i>03</i>规范</a>
+    <a href="#decide" data-t="decide"><i>04</i>拍板</a>
+  </nav>
+
+  <section class="section" id="share">
+    <div class="section-head">
+      <h2>分享页 / 三个方向</h2>
+      <p>共同点：没有编辑入口、没有漫游、不写本地存储；顶栏只保留看与评论。区别在于评论占用画布的方式。</p>
+    </div>
+
+    <!-- ============ S-A ============ -->
+    <article class="proposal" id="sa">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="680">
+            <div class="sh-top">
+              <div class="sh-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <span class="vsep"></span>
+              <div class="sh-title">W1 展馆 · 秋季车展 <span class="ro"><i data-ic="eye"></i>只读</span></div>
+              <div class="sh-sp sp"></div>
+              <div class="sh-live"><span class="live-dot"></span>3 人正在查看</div>
+              <div class="hud-group">
+                <button class="on"><i data-ic="grid"></i>俯视</button>
+                <button><i data-ic="cube"></i>轴测</button>
+                <button><i data-ic="expand"></i>适配</button>
+              </div>
+              <span class="vsep"></span>
+              <button class="btn"><i data-ic="comment"></i>评论<span class="mono" style="color:var(--accent-2)">4</span></button>
+              <button class="btn pri"><i data-ic="link"></i>复制链接</button>
+              <div class="ava">L</div>
+            </div>
+
+            <div class="sh-body">
+              <div class="sh-vp">
+                <svg class="scene" data-scene="sa"></svg>
+                <div class="hud tl">
+                  <span class="hud-chip on"><i data-ic="eye"></i>只读</span>
+                  <span class="hud-chip">W1 展馆 · 130 × 70 m</span>
+                </div>
+                <div class="hud bl">
+                  <div class="scalebar"><i style="width:62px"></i><span class="mono" style="font-size:9px;color:#6b6f76">10 m</span></div>
+                </div>
+                <div class="hud br"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+                <div class="sh-dock">
+                  <button>−</button><span class="zoom">86%</span><button>+</button>
+                  <span class="vsep" style="height:14px"></span>
+                  <button><i data-ic="expand"></i></button>
+                  <button class="on"><i data-ic="comment"></i>评论</button>
+                </div>
+                <span class="anno" style="left:10px;top:54px">1</span>
+                <span class="anno" style="left:812px;top:110px">2</span>
+                <span class="anno" style="left:812px;top:196px">3</span>
+                <span class="anno" style="left:812px;top:560px">4</span>
+              </div>
+
+              <aside class="cpanel">
+                <div class="cp-head">
+                  <h3>评论</h3><span class="count">4</span>
+                  <span class="sp"></span>
+                  <button class="ibtn" title="只看未解决"><i data-ic="filter"></i></button>
+                  <button class="ibtn" title="收起评论"><i data-ic="close"></i></button>
+                </div>
+                <div class="cp-filters">
+                  <span class="fchip on">全部 <b>4</b></span>
+                  <span class="fchip">未解决 <b>3</b></span>
+                  <span class="fchip">我的 <b>1</b></span>
+                </div>
+
+                <div class="cp-list">
+                  <article class="cm on">
+                    <div class="cm-top"><span class="npin">1</span><b>王工</b><span class="guest">访客</span><span class="tm">2 分钟前</span></div>
+                    <p>入口开口方向反了，观众会从背面进入。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">W1A03</span></div>
+                  </article>
+
+                  <article class="cm">
+                    <div class="cm-top"><span class="npin">2</span><b>李设计</b><span class="tm">18 分钟前</span></div>
+                    <p>标准展台顶板建议去掉，视线会挡住主舞台。脚手架这一侧保留。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">W1A02</span></div>
+                    <div class="reply">
+                      <div class="cm-top"><span class="npin done">1</span><b>王工</b><span class="tm">10 分钟前</span></div>
+                      <p>已在一版里改了，稍后重新发布。</p>
+                    </div>
+                  </article>
+
+                  <article class="cm resolved">
+                    <div class="cm-top"><span class="npin done">3</span><b>陈工</b><span class="guest">访客</span><span class="tm">1 小时前</span></div>
+                    <p>这段过道只有 1.2 m，消防可能不通过。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>已解决</a><a>定位</a><span class="cm-link">通道</span></div>
+                  </article>
+
+                  <article class="cm">
+                    <div class="cm-top"><span class="npin">4</span><b>客户 A</b><span class="guest">访客</span><span class="tm">今天 09:40</span></div>
+                    <p>咖啡洽谈区可以再加两组圆桌，现在只有三组。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">W1D01</span></div>
+                  </article>
+                </div>
+
+                <div class="compose">
+                  <div class="compose-box">
+                    <div class="ph">添加评论…</div>
+                    <div class="hint">点击画布可指定位置</div>
+                  </div>
+                  <div class="compose-foot">
+                    <span class="ava sm">王</span><span>王工 · 访客</span>
+                    <span class="sp"></span>
+                    <span class="kbd">⌘↵</span>
+                    <button class="btn pri sm">发送</button>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">S-A</span>常驻评论栏</h3>
+          <p class="tag">评审效率优先。评论是这次分享的主任务，所以给它固定栏位，而不是浮层。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 只读徽标：明确没有编辑与漫游</li>
+            <li>② 引脚编号与列表编号一一对应</li>
+            <li>③ 筛选：全部 / 未解决 / 我的</li>
+            <li>④ 输入区常驻，匿名昵称可改</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">结构</div>
+          <dl>
+            <dt>48 px</dt><dd>顶栏：只读标识、视图、评论、复制链接</dd>
+            <dt>自适应</dt><dd>画布 + 引脚 + 底部缩放条</dd>
+            <dt>348 px</dt><dd>评论栏：筛选、列表、输入</dd>
+            <dt>0</dt><dd>无编辑面板、无时间轴、无漫游</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">取舍</div>
+          <ul>
+            <li class="plus">扫读效率最高，最接近蓝湖 / Figma</li>
+            <li class="plus">画布与评论同屏，定位不跳转</li>
+            <li class="minus">画布有效宽度少约 350 px</li>
+            <li class="minus">窄屏需可收起，否则只剩半屏</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ S-B ============ -->
+    <article class="proposal" id="sb">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="680">
+            <div class="b-canvas">
+              <svg class="scene" data-scene="sb"></svg>
+
+              <div class="float-top">
+                <div class="sh-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+                <span class="vsep"></span>
+                <div class="sh-title">W1 展馆 <span class="sub">秋季车展</span> <span class="ro"><i data-ic="eye"></i>只读</span></div>
+                <span class="vsep"></span>
+                <div class="sh-live"><span class="live-dot"></span>3 人</div>
+              </div>
+
+              <div class="float-tools">
+                <div class="hud-group">
+                  <button class="on"><i data-ic="grid"></i>俯视</button>
+                  <button><i data-ic="cube"></i>轴测</button>
+                  <button><i data-ic="expand"></i>适配</button>
+                </div>
+                <span class="vsep" style="height:14px"></span>
+                <button class="ibtn"><i data-ic="comment"></i></button>
+                <button class="btn pri sm"><i data-ic="link"></i>复制链接</button>
+              </div>
+
+              <div class="v-rail">
+                <button class="ibtn on"><i data-ic="comment"></i></button>
+                <button class="ibtn"><i data-ic="pin"></i></button>
+                <button class="ibtn"><i data-ic="ruler"></i></button>
+                <span class="vrail-sep"></span>
+                <button class="ibtn"><i data-ic="expand"></i></button>
+              </div>
+
+              <aside class="float-panel">
+                <div class="cp-head">
+                  <h3>评论</h3><span class="count">3</span>
+                  <span class="sp"></span>
+                  <button class="ibtn"><i data-ic="filter"></i></button>
+                  <button class="ibtn"><i data-ic="close"></i></button>
+                </div>
+                <div class="cp-filters">
+                  <span class="fchip on">全部 <b>3</b></span>
+                  <span class="fchip">未解决 <b>2</b></span>
+                  <span class="fchip">我的</span>
+                </div>
+                <div class="cp-list">
+                  <article class="cm on">
+                    <div class="cm-top"><span class="npin">2</span><b>李设计</b><span class="tm">18 分钟前</span></div>
+                    <p>标准展台顶板建议去掉，视线会挡住主舞台。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">W1A02</span></div>
+                  </article>
+                  <article class="cm">
+                    <div class="cm-top"><span class="npin">1</span><b>王工</b><span class="guest">访客</span><span class="tm">2 分钟前</span></div>
+                    <p>入口开口方向反了，观众会从背面进入。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">W1A03</span></div>
+                  </article>
+                  <div class="cp-more">还有 1 条评论 · 查看全部 3 条</div>
+                </div>
+                <div class="compose">
+                  <div class="compose-box">
+                    <div class="ph">添加评论…</div>
+                    <div class="hint">点击画布指定位置</div>
+                  </div>
+                  <div class="compose-foot">
+                    <span class="ava sm">王</span><span>王工 · 访客</span>
+                    <span class="sp"></span>
+                    <button class="btn pri sm">发送</button>
+                  </div>
+                </div>
+              </aside>
+
+              <div class="b-dock">
+                <button>−</button><span class="zoom">92%</span><button>+</button>
+                <span class="vsep" style="height:14px"></span>
+                <button><i data-ic="layers"></i></button>
+                <button class="on"><i data-ic="comment"></i>评论</button>
+              </div>
+
+              <span class="anno" style="left:12px;top:60px">1</span>
+              <span class="anno" style="left:812px;top:82px">2</span>
+              <span class="anno" style="left:812px;top:330px">3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">S-B</span>悬浮评审</h3>
+          <p class="tag">把“看模型”作为默认状态。所有界面元素变成浮层，收起评论后画布完全沉浸，适合发给客户或投屏。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 顶栏、工具条都变为悬浮胶囊</li>
+            <li>② 评论是可收起的浮层面板</li>
+            <li>③ 点引脚自动展开面板并定位</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">结构</div>
+          <dl>
+            <dt>0 px</dt><dd>无常驻栏，画布铺满 1200 × 680</dd>
+            <dt>330 px</dt><dd>浮动评论面板，右上角</dd>
+            <dt>44 px</dt><dd>左侧竖排工具，悬浮居中</dd>
+            <dt>38 px</dt><dd>底部缩放与评论模式 dock</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">取舍</div>
+          <ul>
+            <li class="plus">画布最大化，第一眼更像成品</li>
+            <li class="plus">收起后可直接截图 / 投屏</li>
+            <li class="minus">浮层遮挡右下角，需要可拖拽或收起</li>
+            <li class="minus">层级多，移动端要换成抽屉</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ S-C ============ -->
+    <article class="proposal" id="sc">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="720">
+            <div class="sh-top">
+              <div class="sh-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <span class="vsep"></span>
+              <div class="sh-title">W1 展馆 · 秋季车展 <span class="ro"><i data-ic="eye"></i>只读</span></div>
+              <div class="sp"></div>
+              <div class="sh-live"><span class="live-dot"></span>3 人正在查看</div>
+              <div class="hud-group">
+                <button class="on"><i data-ic="grid"></i>俯视</button>
+                <button><i data-ic="cube"></i>轴测</button>
+                <button><i data-ic="expand"></i>适配</button>
+              </div>
+              <span class="vsep"></span>
+              <button class="btn"><i data-ic="comment"></i>评论<span class="mono" style="color:var(--accent-2)">4</span></button>
+              <button class="btn pri"><i data-ic="link"></i>复制链接</button>
+              <div class="ava">L</div>
+            </div>
+
+            <div class="sh-vp">
+              <svg class="scene" data-scene="sc"></svg>
+              <div class="hud tl"><span class="hud-chip on">评审中</span><span class="hud-chip">3 条未解决</span></div>
+              <div class="hud br" style="bottom:320px"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+
+              <div class="cdrawer">
+                <div class="cd-grab"><i></i></div>
+                <div class="cd-head">
+                  <h3>评审评论</h3>
+                  <span class="count">4</span>
+                  <span class="fchip on">全部</span>
+                  <span class="fchip">未解决 <b>3</b></span>
+                  <span class="fchip">我的</span>
+                  <span class="sp"></span>
+                  <span class="cd-hint"><i data-ic="pin"></i>按位置定位</span>
+                  <button class="btn ghost sm"><i data-ic="chevdown"></i>收起</button>
+                </div>
+                <div class="cd-body">
+                  <div class="cd-list">
+                    <button class="cdrow on">
+                      <span class="npin">1</span>
+                      <span class="cdrow-main"><b>入口开口方向反了，观众会从背面进入。</b><span>王工 · W1A03</span></span>
+                      <span class="cdrow-tm">2m</span>
+                    </button>
+                    <button class="cdrow">
+                      <span class="npin">2</span>
+                      <span class="cdrow-main"><b>标准展台顶板建议去掉。</b><span>李设计 · W1A02</span></span>
+                      <span class="cdrow-tm">18m</span>
+                    </button>
+                    <button class="cdrow">
+                      <span class="npin done">3</span>
+                      <span class="cdrow-main"><b>这段过道只有 1.2 m。</b><span>陈工 · 通道 · 已解决</span></span>
+                      <span class="cdrow-tm">1h</span>
+                    </button>
+                    <button class="cdrow">
+                      <span class="npin">4</span>
+                      <span class="cdrow-main"><b>咖啡区可以再加两组圆桌。</b><span>客户 A · W1D01</span></span>
+                      <span class="cdrow-tm">09:40</span>
+                    </button>
+                  </div>
+
+                  <div class="cd-detail">
+                    <div class="cd-detail-head">
+                      <span class="npin">1</span>
+                      <div>
+                        <div class="cd-name"><b>王工</b><span class="guest">访客</span><span class="tm">2 分钟前</span></div>
+                        <div class="cd-src">来自「客户评审」· 第 3 版</div>
+                      </div>
+                      <span class="sp"></span>
+                      <button class="btn sm"><i data-ic="pin"></i>定位</button>
+                      <button class="btn sm"><i data-ic="check"></i>解决</button>
+                    </div>
+                    <p class="cd-text">入口开口方向反了，观众会从背面进入。建议把这面围挡的开口转到南侧，正对主通道。</p>
+                    <div class="cd-anchor"><i data-ic="pin"></i>W1A03 · 标准展台 · 入口 · 离地 1.4 m</div>
+                    <div class="cd-meta">
+                      <div><span>来源</span><b>客户评审 · 第 3 版</b></div>
+                      <div><span>对象</span><b>W1A03 · 标准展台</b></div>
+                      <div><span>锚点</span><b>3.2 / 1.4 / −6.1 m</b></div>
+                    </div>
+                    <div class="reply">
+                      <div class="cm-top"><span class="npin done">1</span><b>李设计</b><span class="tm">1 分钟前</span></div>
+                      <p>收到，这版先按南侧改，下午更新快照。</p>
+                    </div>
+                    <div class="sp"></div>
+                    <div class="cd-compose">
+                      <div class="compose-box" style="min-height:38px"><div class="ph">回复王工…</div></div>
+                      <div class="compose-foot">
+                        <span>⌘↵ 发送</span><span class="sp"></span>
+                        <button class="btn pri sm">发送</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <span class="anno" style="left:10px;top:56px">1</span>
+              <span class="anno" style="left:10px;top:344px">2</span>
+              <span class="anno" style="left:690px;top:400px">3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">S-C</span>底部时间线</h3>
+          <p class="tag">像 Linear Inbox 一样逐条处理评论。画布始终全宽，评论以时间线方式从底部展开，适合评审会逐条过。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 画布全宽，未解决数常驻左上</li>
+            <li>② 收起时是一条 56 px 评论条</li>
+            <li>③ 左列表按时间，右详情含锚点</li>
+            <li>详情内直接回复 / 解决 / 定位</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">结构</div>
+          <dl>
+            <dt>48 px</dt><dd>顶栏：只读、视图、复制链接</dd>
+            <dt>368 px</dt><dd>可见画布（抽屉展开时）</dd>
+            <dt>304 px</dt><dd>评论抽屉：列表 + 详情</dd>
+            <dt>56 px</dt><dd>收起后的评论条</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">取舍</div>
+          <ul>
+            <li class="plus">画布最大，适合投屏和逐条评审</li>
+            <li class="plus">天然适配移动端底部抽屉</li>
+            <li class="minus">按对象找评论不如侧栏直观</li>
+            <li class="minus">展开后画布被压掉约 45%</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <style>
+    /* share B */
+    .b-canvas{position:relative;flex:1;min-height:0;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+    .b-canvas .scene{position:absolute;inset:0;width:100%;height:100%}
+    .float-top,.float-tools{
+      position:absolute;top:14px;z-index:6;display:flex;align-items:center;gap:8px;
+      height:36px;padding:0 10px;border-radius:8px;
+      background:rgba(12,13,15,.86);border:1px solid var(--line-2);
+      box-shadow:0 18px 40px -22px rgba(0,0,0,.9);backdrop-filter:blur(10px);
+    }
+    .float-top{left:14px}
+    .float-tools{right:14px}
+    .v-rail{
+      position:absolute;left:14px;top:50%;transform:translateY(-50%);z-index:6;
+      display:flex;flex-direction:column;gap:2px;padding:4px;
+      border-radius:8px;background:rgba(12,13,15,.88);border:1px solid var(--line-2);
+      box-shadow:0 20px 40px -22px rgba(0,0,0,.9);backdrop-filter:blur(10px);
+    }
+    .v-rail .ibtn{width:32px;height:30px}
+    .v-rail .ibtn.on{background:var(--accent-soft);color:var(--accent-2)}
+    .vrail-sep{height:1px;background:var(--line);margin:4px 6px}
+    .float-panel{
+      position:absolute;right:14px;top:64px;bottom:14px;width:330px;z-index:6;
+      display:flex;flex-direction:column;min-height:0;overflow:hidden;
+      border-radius:10px;background:rgba(12,13,15,.9);border:1px solid var(--line-2);
+      box-shadow:0 30px 70px -24px rgba(0,0,0,.95),0 1px 0 rgba(255,255,255,.04) inset;
+      backdrop-filter:blur(14px);
+    }
+    .b-dock{
+      position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;
+      display:flex;align-items:center;gap:2px;padding:3px;
+      border-radius:8px;background:rgba(12,13,15,.9);border:1px solid var(--line-2);
+      box-shadow:0 20px 40px -22px rgba(0,0,0,.9);backdrop-filter:blur(10px);
+    }
+    .b-dock button{
+      display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;
+      border:0;border-radius:4px;background:none;font-family:inherit;font-size:10.5px;color:var(--tx-3);
+    }
+    .b-dock button.on{background:var(--accent-soft);color:var(--accent-2)}
+    .b-dock .zoom{font-family:var(--mono);font-size:10px;color:var(--tx-3);width:34px;text-align:center}
+
+    /* share C */
+    .cdrawer{
+      position:absolute;left:0;right:0;bottom:0;height:304px;z-index:7;
+      display:flex;flex-direction:column;min-height:0;
+      border-top:1px solid var(--line-2);border-radius:12px 12px 0 0;
+      background:rgba(13,14,17,.97);
+      box-shadow:0 -26px 60px -24px rgba(0,0,0,.95);
+    }
+    .cd-grab{display:grid;place-items:center;height:14px;flex:none}
+    .cd-grab i{width:32px;height:3px;border-radius:2px;background:var(--bg-4)}
+    .cd-head{display:flex;align-items:center;gap:8px;flex:none;height:40px;padding:0 16px;border-bottom:1px solid var(--line)}
+    .cd-head h3{margin:0;font-size:12.5px;font-weight:600}
+    .cd-head .fchip{height:20px;font-size:10px}
+    .cd-hint{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--tx-4)}
+    .cd-hint .i{width:11px;height:11px}
+    .cd-body{display:flex;flex:1;min-height:0}
+    .cd-list{width:360px;flex:none;border-right:1px solid var(--line);overflow:hidden}
+    .cdrow{
+      display:flex;align-items:flex-start;gap:8px;width:100%;text-align:left;
+      padding:9px 14px;border:0;border-bottom:1px solid rgba(255,255,255,.045);
+      background:none;font-family:inherit;
+    }
+    .cdrow.on{background:rgba(111,124,232,.06);box-shadow:inset 2px 0 0 var(--accent)}
+    .cdrow-main{flex:1;min-width:0}
+    .cdrow-main b{display:block;font-size:11px;font-weight:400;color:var(--tx-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cdrow-main span{display:block;margin-top:2px;font-size:9.5px;color:var(--tx-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cdrow-tm{font-family:var(--mono);font-size:9px;color:var(--tx-4);flex:none}
+    .cd-detail{flex:1;min-width:0;display:flex;flex-direction:column;padding:11px 18px 12px}
+    .cd-detail-head{display:flex;align-items:flex-start;gap:8px}
+    .cd-name{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--tx-2)}
+    .cd-name b{font-weight:500;color:var(--tx)}
+    .cd-name .tm{font-family:var(--mono);font-size:9px;color:var(--tx-4)}
+    .cd-src{margin-top:2px;font-size:9.5px;color:var(--tx-4)}
+    .cd-text{margin:9px 0 0;font-size:12px;line-height:1.65;color:var(--tx-2);max-width:640px}
+    .cd-anchor{
+      display:inline-flex;align-items:center;gap:6px;align-self:flex-start;margin-top:9px;
+      height:22px;padding:0 8px;border-radius:4px;border:1px solid var(--line);background:var(--bg-2);
+      font-family:var(--mono);font-size:9.5px;color:var(--tx-3);
+    }
+    .cd-anchor .i{width:11px;height:11px}
+    .cd-meta{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:1px;margin-top:9px;border:1px solid var(--line);border-radius:5px;background:var(--line);overflow:hidden;max-width:560px}
+    .cd-meta div{background:var(--bg-2);padding:6px 8px}
+    .cd-meta span{display:block;font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-4)}
+    .cd-meta b{display:block;margin-top:2px;font-family:var(--mono);font-size:9.5px;font-weight:400;color:var(--tx-3)}
+    .cd-compose{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+    .cd-compose .compose-box{background:var(--bg-2)}
+    .cd-compose .compose-foot{margin-top:5px;font-size:9.5px}
+  </style>
+
+  <section class="section" id="extras">
+    <div class="section-head">
+      <h2>发布动作 / 移动端</h2>
+      <p>发布弹窗只保留已确认的两个开关；移动端沿用 3D 画布和底部抽屉，不提供漫游入口。</p>
+    </div>
+    <!-- ============ DIALOG ============ -->
+    <article class="proposal" id="dialog">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="680">
+            <div class="sh-top">
+              <div class="sh-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <span class="vsep"></span>
+              <div class="sh-title">W1 展馆 · 秋季车展 <span class="ro"><i data-ic="eye"></i>只读</span></div>
+              <div class="sp"></div>
+              <div class="hud-group">
+                <button class="on"><i data-ic="grid"></i>俯视</button>
+                <button><i data-ic="cube"></i>轴测</button>
+                <button><i data-ic="expand"></i>适配</button>
+              </div>
+              <button class="btn"><i data-ic="comment"></i>评论<span class="mono">4</span></button>
+              <button class="btn pri"><i data-ic="link"></i>复制链接</button>
+            </div>
+
+            <div class="b-canvas">
+              <svg class="scene" data-scene="dlg"></svg>
+              <div class="dim"></div>
+
+              <div class="dlg">
+                <div class="dlg-head">
+                  <div>
+                    <div class="dlg-title">分享查看链接</div>
+                    <div class="dlg-sub">拿到链接的人可以查看场景，并留下匿名评论</div>
+                  </div>
+                  <span class="sp"></span>
+                  <span class="ro" style="border-color:rgba(91,189,139,.3);color:var(--green)">已发布 · 第 3 版</span>
+                  <button class="ibtn"><i data-ic="close"></i></button>
+                </div>
+
+                <div class="dlg-body">
+                  <div class="dlg-scene">
+                    <div class="thumb"><svg data-scene="dlg"></svg></div>
+                    <div class="dlg-scene-meta">
+                      <b>W1 展馆 · 秋季车展</b>
+                      <span>130 × 70 m · 19 个展台 · 66 个设施</span>
+                      <span class="ok"><i data-ic="check"></i>快照与当前场景一致</span>
+                    </div>
+                  </div>
+
+                  <label class="dlg-field">
+                    <span class="lbl">链接标题</span>
+                    <div class="inp">W1 展馆 · 秋季车展</div>
+                  </label>
+
+                  <div class="dlg-rows">
+                    <div class="dlg-row">
+                      <div><b>允许匿名评论</b><span>访客填写昵称后即可在画布上留评论</span></div>
+                      <span class="sp"></span>
+                      <span class="toggle on"><i></i></span>
+                    </div>
+                    <div class="dlg-row">
+                      <div><b>允许导出图片</b><span>开放俯视汇报图下载，默认关闭</span></div>
+                      <span class="sp"></span>
+                      <span class="toggle"><i></i></span>
+                    </div>
+                  </div>
+
+                  <div class="dlg-link">
+                    <span class="lbl">链接</span>
+                    <div class="linkrow">
+                      <div class="inp">https://…/#/share/9fK2mQ4xTb1L</div>
+                      <button class="btn">复制</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="dlg-foot">
+                  <span class="hint"><i data-ic="eye"></i>仅拥有链接的人可查看，可随时撤销</span>
+                  <span class="sp"></span>
+                  <button class="btn ghost">取消</button>
+                  <button class="btn pri">更新快照并复制链接</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">D-1</span>发布 / 更新</h3>
+          <p class="tag">只放已确认的选项：匿名评论开关与导出开关。没有口令、没有有效期，减少决策成本。</p>
+          <div class="lbl">状态</div>
+          <ul>
+            <li>首次发布：隐藏链接行，主按钮为「发布并复制链接」</li>
+            <li>已发布：显示版本、链接与「更新快照」</li>
+            <li>场景未变化：主按钮降级为「复制链接」</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">结构</div>
+          <dl>
+            <dt>540 px</dt><dd>弹窗宽度，单列不滚动</dd>
+            <dt>86 × 56</dt><dd>场景缩略图</dd>
+            <dt>2 项</dt><dd>评论 / 导出开关</dd>
+            <dt>1 行</dt><dd>链接 + 复制</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">取舍</div>
+          <ul>
+            <li class="plus">不做密码，链接即权限，流程最短</li>
+            <li class="plus">版本号直接暴露在弹窗里</li>
+            <li class="minus">撤销入口不在弹窗内，放到链接列表</li>
+            <li class="minus">更新快照会让旧评论标注偏移</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ MOBILE ============ -->
+    <article class="proposal" id="mobile">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="680">
+            <div class="phones">
+              <div class="pcol">
+                <div class="phone">
+                  <div class="screen">
+                    <div class="p-status"><span>9:41</span><span class="r"><span>5G</span><span class="bar"></span></span></div>
+                    <div class="p-head">
+                      <div class="t"><b>W1 展馆 · 秋季车展</b><span>只读 · 3 人正在查看</span></div>
+                      <button class="ibtn"><i data-ic="share"></i></button>
+                      <button class="ibtn"><i data-ic="more"></i></button>
+                    </div>
+                    <div class="p-body">
+                      <div class="p-vp">
+                        <svg class="scene" data-scene="mob"></svg>
+                        <div class="p-hud"><span>俯视</span><span>适配</span></div>
+                        <div class="p-hint">拖动旋转 · 双指缩放</div>
+                        <div class="p-metrics3">
+                          <div><span>面积</span><b>7,280 m²</b></div>
+                          <div><span>展台</span><b>19</b></div>
+                          <div><span>覆盖</span><b>61%</b></div>
+                        </div>
+                        <div class="p-cbar">
+                          <span class="stack"><span class="ava sm">王</span><span class="ava sm">李</span><span class="ava sm">陈</span></span>
+                          <div><b>4 条评论</b><span>3 条未解决</span></div>
+                          <span class="sp"></span>
+                          <button class="btn pri sm"><i data-ic="comment"></i>查看</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="cap"><b>M1 · 收起态</b>画布占满，评论收成一条悬浮栏，不挡模型。</div>
+              </div>
+
+              <div class="pcol">
+                <div class="phone">
+                  <div class="screen">
+                    <div class="p-status"><span>9:42</span><span class="r"><span>5G</span><span class="bar"></span></span></div>
+                    <div class="p-head">
+                      <div class="t"><b>评论 · 4</b><span>W1A03 入口方向</span></div>
+                      <button class="ibtn"><i data-ic="back"></i></button>
+                      <button class="ibtn"><i data-ic="close"></i></button>
+                    </div>
+                    <div class="p-body">
+                      <div class="p-vp" style="flex:0 0 40%">
+                        <svg class="scene" data-scene="mob2"></svg>
+                        <div class="p-hud"><span>定位中</span></div>
+                      </div>
+                      <div class="p-csheet">
+                        <div class="p-grab"><i></i></div>
+                        <div class="p-cs-head">
+                          <span class="fchip on">全部</span><span class="fchip">未解决</span>
+                          <span class="sp"></span><span class="mono">3 / 4</span>
+                        </div>
+                        <div class="p-cs-list">
+                          <article class="cm on">
+                            <div class="cm-top"><span class="npin">1</span><b>王工</b><span class="guest">访客</span><span class="tm">2m</span></div>
+                            <p>入口开口方向反了，观众会从背面进入。</p>
+                            <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a></div>
+                          </article>
+                          <article class="cm">
+                            <div class="cm-top"><span class="npin">2</span><b>李设计</b><span class="tm">18m</span></div>
+                            <p>标准展台顶板建议去掉，视线会挡住主舞台。</p>
+                            <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a></div>
+                          </article>
+                          <div class="p-more">还有 2 条 · 查看全部 4 条</div>
+                        </div>
+                        <div class="p-cs-compose">
+                          <div class="compose-box"><div class="ph">添加评论…</div></div>
+                          <div class="compose-foot"><span>王工 · 访客</span><span class="sp"></span><button class="btn pri sm">发送</button></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="cap"><b>M2 · 展开态</b>上方保留定位画面，下方抽屉列表 + 输入，符合拇指区。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">M</span>移动端分享页</h3>
+          <p class="tag">只保留查看与评论。不提供漫游、不提供编辑、不显示时间轴与天气设置。</p>
+          <div class="lbl">规则</div>
+          <ul>
+            <li>画布至少占 55%，抽屉最高 60%</li>
+            <li>引脚点击命中区 ≥ 40 px</li>
+            <li>输入框固定在抽屉底部，避开键盘</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">结构</div>
+          <dl>
+            <dt>30 px</dt><dd>系统状态条</dd>
+            <dt>40 px</dt><dd>标题栏：场馆名 / 只读 / 分享</dd>
+            <dt>自适应</dt><dd>3D 画布与引脚</dd>
+            <dt>46 px</dt><dd>收起态评论条</dd>
+            <dt>60%</dt><dd>展开态抽屉</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">取舍</div>
+          <ul>
+            <li class="plus">与桌面共用同一套引脚与评论组件</li>
+            <li class="plus">客户在微信里打开即可评论</li>
+            <li class="minus">3D 旋转在小屏上更依赖手势</li>
+            <li class="minus">评论详情需要滚动，不能并排</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <style>
+    /* dialog */
+    .dim{position:absolute;inset:0;z-index:10;background:rgba(4,5,7,.62);backdrop-filter:blur(3px) saturate(80%)}
+    .dlg{
+      position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:11;width:540px;
+      border-radius:12px;overflow:hidden;border:1px solid var(--line-2);background:#0e0f12;
+      box-shadow:0 44px 90px -30px rgba(0,0,0,.96),0 1px 0 rgba(255,255,255,.05) inset;
+    }
+    .dlg-head{display:flex;align-items:flex-start;gap:8px;padding:16px 18px 12px}
+    .dlg-title{font-size:14px;font-weight:600;letter-spacing:-.01em}
+    .dlg-sub{margin-top:3px;font-size:10.5px;color:var(--tx-3)}
+    .dlg-body{padding:0 18px}
+    .dlg-scene{display:flex;gap:12px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg-2)}
+    .thumb{width:86px;height:56px;flex:none;border-radius:5px;overflow:hidden;border:1px solid var(--line);background:#0b0d10}
+    .thumb svg{display:block;width:100%;height:100%}
+    .dlg-scene-meta{display:flex;flex-direction:column;justify-content:center;gap:3px;font-size:11px;color:var(--tx-2)}
+    .dlg-scene-meta b{font-size:11.5px;font-weight:500;color:var(--tx)}
+    .dlg-scene-meta span{font-size:10px;color:var(--tx-3)}
+    .dlg-scene-meta .ok{display:inline-flex;align-items:center;gap:4px;color:var(--green)}
+    .dlg-scene-meta .ok .i{width:10px;height:10px}
+    .lbl{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--tx-4)}
+    .dlg-field{margin-top:12px;display:flex;flex-direction:column;gap:5px}
+    .inp{display:flex;align-items:center;height:30px;padding:0 9px;border-radius:5px;border:1px solid var(--line);background:var(--bg-2);font-size:11.5px;color:var(--tx-2)}
+    .dlg-rows{margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+    .dlg-row{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bg-2)}
+    .dlg-row + .dlg-row{border-top:1px solid var(--line)}
+    .dlg-row b{display:block;font-size:11.5px;font-weight:500;color:var(--tx)}
+    .dlg-row span{display:block;font-size:10px;color:var(--tx-4);margin-top:1px}
+    .toggle{width:30px;height:17px;border-radius:9px;background:var(--bg-4);position:relative;flex:none}
+    .toggle i{position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#8b8f98}
+    .toggle.on{background:var(--accent)}
+    .toggle.on i{left:15px;background:#fff}
+    .dlg-link{margin-top:12px}
+    .linkrow{display:flex;gap:6px;margin-top:5px}
+    .linkrow .inp{flex:1;font-family:var(--mono);font-size:10.5px;color:var(--tx-3)}
+    .dlg-foot{display:flex;align-items:center;gap:8px;margin-top:14px;padding:12px 18px;border-top:1px solid var(--line);background:var(--bg-1)}
+    .dlg-foot .hint{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--tx-4)}
+    .dlg-foot .hint .i{width:11px;height:11px}
+
+    /* phones */
+    .phones{display:flex;gap:30px;justify-content:center;align-items:flex-start;padding:12px 0 4px}
+    .pcol{width:300px;flex:none}
+    .pcol .cap{margin-top:12px;font-size:10.5px;line-height:1.6;color:var(--tx-4)}
+    .pcol .cap b{display:block;color:var(--tx-2);font-weight:500;font-size:11px}
+    .phone{
+      position:relative;width:300px;height:600px;border-radius:26px;padding:7px;
+      background:linear-gradient(180deg,#1a1c20,#0d0e10);
+      box-shadow:0 0 0 1px rgba(255,255,255,.09),0 40px 70px -34px rgba(0,0,0,.95);
+    }
+    .screen{position:relative;width:100%;height:100%;overflow:hidden;border-radius:20px;background:var(--bg-1);font-size:11px;display:flex;flex-direction:column}
+    .p-status{display:flex;align-items:center;justify-content:space-between;height:30px;padding:0 16px;font-family:var(--mono);font-size:10px;color:var(--tx-2);flex:none}
+    .p-status .r{display:flex;align-items:center;gap:5px}
+    .p-status .bar{width:14px;height:7px;border:1px solid var(--tx-3);border-radius:2px;position:relative}
+    .p-status .bar::after{content:"";position:absolute;inset:1px;right:5px;background:var(--tx-2);border-radius:1px}
+    .p-head{display:flex;align-items:center;gap:6px;height:42px;padding:0 10px;border-bottom:1px solid var(--line);flex:none}
+    .p-head .t{flex:1;min-width:0}
+    .p-head .t b{display:block;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .p-head .t span{display:block;font-size:9px;color:var(--tx-4);margin-top:1px}
+    .p-head .ibtn{width:24px;height:24px}
+    .p-body{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+    .p-vp{position:relative;flex:1;min-height:0;overflow:hidden;background:radial-gradient(72% 58% at 50% 44%,#0e1116,#07080a 72%)}
+    .p-vp .scene{position:absolute;inset:0;width:100%;height:100%}
+    .p-hud{position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:4}
+    .p-hud span{display:inline-flex;align-items:center;height:22px;padding:0 7px;border-radius:4px;background:rgba(12,13,15,.82);border:1px solid var(--line);font-size:9.5px;color:var(--tx-2)}
+    .p-cbar{
+      position:absolute;left:10px;right:10px;bottom:10px;z-index:5;
+      display:flex;align-items:center;gap:8px;height:46px;padding:0 10px;
+      border-radius:10px;background:rgba(12,13,15,.93);border:1px solid var(--line-2);
+      box-shadow:0 18px 40px -20px rgba(0,0,0,.9);
+    }
+    .p-cbar .stack{display:flex}
+    .p-cbar .stack .ava{margin-left:-5px;box-shadow:0 0 0 2px #0d0e10}
+    .p-cbar .stack .ava:first-child{margin-left:0}
+    .p-cbar div b{display:block;font-size:10.5px;font-weight:500;color:var(--tx)}
+    .p-cbar div span{display:block;font-size:9px;color:var(--tx-3)}
+    .p-cbar .btn.sm{height:24px;font-size:10px}
+    .p-csheet{
+      position:relative;display:flex;flex-direction:column;flex:1;min-height:0;
+      margin-top:-10px;z-index:5;border-top:1px solid var(--line-2);border-radius:12px 12px 0 0;
+      background:#101113;box-shadow:0 -18px 40px -20px rgba(0,0,0,.9);
+    }
+    .p-grab{display:grid;place-items:center;height:16px;flex:none}
+    .p-grab i{width:30px;height:3px;border-radius:2px;background:var(--bg-4)}
+    .p-cs-head{display:flex;align-items:center;gap:4px;padding:0 12px 6px;flex:none}
+    .p-cs-head .fchip{height:20px;font-size:9.5px;padding:0 6px}
+    .p-cs-head .mono{font-size:9px;color:var(--tx-4)}
+    .p-cs-list{flex:1;min-height:0;overflow:hidden}
+    .p-cs-list .cm{padding:8px 12px}
+    .p-cs-list .cm p{font-size:10.5px;margin-top:3px}
+    .p-cs-list .cm-acts{margin-top:5px;font-size:9px}
+    .p-cs-compose{flex:none;padding:7px 10px 10px;border-top:1px solid var(--line)}
+    .p-cs-compose .compose-box{min-height:32px;padding:7px 8px}
+    .p-cs-compose .compose-box .ph{font-size:10px}
+    .p-cs-compose .compose-foot{margin-top:5px;font-size:9px}
+    .p-cs-compose .btn.sm{height:22px;font-size:9.5px}
+    .p-hint{
+      position:absolute;left:10px;top:8px;z-index:4;
+      display:inline-flex;align-items:center;height:22px;padding:0 7px;border-radius:4px;
+      background:rgba(12,13,15,.82);border:1px solid var(--line);
+      font-size:9px;color:var(--tx-3);
+    }
+    .p-metrics3{
+      position:absolute;left:10px;right:10px;bottom:64px;z-index:4;
+      display:grid;grid-template-columns:repeat(3,1fr);overflow:hidden;
+      border:1px solid var(--line);border-radius:8px;background:rgba(12,13,15,.86);backdrop-filter:blur(8px);
+    }
+    .p-metrics3 div{padding:6px 8px;border-right:1px solid var(--line)}
+    .p-metrics3 div:last-child{border-right:0}
+    .p-metrics3 span{display:block;font-size:8px;letter-spacing:.04em;text-transform:uppercase;color:var(--tx-4)}
+    .p-metrics3 b{display:block;margin-top:1px;font-family:var(--mono);font-size:10px;font-weight:400;color:var(--tx-2)}
+    .p-more{padding:8px 12px;font-size:9px;color:var(--tx-4)}
+  </style>
+
+  <section class="section" id="editor">
+    <div class="section-head">
+      <h2>编辑器回显 / 三个方向</h2>
+      <p>同一项目的评论会回到编辑器：画布引脚 + 右侧面板。区别在于评论占用属性栏、独立 Tab，还是独立模式。</p>
+    </div>
+    <!-- ============ E-A ============ -->
+    <article class="proposal" id="ea">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="700">
+            <div class="tb">
+              <div class="tb-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <div class="tb-venue">W1 展馆 <span class="caret"></span></div>
+              <nav class="tb-menu"><a>文件</a><a class="on">视图</a><a>显示</a><a>数据</a><a>帮助</a></nav>
+              <div class="sp"></div>
+              <span class="kbd">⌘K</span>
+              <button class="ibtn"><i data-ic="undo"></i></button>
+              <button class="ibtn"><i data-ic="redo"></i></button>
+              <span class="vsep"></span>
+              <button class="btn ghost"><i data-ic="comment"></i>评论<span class="mono" style="color:var(--accent-2)">5</span></button>
+              <button class="btn"><i data-ic="share"></i>分享</button>
+              <button class="btn pri">导出</button>
+              <div class="ava">L</div>
+            </div>
+
+            <div class="e-body">
+              <aside class="e-tree">
+                <div class="panel-head">场景结构<span class="sp"></span><span class="kbd">L</span></div>
+                <div class="list">
+                  <div class="row"><span class="sw" style="background:#4a4f5c"></span>W1 展馆<span class="num">130 × 70 m</span></div>
+                  <div class="grp open"><span class="tri"></span><b>展台</b><span class="num">19</span></div>
+                  <div class="row"><span class="sw"></span>W1A01<span class="num">48 m²</span></div>
+                  <div class="row"><span class="sw"></span>W1A02<span class="cbadge">1</span><span class="num">64 m²</span></div>
+                  <div class="row on"><span class="sw" style="background:var(--sel)"></span>W1A03<span class="cbadge">3</span><span class="num">48 m²</span></div>
+                  <div class="row"><span class="sw"></span>W1A04<span class="num">56 m²</span></div>
+                  <div class="grp open"><span class="tri"></span><b>基础设施</b><span class="num">66</span></div>
+                  <div class="row"><span class="sw" style="background:#4a4438"></span>出入口 01<span class="cbadge">1</span><span class="num">5.0 m</span></div>
+                  <div class="row"><span class="sw" style="background:#4a4438"></span>窗户 04<span class="num">2 × 2</span></div>
+                  <div class="row"><span class="sw" style="background:#4a4438"></span>内墙 02<span class="num">12.4 m</span></div>
+                  <div class="grp"><span class="tri"></span><b>家具</b><span class="num">7</span></div>
+                </div>
+                <div class="panel-foot">合计 <b>7,280 m²</b><span class="sp"></span>覆盖率 <b>61%</b></div>
+              </aside>
+
+              <div class="e-vp">
+                <svg class="scene" data-scene="ea"></svg>
+                <div class="hud tl"><span class="hud-chip on">编辑模式</span><span class="hud-chip">1 m 网格</span></div>
+                <div class="hud tr">
+                  <div class="hud-group">
+                    <button><i data-ic="grid"></i>俯视</button>
+                    <button class="on"><i data-ic="cube"></i>轴测</button>
+                    <button><i data-ic="expand"></i>适配</button>
+                  </div>
+                </div>
+                <div class="hud bl"><div class="scalebar"><i style="width:56px"></i><span class="mono" style="font-size:9px;color:#6b6f76">10 m</span></div></div>
+                <div class="hud br"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+                <span class="anno" style="left:10px;top:54px">1</span>
+                <span class="anno" style="left:580px;top:80px">2</span>
+              </div>
+
+              <aside class="e-props">
+                <div class="panel-head">属性<span class="state-badge">就绪</span></div>
+                <div class="e-scroll">
+                  <section class="prop review">
+                    <div class="prop-head">
+                      <i data-ic="comment"></i><h2>评审评论</h2><span class="count">3</span>
+                      <span class="sp"></span><span class="mono" style="font-size:9px;color:var(--tx-4)">W1A03</span>
+                    </div>
+                    <div class="prop-body">
+                      <div class="prop-sub">标准展台 · 来自「客户评审」<span class="sp"></span><a>全部 5</a></div>
+                      <article class="cm on">
+                        <div class="cm-top"><span class="npin">1</span><b>王工</b><span class="guest">访客</span><span class="tm">2m</span></div>
+                        <p>入口开口方向反了，观众会从背面进入。</p>
+                        <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a></div>
+                      </article>
+                      <article class="cm">
+                        <div class="cm-top"><span class="npin">2</span><b>李设计</b><span class="tm">18m</span><span class="state-tag warn">场景已更新</span></div>
+                        <p>标准展台顶板建议去掉，视线会挡住主舞台。</p>
+                        <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a></div>
+                      </article>
+                      <article class="cm resolved">
+                        <div class="cm-top"><span class="npin done">3</span><b>陈工</b><span class="tm">1h</span></div>
+                        <p>这段过道只有 1.2 m，消防可能不通过。</p>
+                      </article>
+                      <div class="prop-foot">这是 W1A03 的全部评论 · 2 条未解决</div>
+                    </div>
+                  </section>
+
+                  <section class="prop">
+                    <div class="prop-head"><h2>场馆</h2><span class="sp"></span><span class="chev">–</span></div>
+                    <div class="prop-body">
+                      <div class="fields2">
+                        <div class="fld2"><span>面积</span><i>7,280 m²</i></div>
+                        <div class="fld2"><span>净高</span><i>8.0 m</i></div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="prop">
+                    <div class="prop-head"><h2>展台</h2><span class="count">1</span><span class="sp"></span><span class="chev">–</span></div>
+                    <div class="prop-body">
+                      <div class="fields2">
+                        <div class="fld2"><span>名称</span><i>W1A03</i></div>
+                        <div class="fld2"><span>类型</span><i>标准展台</i></div>
+                        <div class="fld2"><span>高度</span><i>4.0 m</i></div>
+                        <div class="fld2"><span>面积</span><i>48 m²</i></div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="prop">
+                    <div class="prop-head"><h2>基础设施</h2><span class="sp"></span><span class="chev">+</span></div>
+                  </section>
+                </div>
+              </aside>
+            </div>
+
+            <div class="e-timeline">
+              <button class="ibtn"><i data-ic="play"></i></button>
+              <span class="mono" style="font-size:11px">14:20</span>
+              <div class="tl-track"><div class="band"></div><span class="tick" style="left:42%"></span><span class="cursor" style="left:59%"></span></div>
+              <span style="font-size:9.5px;color:var(--tx-4)">50×</span>
+            </div>
+            <div class="status">
+              <span class="g on">就绪</span><span class="vsep"></span>
+              <span class="g">X 12.4 &nbsp;Z −31.2</span><span class="vsep"></span>
+              <span class="g">1 m 网格</span>
+              <span class="sp"></span>
+              <span class="g">未解决评论 3</span><span class="vsep"></span>
+              <span class="g">对象 92</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">E-A</span>属性栏内嵌</h3>
+          <p class="tag">评论跟着对象走。选中 W1A03 时，属性栏第一张卡就是它的评论；未选中时显示全部未解决。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 画布引脚与卡片编号一致</li>
+            <li>② 属性栏插槽，位于场馆卡之前</li>
+            <li>卡片内直接回复 / 解决 / 定位</li>
+            <li>场景树行尾显示评论数</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">结构</div>
+          <dl>
+            <dt>240 px</dt><dd>场景结构 + 评论徽标</dd>
+            <dt>自适应</dt><dd>画布 + 引脚</dd>
+            <dt>348 px</dt><dd>属性栏：评论卡置顶</dd>
+            <dt>44 px</dt><dd>时间轴（保留原样）</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">取舍</div>
+          <ul>
+            <li class="plus">零新增面板，改动最小</li>
+            <li class="plus">与选中强联动，心智最顺</li>
+            <li class="minus">属性栏更长，需折叠与内滚动</li>
+            <li class="minus">全局浏览评论弱，只能看当前对象</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ E-B ============ -->
+    <article class="proposal" id="eb">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="700">
+            <div class="tb">
+              <div class="tb-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <div class="tb-venue">W1 展馆 <span class="caret"></span></div>
+              <nav class="tb-menu"><a>文件</a><a class="on">视图</a><a>显示</a><a>数据</a><a>帮助</a></nav>
+              <div class="sp"></div>
+              <button class="btn ghost"><i data-ic="comment"></i>评论<span class="mono" style="color:var(--accent-2)">5</span></button>
+              <button class="btn"><i data-ic="share"></i>分享</button>
+              <button class="btn pri">导出</button>
+              <div class="ava">L</div>
+            </div>
+
+            <div class="e-body">
+              <aside class="e-tree">
+                <div class="panel-head">场景结构<span class="sp"></span><span class="kbd">L</span></div>
+                <div class="list">
+                  <div class="row"><span class="sw" style="background:#4a4f5c"></span>W1 展馆<span class="num">130 × 70 m</span></div>
+                  <div class="grp open"><span class="tri"></span><b>展台</b><span class="num">19</span></div>
+                  <div class="row"><span class="sw"></span>W1A01<span class="num">48 m²</span></div>
+                  <div class="row"><span class="sw"></span>W1A02<span class="cbadge">1</span><span class="num">64 m²</span></div>
+                  <div class="row on"><span class="sw" style="background:var(--sel)"></span>W1A03<span class="cbadge">3</span><span class="num">48 m²</span></div>
+                  <div class="row"><span class="sw"></span>W1A04<span class="cbadge">1</span><span class="num">56 m²</span></div>
+                  <div class="grp open"><span class="tri"></span><b>基础设施</b><span class="num">66</span></div>
+                  <div class="row"><span class="sw" style="background:#4a4438"></span>出入口 01<span class="cbadge">1</span><span class="num">5.0 m</span></div>
+                  <div class="row"><span class="sw" style="background:#4a4438"></span>窗户 04<span class="num">2 × 2</span></div>
+                  <div class="grp"><span class="tri"></span><b>家具</b><span class="num">7</span></div>
+                </div>
+                <div class="panel-foot">合计 <b>7,280 m²</b><span class="sp"></span>覆盖率 <b>61%</b></div>
+              </aside>
+
+              <div class="e-vp">
+                <svg class="scene" data-scene="eb"></svg>
+                <div class="hud tl"><span class="hud-chip on">编辑模式</span><span class="hud-chip">1 m 网格</span></div>
+                <div class="hud tr">
+                  <div class="hud-group">
+                    <button><i data-ic="grid"></i>俯视</button>
+                    <button class="on"><i data-ic="cube"></i>轴测</button>
+                    <button><i data-ic="expand"></i>适配</button>
+                  </div>
+                </div>
+                <div class="hud bl"><div class="scalebar"><i style="width:56px"></i><span class="mono" style="font-size:9px;color:#6b6f76">10 m</span></div></div>
+                <div class="hud br"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+                <span class="anno" style="left:10px;top:54px">1</span>
+                <span class="anno" style="left:580px;top:150px">2</span>
+              </div>
+
+              <aside class="e-props">
+                <div class="tabbar">
+                  <button class="tab">属性</button>
+                  <button class="tab on">评审<span class="b">5</span></button>
+                  <span class="sp"></span>
+                  <button class="ibtn"><i data-ic="more"></i></button>
+                </div>
+
+                <div class="rt-head">
+                  <h3>评审评论</h3><span class="count">5</span>
+                  <span class="sp"></span>
+                  <span class="mono" style="font-size:9px;color:var(--tx-4)">3 未解决</span>
+                </div>
+                <div class="cp-filters" style="padding-top:2px">
+                  <span class="fchip on">全部 <b>5</b></span>
+                  <span class="fchip">未解决 <b>3</b></span>
+                  <span class="fchip">我的 <b>2</b></span>
+                </div>
+                <div class="src-filter">
+                  <span class="src-tag on">客户评审 · v3</span>
+                  <span class="src-tag">内审版 · v2</span>
+                  <span class="sp"></span>
+                  <span class="mono" style="font-size:9px;color:var(--tx-4)">刷新</span>
+                </div>
+
+                <div class="e-scroll">
+                  <div class="cm-group">展台 W1A03 <span>3</span></div>
+                  <article class="cm on">
+                    <div class="cm-top"><span class="npin">1</span><b>王工</b><span class="guest">访客</span><span class="tm">2m</span></div>
+                    <p>入口开口方向反了，观众会从背面进入。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">客户评审</span></div>
+                  </article>
+                  <article class="cm resolved">
+                    <div class="cm-top"><span class="npin done">3</span><b>陈工</b><span class="tm">1h</span></div>
+                    <p>这段过道只有 1.2 m，消防可能不通过。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>已解决</a><span class="cm-link">客户评审</span></div>
+                  </article>
+
+                  <div class="cm-group">展台 W1A02 <span>1</span></div>
+                  <article class="cm">
+                    <div class="cm-top"><span class="npin">2</span><b>李设计</b><span class="tm">18m</span><span class="state-tag warn">场景已更新</span></div>
+                    <p>标准展台顶板建议去掉，视线会挡住主舞台。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">内审版</span></div>
+                  </article>
+
+                  <div class="prop-foot">已显示 3 / 5 · 查看全部</div>
+                </div>
+
+                <div class="compose">
+                  <div class="compose-box" style="min-height:38px"><div class="ph">回复或添加评论…</div></div>
+                  <div class="compose-foot">
+                    <span class="ava sm">L</span><span>李设计</span>
+                    <span class="sp"></span><span class="kbd">⌘↵</span>
+                    <button class="btn pri sm">发送</button>
+                  </div>
+                </div>
+              </aside>
+            </div>
+
+            <div class="e-timeline">
+              <button class="ibtn"><i data-ic="play"></i></button>
+              <span class="mono" style="font-size:11px">14:20</span>
+              <div class="tl-track"><div class="band"></div><span class="tick" style="left:42%"></span><span class="cursor" style="left:59%"></span></div>
+              <span style="font-size:9.5px;color:var(--tx-4)">50×</span>
+            </div>
+            <div class="status">
+              <span class="g on">就绪</span><span class="vsep"></span>
+              <span class="g">1 m 网格</span>
+              <span class="sp"></span>
+              <span class="g">评审 5 · 未解决 3</span><span class="vsep"></span>
+              <span class="g">对象 92</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">E-B</span>属性 / 评审双 Tab</h3>
+          <p class="tag">编辑与评审是两种任务。右侧面板加一个 Tab，评论获得独立空间，属性栏保持原样。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① Tab 上显示未解决数</li>
+            <li>② 来源链接筛选：客户评审 / 内审版</li>
+            <li>按展台分组的评论列表</li>
+            <li>卡片可直接回复与解决</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">结构</div>
+          <dl>
+            <dt>36 px</dt><dd>Tab：属性 / 评审</dd>
+            <dt>34 px</dt><dd>标题 + 未解决数</dd>
+            <dt>自适应</dt><dd>分组列表</dd>
+            <dt>90 px</dt><dd>底部输入区</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">取舍</div>
+          <ul>
+            <li class="plus">评论空间充足，可分组 / 筛选</li>
+            <li class="plus">属性栏不变长，互不干扰</li>
+            <li class="minus">多一层切换，需要未读提示</li>
+            <li class="minus">选中对象时不会自动跳到评审 Tab</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ E-C ============ -->
+    <article class="proposal" id="ec">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="700">
+            <div class="tb">
+              <div class="tb-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <div class="tb-venue">W1 展馆 <span class="caret"></span></div>
+              <div class="mode">
+                <span>编辑</span><span class="on">评审</span>
+              </div>
+              <span class="anno" style="left:310px;top:6px">1</span>
+              <div class="sp"></div>
+              <span class="mode-hint"><i data-ic="comment"></i>6 条 · 3 未解决</span>
+              <button class="btn"><i data-ic="share"></i>分享链接</button>
+              <div class="ava">L</div>
+            </div>
+
+            <div class="e-body">
+              <aside class="mini-rail">
+                <button class="ibtn on"><i data-ic="comment"></i></button>
+                <button class="ibtn"><i data-ic="pin"></i></button>
+                <button class="ibtn"><i data-ic="layers"></i></button>
+                <span class="sp"></span>
+                <button class="ibtn"><i data-ic="chevdown"></i></button>
+              </aside>
+
+              <div class="e-vp">
+                <svg class="scene" data-scene="ec"></svg>
+                <div class="hud tl"><span class="hud-chip on"><i data-ic="comment"></i>评审模式</span><span class="hud-chip">编辑工具已隐藏</span></div>
+                <div class="hud tr">
+                  <div class="hud-group">
+                    <button class="on"><i data-ic="grid"></i>俯视</button>
+                    <button><i data-ic="cube"></i>轴测</button>
+                    <button><i data-ic="expand"></i>适配</button>
+                  </div>
+                </div>
+                <div class="hud bl"><div class="scalebar"><i style="width:56px"></i><span class="mono" style="font-size:9px;color:#6b6f76">10 m</span></div></div>
+                <div class="hud br"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+                <span class="anno" style="left:770px;top:96px">2</span>
+                <span class="anno" style="left:748px;top:556px">3</span>
+              </div>
+
+              <aside class="e-props" style="width:360px">
+                <div class="rt-head">
+                  <h3>评审评论</h3><span class="count">6</span>
+                  <span class="sp"></span>
+                  <button class="ibtn"><i data-ic="filter"></i></button>
+                  <button class="ibtn"><i data-ic="close"></i></button>
+                </div>
+                <div class="cp-filters">
+                  <span class="fchip on">全部 <b>6</b></span>
+                  <span class="fchip">未解决 <b>3</b></span>
+                  <span class="fchip">我的 <b>2</b></span>
+                </div>
+                <div class="e-scroll">
+                  <article class="cm on">
+                    <div class="cm-top"><span class="npin">1</span><b>王工</b><span class="guest">访客</span><span class="tm">2m</span></div>
+                    <p>入口开口方向反了，观众会从背面进入。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">W1A03</span></div>
+                  </article>
+                  <article class="cm">
+                    <div class="cm-top"><span class="npin">2</span><b>李设计</b><span class="tm">18m</span><span class="state-tag warn">场景已更新</span></div>
+                    <p>标准展台顶板建议去掉，视线会挡住主舞台。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">W1A02</span></div>
+                  </article>
+                  <article class="cm">
+                    <div class="cm-top"><span class="npin">4</span><b>客户 A</b><span class="guest">访客</span><span class="tm">09:40</span></div>
+                    <p>咖啡区可以再加两组圆桌，现在只有三组。</p>
+                    <div class="cm-acts"><a><i data-ic="check"></i>解决</a><a>回复</a><a>定位</a><span class="cm-link">W1D01</span></div>
+                  </article>
+                  <article class="cm resolved">
+                    <div class="cm-top"><span class="npin done">3</span><b>陈工</b><span class="tm">1h</span></div>
+                    <p>这段过道只有 1.2 m，消防可能不通过。</p>
+                  </article>
+                </div>
+                <div class="panel-progress">
+                  <div class="pp-row"><span>本次评审</span><b>已解决 3 / 6</b></div>
+                  <div class="pp-bar"><i style="width:50%"></i></div>
+                  <div class="pp-row sub"><span>剩余 3 条未解决</span><span>2 条有回复</span></div>
+                </div>
+                <div class="compose">
+                  <div class="compose-box" style="min-height:38px"><div class="ph">添加评论…</div></div>
+                  <div class="compose-foot"><span class="ava sm">L</span><span>李设计</span><span class="sp"></span><span class="kbd">⌘↵</span><button class="btn pri sm">发送</button></div>
+                </div>
+              </aside>
+            </div>
+
+            <div class="review-bar">
+              <span class="rb-dot"></span><span class="rb-label">评审模式</span>
+              <div class="progress"><i style="width:50%"></i></div>
+              <span class="mono">已解决 3 / 6</span>
+              <span class="sp"></span>
+              <button class="btn ghost sm">上一条</button>
+              <button class="btn sm">下一条</button>
+              <span class="vsep" style="height:16px"></span>
+              <button class="btn sm"><i data-ic="close"></i>退出评审</button>
+            </div>
+            <div class="status">
+              <span class="g on">评审</span><span class="vsep"></span>
+              <span class="g">编辑快捷键已禁用</span>
+              <span class="sp"></span>
+              <span class="g">Esc 退出</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">E-C</span>评审模式</h3>
+          <p class="tag">把评审当成阶段性动作。进入后收起编辑控件，避免误操作，适合开会时集中处理一批评论。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 顶栏 segmented：编辑 / 评审</li>
+            <li>② 评审面板替代属性栏，编辑控件隐藏</li>
+            <li>③ 底部进度 + 上一条 / 下一条</li>
+            <li>④ 退出后恢复原编辑状态</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">结构</div>
+          <dl>
+            <dt>44 px</dt><dd>左侧图标轨（仅定位与图层）</dd>
+            <dt>自适应</dt><dd>画布（比 E-A / E-B 更宽）</dd>
+            <dt>360 px</dt><dd>评审面板</dd>
+            <dt>44 px</dt><dd>底部进度条</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">取舍</div>
+          <ul>
+            <li class="plus">任务边界清晰，评审会最顺手</li>
+            <li class="plus">画布更大，编辑控件不干扰</li>
+            <li class="minus">模式切换成本，需要明显退出入口</li>
+            <li class="minus">要维护两套工具栏状态</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <style>
+    /* editor shell */
+    .e-body{display:flex;flex:1;min-height:0}
+    .e-tree{width:240px;flex:none;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--bg-1)}
+    .e-vp{position:relative;flex:1;min-width:0;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+    .e-vp .scene{position:absolute;inset:0;width:100%;height:100%}
+    .e-props{width:348px;flex:none;display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--line);background:var(--bg-1)}
+    .panel-head{display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;flex:none;border-bottom:1px solid var(--line);font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--tx-2)}
+    .state-badge{margin-left:auto;font-family:var(--mono);font-size:8.5px;font-weight:400;letter-spacing:.08em;padding:2px 5px;border-radius:3px;border:1px solid var(--line);color:var(--tx-4)}
+    .list{flex:1;min-height:0;padding:2px 6px 8px;overflow:hidden}
+    .grp{display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;margin-top:2px;font-size:11px;color:var(--tx-3)}
+    .grp .tri{width:0;height:0;border:4px solid transparent;border-left-color:var(--tx-4);margin-right:1px}
+    .grp.open .tri{transform:rotate(90deg)}
+    .grp b{font-weight:500;color:var(--tx-2)}
+    .row{display:flex;align-items:center;gap:8px;height:27px;padding:0 8px;border-radius:4px;font-size:12px;color:var(--tx-2)}
+    .row .sw{width:6px;height:6px;border-radius:1.5px;background:var(--bg-4);flex:none}
+    .row .num{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--tx-4)}
+    .row.on{background:var(--accent-soft);color:var(--tx);box-shadow:inset 2px 0 0 var(--sel)}
+    .row.on .num{color:var(--tx-2)}
+    .panel-foot{flex:none;display:flex;align-items:center;gap:8px;height:29px;padding:0 12px;border-top:1px solid var(--line);font-family:var(--mono);font-size:9.5px;color:var(--tx-4)}
+    .panel-foot b{font-weight:500;color:var(--tx-2)}
+    .cbadge{min-width:14px;height:14px;padding:0 4px;border-radius:7px;display:inline-grid;place-items:center;background:var(--accent-soft);color:var(--accent-2);font-family:var(--mono);font-size:8.5px;flex:none}
+    .row .cbadge{margin-left:auto}
+    .row .cbadge + .num{margin-left:0}
+
+    /* props */
+    .e-scroll{flex:1;min-height:0;overflow:hidden}
+    .prop{border-bottom:1px solid var(--line)}
+    .prop.review{background:linear-gradient(180deg,rgba(111,124,232,.05),transparent 62%)}
+    .prop-head{display:flex;align-items:center;gap:7px;height:34px;padding:0 12px;flex:none}
+    .prop-head h2{margin:0;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--tx-2)}
+    .prop-head .i{width:12px;height:12px;color:var(--tx-4)}
+    .prop-head .chev{font-family:var(--mono);font-size:12px;color:var(--tx-4)}
+    .prop-body{padding-bottom:8px}
+    .prop-sub{display:flex;align-items:center;gap:6px;padding:0 12px 7px;font-size:9.5px;color:var(--tx-4)}
+    .prop-sub a{color:var(--accent-2);text-decoration:none;cursor:pointer}
+    .prop-body .cm{padding:9px 12px}
+    .prop-body .cm p{font-size:11.5px}
+    .prop-foot{padding:7px 12px 2px;font-size:9.5px;color:var(--tx-4)}
+    .fields2{display:grid;grid-template-columns:1fr 1fr;gap:7px 10px;padding:2px 12px 10px}
+    .fld2 span{display:block;font-size:9px;color:var(--tx-4);margin-bottom:3px}
+    .fld2 i{display:flex;align-items:center;height:24px;padding:0 7px;border:1px solid var(--line);border-radius:4px;background:var(--bg-2);font-family:var(--mono);font-size:10.5px;font-style:normal;color:var(--tx-2)}
+    .state-tag{margin-left:auto;padding:1px 4px;border-radius:3px;font-size:8px;letter-spacing:.02em;border:1px solid var(--line);color:var(--tx-4)}
+    .state-tag.warn{border-color:rgba(233,160,106,.28);color:#d8a27b}
+
+    /* tabs */
+    .tabbar{display:flex;align-items:center;gap:2px;height:36px;padding:0 8px;flex:none;border-bottom:1px solid var(--line)}
+    .tab{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:0;border-radius:4px;background:none;font-family:inherit;font-size:11.5px;color:var(--tx-3)}
+    .tab.on{background:var(--bg-3);color:var(--tx)}
+    .tab .b{min-width:15px;height:15px;padding:0 4px;border-radius:8px;display:inline-grid;place-items:center;background:var(--accent-soft);color:var(--accent-2);font-family:var(--mono);font-size:8.5px}
+    .rt-head{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;flex:none;border-bottom:1px solid var(--line)}
+    .rt-head h3{margin:0;font-size:11.5px;font-weight:600;letter-spacing:.01em}
+    .src-filter{display:flex;align-items:center;gap:5px;padding:0 12px 8px;flex:none}
+    .src-tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:4px;border:1px solid var(--line);font-size:9px;color:var(--tx-4);white-space:nowrap}
+    .src-tag.on{border-color:rgba(111,124,232,.3);background:var(--accent-soft);color:var(--accent-2)}
+    .cm-group{display:flex;align-items:center;gap:6px;height:26px;padding:0 14px;background:rgba(255,255,255,.018);font-size:9.5px;letter-spacing:.03em;color:var(--tx-4)}
+    .cm-group span{margin-left:auto;font-family:var(--mono);font-size:8.5px}
+
+    /* timeline */
+    .e-timeline{display:flex;align-items:center;gap:10px;height:44px;padding:0 12px;flex:none;border-top:1px solid var(--line);background:var(--bg-1)}
+    .tl-track{position:relative;flex:1;height:26px}
+    .tl-track .band{position:absolute;inset:9px 0;border-radius:3px;background:linear-gradient(90deg,#0e1219 0%,#171d27 17%,#2f323a 33%,#5b5f68 50%,#2f323a 67%,#171d27 83%,#0e1219 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)}
+    .tl-track .tick{position:absolute;top:6px;bottom:6px;width:1px;background:rgba(255,255,255,.17)}
+    .tl-track .cursor{position:absolute;top:2px;bottom:2px;width:1px;background:var(--accent)}
+    .tl-track .cursor::after{content:"";position:absolute;left:-3.5px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(111,124,232,.22)}
+
+    /* review mode */
+    .mini-rail{width:44px;flex:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;border-right:1px solid var(--line);background:var(--bg-1)}
+    .mini-rail .ibtn{width:32px;height:30px}
+    .mini-rail .ibtn.on{background:var(--accent-soft);color:var(--accent-2)}
+    .mode{display:flex;padding:2px;margin-left:4px;border:1px solid var(--line);border-radius:6px;background:var(--bg-2)}
+    .mode span{display:inline-flex;align-items:center;height:20px;padding:0 9px;border-radius:4px;font-size:11px;color:var(--tx-3)}
+    .mode span.on{background:var(--bg-4);color:var(--tx);box-shadow:0 1px 0 rgba(255,255,255,.05) inset}
+    .mode-hint{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--tx-3);padding:0 6px}
+    .mode-hint .i{width:12px;height:12px}
+    .review-bar{display:flex;align-items:center;gap:10px;height:44px;padding:0 12px;flex:none;border-top:1px solid var(--line);background:var(--bg-1)}
+    .rb-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(111,124,232,.16)}
+    .rb-label{font-size:10.5px;color:var(--tx-2)}
+    .progress{width:120px;height:3px;border-radius:2px;background:var(--bg-4);overflow:hidden}
+    .progress i{display:block;height:100%;background:var(--green)}
+    .review-bar .mono{font-size:9.5px;color:var(--tx-4)}
+    .panel-progress{padding:8px 12px 10px;border-top:1px solid var(--line);background:rgba(255,255,255,.014)}
+    .pp-row{display:flex;align-items:center;justify-content:space-between;font-size:9.5px;color:var(--tx-4)}
+    .pp-row b{font-family:var(--mono);font-weight:400;color:var(--tx-3)}
+    .pp-bar{margin:6px 0 5px;height:3px;border-radius:2px;background:var(--bg-4);overflow:hidden}
+    .pp-bar i{display:block;height:100%;background:var(--green)}
+    .pp-row.sub{font-size:8.5px}
+  </style>
+
+  <section class="section" id="tokens">
+    <div class="section-head">
+      <h2>设计规范 / Linear 语言</h2>
+      <p>所有方案共用。强调色只用于“动作 + 选中 + 评论”，其余交给 1 px 描边和层级差。</p>
+    </div>
+    <div class="tok-grid">
+      <div class="tok-block">
+        <h4>颜色</h4>
+        <div class="swatches">
+          <div class="swatch"><i style="background:#08090a"></i><span>bg · #08090a</span></div>
+          <div class="swatch"><i style="background:#0b0c0e"></i><span>surface · #0b0c0e</span></div>
+          <div class="swatch"><i style="background:#101113"></i><span>raised · #101113</span></div>
+          <div class="swatch"><i style="background:#15161a"></i><span>hover · #15161a</span></div>
+          <div class="swatch"><i style="background:#6f7ce8"></i><span>accent · #6f7ce8</span></div>
+          <div class="swatch"><i style="background:#5bbd8b"></i><span>ok · #5bbd8b</span></div>
+          <div class="swatch"><i style="background:#e9a06a"></i><span>select · #e9a06a</span></div>
+          <div class="swatch"><i style="background:repeating-linear-gradient(45deg,#101113,#101113 3px,#1c1e22 3px,#1c1e22 4px)"></i><span>line · 7% white</span></div>
+        </div>
+
+        <h4 style="margin-top:26px">字号</h4>
+        <div class="type-row"><span class="sm">20 / 600</span><span class="demo" style="font-size:20px;font-weight:600;letter-spacing:-.02em">分享链接与评审</span></div>
+        <div class="type-row"><span class="sm">15 / 600</span><span class="demo" style="font-size:15px;font-weight:600">方案标题与区块</span></div>
+        <div class="type-row"><span class="sm">12.5 / 500</span><span class="demo" style="font-size:12.5px;font-weight:500">面板标题 / 顶栏名称</span></div>
+        <div class="type-row"><span class="sm">12 / 400</span><span class="demo" style="font-size:12px;color:var(--tx-2)">评论正文与界面正文，行高 1.6</span></div>
+        <div class="type-row"><span class="sm">10.5 / 400</span><span class="demo" style="font-size:10.5px;color:var(--tx-3)">次级信息：时间、来源、操作</span></div>
+        <div class="type-row"><span class="sm">9 / mono</span><span class="demo mono" style="font-size:9px;color:var(--tx-4);letter-spacing:.08em">W1A03 · V3 · 12.4 M</span></div>
+      </div>
+
+      <div class="tok-block">
+        <h4>圆角</h4>
+        <div class="radii">
+          <div><i style="border-radius:3px"></i>3</div>
+          <div><i style="border-radius:4px"></i>4</div>
+          <div><i style="border-radius:6px"></i>6</div>
+          <div><i style="border-radius:8px"></i>8</div>
+          <div><i style="border-radius:12px"></i>12</div>
+        </div>
+
+        <h4 style="margin-top:26px">间距</h4>
+        <div class="space-scale">
+          <span style="width:2px"></span><span style="width:4px"></span><span style="width:8px"></span>
+          <span style="width:12px"></span><span style="width:16px"></span><span style="width:24px"></span>
+          <span style="width:34px"></span>
+        </div>
+        <div class="mono" style="font-size:9px;color:var(--tx-4);margin-top:6px">2 · 4 · 8 · 12 · 16 · 24 · 34</div>
+
+        <h4 style="margin-top:26px">组件</h4>
+        <div class="comp-row">
+          <span class="comp-label">Button</span>
+          <button class="btn pri">主要</button>
+          <button class="btn">次要</button>
+          <button class="btn ghost">幽灵</button>
+          <button class="btn sm">小号</button>
+        </div>
+        <div class="comp-row">
+          <span class="comp-label">Chip / Badge</span>
+          <span class="fchip on">全部</span>
+          <span class="fchip">未解决</span>
+          <span class="count">5</span>
+          <span class="src-tag on">客户评审</span>
+          <span class="state-tag warn">场景已更新</span>
+        </div>
+        <div class="comp-row">
+          <span class="comp-label">Pin</span>
+          <span class="npin">1</span>
+          <span class="npin">2</span>
+          <span class="npin done">3</span>
+          <span style="font-size:10px;color:var(--tx-4)">未解决 / 已解决</span>
+        </div>
+        <div class="comp-row">
+          <span class="comp-label">Toggle / Input</span>
+          <span class="toggle on"><i></i></span>
+          <span class="toggle"><i></i></span>
+          <span class="inp" style="height:26px;width:170px;font-size:10.5px;color:var(--tx-4)">添加评论…</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rules">
+      <div class="rule"><span class="n">01</span><b>强调色只给动作</b><p>主按钮、选中态、评论引脚、链接。大面积区域保持中性灰，避免紫色泛化。</p></div>
+      <div class="rule"><span class="n">02</span><b>1 px 描边优先于阴影</b><p>面板用 7% 白描边区分层级；只有浮层与弹窗使用大范围阴影。</p></div>
+      <div class="rule"><span class="n">03</span><b>数字与编号等宽</b><p>面积、坐标、版本、引脚编号全部使用 mono，右对齐或居中，避免跳动。</p></div>
+      <div class="rule"><span class="n">04</span><b>评论是内容，不是卡片</b><p>列表用分隔线和悬停底色，不嵌套卡片；只有弹窗和浮层用容器。</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="decide">
+    <div class="section-head">
+      <h2>建议与拍板</h2>
+      <p>六版都可行，下面只按“评审主路径 + 实现成本”排序，不评价视觉偏好。</p>
+    </div>
+
+    <table class="matrix">
+      <thead>
+        <tr><th>编号</th><th>方向</th><th>最适合</th><th>代价</th><th>建议</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">S-A</td>
+          <td>分享页 · 常驻评论栏</td>
+          <td>主办方与展商逐条评审、需要对照模型</td>
+          <td>画布少约 350 px，窄屏需可收起</td>
+          <td class="pick">默认采用</td>
+        </tr>
+        <tr>
+          <td class="mono">S-B</td>
+          <td>分享页 · 悬浮评审</td>
+          <td>发给客户、投屏演示、需要沉浸看模型</td>
+          <td>浮层遮挡，层级与收起逻辑更多</td>
+          <td>作为 S-A 的收起态</td>
+        </tr>
+        <tr>
+          <td class="mono">S-C</td>
+          <td>分享页 · 底部时间线</td>
+          <td>评审会逐条过、移动端底部抽屉</td>
+          <td>按对象找评论弱，展开后画布被压缩</td>
+          <td>移动端采用其抽屉结构</td>
+        </tr>
+        <tr>
+          <td class="mono">E-A</td>
+          <td>编辑器 · 属性栏内嵌</td>
+          <td>最小改动、评论跟着选中对象走</td>
+          <td>属性栏更长，全局浏览弱</td>
+          <td>备选 / 一期可先做</td>
+        </tr>
+        <tr>
+          <td class="mono">E-B</td>
+          <td>编辑器 · 属性 / 评审 Tab</td>
+          <td>日常编辑 + 集中处理评论并存</td>
+          <td>多一层切换，需要未读徽标</td>
+          <td class="pick">推荐采用</td>
+        </tr>
+        <tr>
+          <td class="mono">E-C</td>
+          <td>编辑器 · 评审模式</td>
+          <td>评审会、批量处理、投屏</td>
+          <td>两套工具栏状态，模式切换成本</td>
+          <td>二期增强</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="final-grid">
+      <div class="final">
+        <div class="lbl-xs">推荐组合</div>
+        <h3>分享页 S-A ＋ 编辑器 E-B</h3>
+        <p>分享页给固定评论栏，符合评审习惯；编辑器用 Tab 把评论与属性分开，避免属性栏继续变长。S-B 的悬浮样式可以作为 S-A “收起评论”后的状态，不需要单独实现一套页面。</p>
+        <div class="pick-row">
+          <span class="chip good"><span class="k"></span>画布与评论同屏</span>
+          <span class="chip good"><span class="k"></span>属性栏不变长</span>
+          <span class="chip good"><span class="k"></span>复用同一套引脚与卡片</span>
+        </div>
+      </div>
+      <div class="final">
+        <div class="lbl-xs">落地顺序</div>
+        <ol class="steps">
+          <li><b>01</b><span>projectKey / sceneSignature / 场景解析抽取</span></li>
+          <li><b>02</b><span>dataService：share_links + share_comments + 聚合接口</span></li>
+          <li><b>03</b><span>分享页 S-A：只读 Stage + 评论栏 + 发布弹窗</span></li>
+          <li><b>04</b><span>编辑器 E-B：Tab + 引脚 + 未读 + 定位</span></li>
+          <li><b>05</b><span>移动端抽屉 + 链接管理 + 异常状态</span></li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="ask">
+      <code>回复：S-A + E-B</code>
+      <code>或：S-A + E-A（先做最轻的一版）</code>
+      <code>或：S-B + E-C</code>
+    </div>
+  </section>
+
+  <style>
+    /* tokens */
+    .tok-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:44px;margin-top:6px}
+    .tok-block h4{margin:0 0 10px;font-size:12px;font-weight:500;color:var(--tx-2);letter-spacing:.02em}
+    .swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .swatch{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--bg-1)}
+    .swatch i{display:block;height:42px}
+    .swatch span{display:block;padding:6px 7px;border-top:1px solid var(--line);font-family:var(--mono);font-size:8.5px;color:var(--tx-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .type-row{display:flex;align-items:baseline;gap:14px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+    .type-row .sm{width:78px;flex:none;font-family:var(--mono);font-size:9px;color:var(--tx-4)}
+    .type-row .demo{flex:1;min-width:0}
+    .radii{display:flex;gap:10px}
+    .radii div{text-align:center;font-family:var(--mono);font-size:8.5px;color:var(--tx-4)}
+    .radii i{display:block;width:48px;height:34px;border:1px solid var(--line-2);background:var(--bg-2);margin-bottom:5px}
+    .space-scale{display:flex;align-items:flex-end;gap:8px;height:26px}
+    .space-scale span{display:block;height:14px;background:var(--bg-4);border-radius:2px}
+    .comp-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+    .comp-label{width:100%;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx-4)}
+    .comp-row .state-tag{margin-left:0}
+    .rules{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-top:44px;padding-top:26px;border-top:1px solid var(--line)}
+    .rule .n{font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:.08em}
+    .rule b{display:block;margin-top:5px;font-size:12px;font-weight:500;color:var(--tx)}
+    .rule p{margin:5px 0 0;font-size:11.5px;line-height:1.65;color:var(--tx-3)}
+
+    /* decide */
+    .matrix{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+    .matrix th{
+      padding:0 12px 9px;text-align:left;font-family:var(--mono);font-size:9px;font-weight:400;
+      letter-spacing:.08em;text-transform:uppercase;color:var(--tx-4);border-bottom:1px solid var(--line);
+    }
+    .matrix th:nth-child(1){width:64px}
+    .matrix th:nth-child(2){width:190px}
+    .matrix th:nth-child(3){width:32%}
+    .matrix th:nth-child(4){width:32%}
+    .matrix th:nth-child(5){width:120px}
+    .matrix td{padding:12px;border-bottom:1px solid rgba(255,255,255,.045);color:var(--tx-2);vertical-align:top;line-height:1.55}
+    .matrix td:first-child{color:var(--tx-4)}
+    .matrix td:nth-child(2){color:var(--tx);font-weight:500}
+    .matrix .pick{color:var(--green);font-weight:500}
+    .final-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:34px;margin-top:38px}
+    .lbl-xs{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx-4)}
+    .final h3{margin:8px 0 0;font-size:18px;font-weight:600;letter-spacing:-.02em}
+    .final p{margin:8px 0 0;font-size:12px;line-height:1.7;color:var(--tx-3);max-width:560px}
+    .pick-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+    .steps{margin:8px 0 0;padding:0;list-style:none;counter-reset:step}
+    .steps li{display:flex;gap:10px;align-items:baseline;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;color:var(--tx-2)}
+    .steps b{font-family:var(--mono);font-size:9px;font-weight:400;color:var(--accent);flex:none}
+    .ask{display:flex;gap:10px;flex-wrap:wrap;margin-top:36px}
+    .ask code{
+      display:inline-flex;align-items:center;height:28px;padding:0 10px;border-radius:5px;
+      border:1px solid var(--line);background:var(--bg-2);
+      font-family:var(--mono);font-size:11px;color:var(--tx-2);
+    }
+    @media (max-width:1080px){
+      .tok-grid{grid-template-columns:1fr}
+      .rules{grid-template-columns:1fr 1fr}
+      .final-grid{grid-template-columns:1fr}
+      .matrix{font-size:11px}
+    }
+    @media (max-width:760px){
+      .rules{grid-template-columns:1fr}
+      .matrix{display:block;overflow-x:auto;white-space:nowrap}
+    }
+  </style>
+
+</div>
+
+<script>
+(function () {
+  /* ---------- icons ---------- */
+  var ICONS = {
+    cube: '<path d="M12 2.8l8.4 4.7v9L12 21.2l-8.4-4.7v-9z"/><path d="M12 2.8v9.4M12 12.2l8.4-4.7M12 12.2L3.6 7.5"/>',
+    grid: '<path d="M3.6 3.6h16.8v16.8H3.6z"/><path d="M9.2 3.6v16.8M14.8 3.6v16.8M3.6 9.2h16.8M3.6 14.8h16.8"/>',
+    expand: '<path d="M9 3.6H3.6V9M15 3.6h5.4V9M15 20.4h5.4V15M9 20.4H3.6V15"/>',
+    eye: '<path d="M2.6 12S6.1 5.9 12 5.9 21.4 12 21.4 12 17.9 18.1 12 18.1 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="2.7"/>',
+    comment: '<path d="M20.4 12c0 4.2-3.8 7.4-8.4 7.4-1 0-2-.15-2.9-.42L4 20.4l1.3-3.6A7 7 0 013.6 12c0-4.2 3.8-7.4 8.4-7.4s8.4 3.2 8.4 7.4z"/>',
+    link: '<path d="M10 13.8a3.6 3.6 0 005.1 0l3.3-3.3a3.6 3.6 0 00-5.1-5.1L11.6 7"/><path d="M14 10.2a3.6 3.6 0 00-5.1 0l-3.3 3.3a3.6 3.6 0 005.1 5.1l1.7-1.7"/>',
+    check: '<path d="M4.8 12.6l4.6 4.6 9.8-10"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    filter: '<path d="M3.6 6.4h16.8M6.4 12h11.2M9.2 17.6h5.6"/>',
+    send: '<path d="M20.4 3.6L3.6 10.8l6 2.4 2.4 6z"/><path d="M9.6 13.2l4.8-4.8"/>',
+    pin: '<path d="M12 21s6.4-5.6 6.4-11A6.4 6.4 0 105.6 10c0 5.4 6.4 11 6.4 11z"/><circle cx="12" cy="10" r="2.2"/>',
+    users: '<circle cx="9" cy="8.4" r="3.2"/><path d="M3.6 19.4c.6-3 2.8-4.8 5.4-4.8s4.8 1.8 5.4 4.8"/><path d="M15.6 5.6a3.2 3.2 0 010 5.8M17.4 14.9c1.6.5 2.7 2.1 3 4.5"/>',
+    download: '<path d="M12 3.6v11.2"/><path d="M7.8 10.6L12 14.8l4.2-4.2"/><path d="M4.6 18.4h14.8"/>',
+    share: '<path d="M12 3.6v10.8"/><path d="M8.2 7.4L12 3.6l3.8 3.8"/><path d="M5.4 12.6v6.4a1.4 1.4 0 001.4 1.4h10.4a1.4 1.4 0 001.4-1.4v-6.4"/>',
+    chevron: '<path d="M8.5 5l7 7-7 7"/>',
+    chevdown: '<path d="M5 8.5l7 7 7-7"/>',
+    back: '<path d="M14.5 5.5L8 12l6.5 6.5"/>',
+    plus: '<path d="M12 5.2v13.6M5.2 12h13.6"/>',
+    layers: '<path d="M12 3.2l8.6 4.6L12 12.4 3.4 7.8z"/><path d="M3.4 12.4l8.6 4.6 8.6-4.6"/><path d="M3.4 16.9l8.6 4.6 8.6-4.6"/>',
+    ruler: '<path d="M3.4 15.2L15.2 3.4l5.4 5.4L8.8 20.6z"/><path d="M8.2 10.4l2.2 2.2M11.4 7.2l2.2 2.2M5.2 13.4l2.2 2.2"/>',
+    cursor: '<path d="M5.6 3.4l13 7.8-5.9 1.4-2.2 5.6z"/>',
+    poly: '<path d="M3.8 9.4l5-5.8 10.8 2.2-2.2 10.8-9.8 1.6z"/>',
+    door: '<path d="M6.2 20.4V4.8a.9.9 0 01.9-.9h9.8a.9.9 0 01.9.9v15.6"/><path d="M4 20.4h16"/><circle cx="14.4" cy="12.2" r=".75" fill="currentColor" stroke="none"/>',
+    seat: '<path d="M6.2 10.6V7.2a2 2 0 012-2h7.6a2 2 0 012 2v3.4"/><rect x="4.4" y="10.6" width="15.2" height="4.8" rx="1"/><path d="M6.6 15.4v3.6M17.4 15.4v3.6"/>',
+    sun: '<circle cx="12" cy="12" r="3.9"/><path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5l1.5 1.5M17 17l1.5 1.5M18.5 5.5L17 7M7 17l-1.5 1.5"/>',
+    play: '<path d="M8.2 5.6l10 6.4-10 6.4z"/>',
+    undo: '<path d="M4.2 9.4h9.2a5.3 5.3 0 010 10.6H8.4"/><path d="M7.8 5.8L4.2 9.4l3.6 3.6"/>',
+    redo: '<path d="M19.8 9.4h-9.2a5.3 5.3 0 000 10.6h5"/><path d="M16.2 5.8l3.6 3.6-3.6 3.6"/>',
+    settings: '<circle cx="12" cy="12" r="2.8"/><path d="M19.2 14.4a7.6 7.6 0 000-4.8l2-1.4-2-3.4-2.2 1.2a7.6 7.6 0 00-4.2-2.4L12.4 1h-4l-.4 2.6a7.6 7.6 0 00-4.2 2.4L1.6 4.8l-2 3.4 2 1.4a7.6 7.6 0 000 4.8l-2 1.4 2 3.4 2.2-1.2a7.6 7.6 0 004.2 2.4L8.4 23h4l.4-2.6a7.6 7.6 0 004.2-2.4l2.2 1.2 2-3.4z"/>',
+    more: '<circle cx="5.5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.4" fill="currentColor" stroke="none"/>'
+  };
+  document.querySelectorAll('[data-ic]').forEach(function (n) {
+    var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('class', 'i');
+    s.setAttribute('viewBox', '0 0 24 24');
+    s.innerHTML = ICONS[n.dataset.ic] || '';
+    n.parentNode.replaceChild(s, n);
+  });
+
+  /* ---------- iso scene ---------- */
+  var NS = 'http://www.w3.org/2000/svg';
+  var K = Math.sqrt(3) / 2;
+  function P(x, y, z) { return [(x - y) * K, (x + y) * 0.5 - (z || 0)]; }
+  function mk(name, attrs) {
+    var n = document.createElementNS(NS, name);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+  function pts(arr) {
+    return arr.map(function (p) { return P(p[0], p[1], p[2] || 0); })
+      .map(function (p) { return p[0].toFixed(2) + ',' + p[1].toFixed(2); }).join(' ');
+  }
+
+  var VENUE = { x: -26, y: -16, w: 52, d: 32, h: 7 };
+  var BOOTHS = [
+    { x: -22, y: -12, w: 9, d: 7, h: 3.2, lab: 'W1A01' },
+    { x: -11, y: -12, w: 7, d: 7, h: 2.6, lab: 'W1A02' },
+    { x: -2, y: -12, w: 10, d: 7, h: 4.0, lab: 'W1A03' },
+    { x: 10, y: -12, w: 8, d: 7, h: 2.4, lab: 'W1A04' },
+    { x: -22, y: -3.5, w: 6, d: 6, h: 2.8 },
+    { x: -13, y: -3.5, w: 5, d: 6, h: 2.2 },
+    { x: 2, y: -3.5, w: 8, d: 6, h: 3.6, lab: 'W1B03' },
+    { x: 12, y: -3.5, w: 6, d: 6, h: 2.0 },
+    { x: -22, y: 5, w: 8, d: 8, h: 3.0 },
+    { x: -11, y: 5, w: 5, d: 8, h: 2.4 },
+    { x: 6, y: 5, w: 7, d: 8, h: 2.8, lab: '咖啡区' },
+    { x: 15, y: 5, w: 6, d: 8, h: 2.2 }
+  ];
+
+  var SCENES = {
+    sa: { vb: '-44 -31 88 55', grid: 2, sel: 2, pins: [[-14, -8, 5.2, 1, 'active'], [6, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved'], [16, 7, 3.8, 4, 'open']], bubble: { p: [-14, -8, 5.2], dx: 3, dy: -12, t: '入口方向反了', s: '王工 · 2 分钟前' } },
+    sb: { vb: '-40 -27 80 50', grid: 2, sel: null, pins: [[6, -9, 5.6, 2, 'active'], [-14, -8, 5.2, 1, 'open'], [16, 7, 3.8, 4, 'open']], bubble: { p: [6, -9, 5.6], dx: -26, dy: -11, t: '顶板建议去掉', s: '李设计 · 18 分钟前' } },
+    sc: { vb: '-44 -28 88 54', grid: 2, sel: null, pins: [[-14, -8, 5.2, 1, 'open'], [6, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved']] },
+    ea: { vb: '-44 -31 88 55', grid: 2, sel: 2, pins: [[-14, -8, 5.2, 1, 'active'], [6, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'open']], bubble: { p: [-14, -8, 5.2], dx: 3, dy: -12, t: '入口方向反了', s: '王工 · 2 分钟前' } },
+    eb: { vb: '-44 -31 88 55', grid: 2, sel: 2, pins: [[-14, -8, 5.2, 1, 'active'], [6, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'open']] },
+    ec: { vb: '-40 -28 80 52', grid: 2, sel: null, pins: [[-14, -8, 5.2, 1, 'active'], [6, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved']] },
+    dlg: { vb: '-44 -31 88 55', grid: 4, sel: 2, pins: [] },
+    mob: { vb: '-34 -22 68 42', grid: 2, sel: 2, meet: 1, pinScale: 2.2, pins: [[-14, -8, 5.2, 1, 'open'], [6, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved']] },
+    mob2: { vb: '-34 -22 68 42', grid: 2, sel: 2, meet: 1, pinScale: 2, pins: [[-14, -8, 5.2, 1, 'active'], [6, -9, 5.6, 2, 'open']] }
+  };
+
+  function drawPins(svg, cfg) {
+    var sc = cfg.pinScale || 1;
+    (cfg.pins || []).forEach(function (p) {
+      var xy = P(p[0], p[1], p[2]);
+      var n = p[3], st = p[4] || 'open';
+      var on = st !== 'resolved';
+      if (st === 'active') {
+        svg.appendChild(mk('circle', { cx: xy[0], cy: xy[1], r: 2.8 * sc, fill: 'rgba(111,124,232,.13)' }));
+        svg.appendChild(mk('circle', { cx: xy[0], cy: xy[1], r: 2.1 * sc, fill: 'none', stroke: 'rgba(111,124,232,.42)', 'stroke-width': '.2' }));
+      }
+      svg.appendChild(mk('circle', {
+        cx: xy[0], cy: xy[1], r: 1.32 * sc,
+        fill: on ? '#6f7ce8' : 'rgba(255,255,255,.10)',
+        stroke: on ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.22)',
+        'stroke-width': '.18'
+      }));
+      var t = mk('text', {
+        x: xy[0], y: xy[1] + 0.06, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        'font-size': (1.22 * sc).toFixed(2), 'font-family': 'ui-monospace,monospace',
+        fill: on ? '#fff' : '#8b8f98'
+      });
+      t.textContent = n;
+      svg.appendChild(t);
+    });
+  }
+
+  function drawBubble(svg, b) {
+    var anchor = P(b.p[0], b.p[1], b.p[2]);
+    var x, y;
+    if (b.dx < 0) { x = anchor[0] + b.dx - 24; } else { x = anchor[0] + b.dx; }
+    y = anchor[1] + b.dy;
+    var w = 24, h = 7.4;
+    svg.appendChild(mk('line', {
+      x1: anchor[0], y1: anchor[1] - 1.6, x2: b.dx < 0 ? x + w : x, y2: y + h,
+      stroke: 'rgba(111,124,232,.38)', 'stroke-width': '.18', 'stroke-dasharray': '1 1'
+    }));
+    svg.appendChild(mk('rect', {
+      x: x, y: y, width: w, height: h, rx: 1.1,
+      fill: '#111319', stroke: 'rgba(111,124,232,.45)', 'stroke-width': '.2'
+    }));
+    var t1 = mk('text', {
+      x: x + 1.8, y: y + 2.7, 'font-size': '1.5', 'font-family': 'PingFang SC,Microsoft YaHei,sans-serif',
+      fill: '#d9dcf2'
+    });
+    t1.textContent = b.t;
+    svg.appendChild(t1);
+    var t2 = mk('text', {
+      x: x + 1.8, y: y + 5.5, 'font-size': '1.05', 'font-family': 'ui-monospace,monospace',
+      fill: '#6f7480'
+    });
+    t2.textContent = b.s;
+    svg.appendChild(t2);
+  }
+
+  var sceneSeq = 0;
+  function drawScene(svg, key) {
+    var cfg = SCENES[key] || SCENES.sa;
+    var uid = 'sc' + key + '-' + (sceneSeq++);
+    svg.setAttribute('viewBox', cfg.vb);
+    svg.setAttribute('preserveAspectRatio', cfg.meet ? 'xMidYMid meet' : 'xMidYMid slice');
+    svg.innerHTML = '';
+
+    var defs = mk('defs');
+    var clip = mk('clipPath', { id: uid + '-clip' });
+    clip.appendChild(mk('polygon', {
+      points: pts([[VENUE.x, VENUE.y], [VENUE.x + VENUE.w, VENUE.y],
+        [VENUE.x + VENUE.w, VENUE.y + VENUE.d], [VENUE.x, VENUE.y + VENUE.d]])
+    }));
+    defs.appendChild(clip);
+    svg.appendChild(defs);
+
+    svg.appendChild(mk('polygon', {
+      points: pts([[VENUE.x, VENUE.y], [VENUE.x + VENUE.w, VENUE.y],
+        [VENUE.x + VENUE.w, VENUE.y + VENUE.d], [VENUE.x, VENUE.y + VENUE.d]]),
+      fill: 'rgba(255,255,255,.022)'
+    }));
+
+    var g = mk('g', { 'clip-path': 'url(#' + uid + '-clip)' });
+    for (var x = VENUE.x; x <= VENUE.x + VENUE.w; x += cfg.grid) {
+      var a = P(x, VENUE.y), b = P(x, VENUE.y + VENUE.d);
+      g.appendChild(mk('line', {
+        x1: a[0], y1: a[1], x2: b[0], y2: b[1],
+        stroke: x === 0 ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.042)', 'stroke-width': '.28'
+      }));
+    }
+    for (var y = VENUE.y; y <= VENUE.y + VENUE.d; y += cfg.grid) {
+      var c = P(VENUE.x, y), d = P(VENUE.x + VENUE.w, y);
+      g.appendChild(mk('line', {
+        x1: c[0], y1: c[1], x2: d[0], y2: d[1],
+        stroke: y === 0 ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.042)', 'stroke-width': '.28'
+      }));
+    }
+    svg.appendChild(g);
+
+    var ring = [[VENUE.x, VENUE.y], [VENUE.x + VENUE.w, VENUE.y],
+      [VENUE.x + VENUE.w, VENUE.y + VENUE.d], [VENUE.x, VENUE.y + VENUE.d]];
+    svg.appendChild(mk('polygon', {
+      points: ring.map(function (p) { return P(p[0], p[1], VENUE.h); }).map(function (p) {
+        return p[0].toFixed(2) + ',' + p[1].toFixed(2);
+      }).join(' '),
+      fill: 'none', stroke: 'rgba(255,255,255,.17)', 'stroke-width': '.45', 'stroke-dasharray': '2 1.6'
+    }));
+    ring.forEach(function (p) {
+      var t = P(p[0], p[1], VENUE.h), bt = P(p[0], p[1], 0);
+      svg.appendChild(mk('line', {
+        x1: bt[0], y1: bt[1], x2: t[0], y2: t[1], stroke: 'rgba(255,255,255,.13)', 'stroke-width': '.4'
+      }));
+    });
+
+    var order = cfg.booths || BOOTHS;
+    order = order.map(function (b, i) {
+      return { b: b, i: i, z: (b.x + b.w / 2) + (b.y + b.d / 2) };
+    }).sort(function (p, q) { return p.z - q.z; });
+
+    order.forEach(function (it) {
+      var b = it.b, x = b.x, y = b.y, w = b.w, d = b.d, h = b.h;
+      var on = cfg.sel === it.i;
+      var fTop = on ? 'rgba(233,160,106,.34)' : '#2a2f36';
+      var fA = on ? 'rgba(233,160,106,.18)' : '#1d2126';
+      var fB = on ? 'rgba(233,160,106,.10)' : '#171a1f';
+      var stroke = on ? '#e9a06a' : 'rgba(255,255,255,.10)';
+      var sw = on ? '0.55' : '0.3';
+
+      svg.appendChild(mk('polygon', {
+        points: pts([[x, y + d, 0], [x + w, y + d, 0], [x + w, y + d, h], [x, y + d, h]]),
+        fill: fA, stroke: stroke, 'stroke-width': sw
+      }));
+      svg.appendChild(mk('polygon', {
+        points: pts([[x + w, y, 0], [x + w, y + d, 0], [x + w, y + d, h], [x + w, y, h]]),
+        fill: fB, stroke: stroke, 'stroke-width': sw
+      }));
+      svg.appendChild(mk('polygon', {
+        points: pts([[x, y, h], [x + w, y, h], [x + w, y + d, h], [x, y + d, h]]),
+        fill: fTop, stroke: stroke, 'stroke-width': sw
+      }));
+
+      if (b.lab) {
+        var lp = P(x + w / 2, y + d / 2, h);
+        var lt = mk('text', {
+          x: lp[0], y: lp[1] + 0.5, 'text-anchor': 'middle',
+          'font-size': '1.18', 'font-family': 'ui-monospace,monospace',
+          fill: on ? '#f4c9a6' : 'rgba(255,255,255,.34)'
+        });
+        lt.textContent = b.lab;
+        svg.appendChild(lt);
+      }
+    });
+
+    if (cfg.bubble) drawBubble(svg, cfg.bubble);
+    drawPins(svg, cfg);
+  }
+
+  document.querySelectorAll('[data-scene]').forEach(function (s) {
+    drawScene(s, s.dataset.scene);
+  });
+
+  /* ---------- axis gizmo ---------- */
+  document.querySelectorAll('[data-gizmo]').forEach(function (s) {
+    s.setAttribute('viewBox', '0 0 44 44');
+    var cx = 22, cy = 24, L = 14;
+    var ax = [
+      { d: [cx - L * 0.87, cy + L * 0.5], k: '#c96b5e', t: 'X', tx: -6, ty: 5 },
+      { d: [cx + L * 0.87, cy + L * 0.5], k: '#5e9c6b', t: 'Z', tx: 5, ty: 5 },
+      { d: [cx, cy - L], k: '#6f7ce8', t: 'Y', tx: 0, ty: -3 }
+    ];
+    ax.forEach(function (a) {
+      s.appendChild(mk('line', {
+        x1: cx, y1: cy, x2: a.d[0], y2: a.d[1],
+        stroke: a.k, 'stroke-width': '1.8', 'stroke-linecap': 'round'
+      }));
+      var t = mk('text', {
+        x: a.d[0] + a.tx, y: a.d[1] + a.ty, fill: a.k,
+        'font-size': '5.6', 'font-family': 'ui-monospace,monospace', 'text-anchor': 'middle'
+      });
+      t.textContent = a.t;
+      s.appendChild(t);
+    });
+    s.appendChild(mk('circle', { cx: cx, cy: cy, r: 1.6, fill: 'rgba(255,255,255,.4)' }));
+  });
+
+  /* ---------- scale mocks ---------- */
+  function fit() {
+    document.querySelectorAll('.mock-scaler').forEach(function (w) {
+      var inner = w.querySelector('.mock');
+      if (!inner) return;
+      var bw = parseFloat(inner.dataset.w) || 1200;
+      var bh = parseFloat(inner.dataset.h) || 680;
+      var avail = w.clientWidth;
+      var s = Math.min(1, avail / bw);
+      inner.style.width = bw + 'px';
+      inner.style.height = bh + 'px';
+      inner.style.transform = 'scale(' + s + ')';
+      w.style.height = (bh * s) + 'px';
+    });
+  }
+  fit();
+  window.addEventListener('resize', fit, { passive: true });
+
+  /* ---------- toc active ---------- */
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[data-t]'));
+  var map = {};
+  links.forEach(function (l) { map[l.dataset.t] = l; });
+  var targets = [];
+  ['sa', 'sb', 'sc', 'ea', 'eb', 'ec', 'dialog', 'mobile', 'tokens', 'decide'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) targets.push(el);
+  });
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (l) { l.classList.remove('on'); });
+        if (map[e.target.id]) map[e.target.id].classList.add('on');
+      });
+    }, { rootMargin: '-60px 0px -70% 0px', threshold: 0 });
+    targets.forEach(function (t) { io.observe(t); });
+  }
+})();
+</script>
+</body>
+</html>

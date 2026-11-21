@@ -1,4 +1,5 @@
 import { nextTick, ref, type Ref, type ShallowRef } from 'vue'
+import { newProjectKey } from '../core/projectKey'
 import { isFurnitureKind } from '../core/infra'
 import { furnitureInsidePolygon } from '../core/infraGeometry'
 import { pointInPolygon } from '../core/polygon'
@@ -38,6 +39,7 @@ export interface SceneCloudBridge {
 
 interface ScenePersistenceOptions {
   venue: ShallowRef<Venue | null>
+  projectKey: Ref<string>
   venueName: Ref<string>
   booths: ShallowRef<Booth[]>
   infras: ShallowRef<Infra[]>
@@ -107,6 +109,7 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
 
   function buildSceneJson(): SceneJson {
     return buildSceneFile({
+      projectKey: options.projectKey.value,
       venue: options.venue.value,
       venueName: options.venueName.value,
       weather: options.weather.value,
@@ -288,6 +291,10 @@ export function useScenePersistence(options: ScenePersistenceOptions) {
 
     const obj = input as Partial<SceneJson>
     if (!options.restoringProject.value) importedDuringRestore = true
+    options.projectKey.value =
+      typeof obj.projectKey === 'string' && obj.projectKey.trim()
+        ? obj.projectKey.trim().slice(0, 32)
+        : newProjectKey()
     const nextUnderlay = normalizeUnderlay(obj.underlay)
 
     const nextName =

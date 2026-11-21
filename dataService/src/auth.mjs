@@ -44,6 +44,20 @@ export function requireAuth(req, res, next) {
   }
 }
 
+/** 可选登录：有合法 Bearer 时返回用户，否则返回 null；用于公开评论接口识别作者 */
+export function readAuthUser(req) {
+  const header = String(req.headers.authorization ?? '')
+  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
+  if (!token) return null
+  try {
+    const payload = jwt.verify(token, config.jwtSecret)
+    if (!payload || typeof payload !== 'object' || !payload.uid) return null
+    return { id: Number(payload.uid), username: String(payload.username ?? '') }
+  } catch {
+    return null
+  }
+}
+
 export function validateUsername(value) {
   const username = String(value ?? '').trim()
   if (!config.usernamePattern.test(username)) {

@@ -1,0 +1,997 @@
+import crypto from 'node:crypto'
+import { readAuthUser, requireAuth } from './auth.mjs'
+import { getPool } from './db.mjs'
+import { config } from './config.mjs'
+
+const TICKET_TTL = 60_000
+const COMMENT_MAX = 1000
+const NAME_MAX = 24
+const TITLE_MAX = 64
+
+/** 短时 SSE ticket：EventSource 不能带 Authorization，用 ticket 换取连接 */
+const tickets = new Map()
+/** key -> Set<{ res }> */
+const channels = new Map()
+/** 简单的内存限流：key -> number[] */
+const rateBuckets = new Map()
+
+function wrap(fn) {
+  return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next)
+}
+
+function requireDb(req, res, next) {
+  if (!req.app.locals.dbReady) {
+    res.status(503).json({ error: '云存储数据库未就绪，请检查 dataService 配置' })
+    return
+  }
+  next()
+}
+
+function newShareToken() {
+  return crypto.randomBytes(12).toString('base64url')
+}
+
+function randomKey(bytes = 12) {
+  return crypto.randomBytes(bytes).toString('hex')
+}
+
+function cleanText(value, max) {
+  return String(value ?? '').trim().slice(0, max)
+}
+
+function allowRate(key, max, windowMs) {
+  const now = Date.now()
+  const list = (rateBuckets.get(key) ?? []).filter((t) => now - t < windowMs)
+  if (list.length >= max) {
+    rateBuckets.set(key, list)
+    return false
+  }
+  list.push(now)
+  rateBuckets.set(key, list)
+  return true
+}
+
+function issueTicket(payload) {
+  const ticket = randomKey(18)
+  tickets.set(ticket, { ...payload, exp: Date.now() + TICKET_TTL })
+  return ticket
+}
+
+function readTicket(value, kind) {
+  const ticket = String(value ?? '')
+  const data = tickets.get(ticket)
+  if (!data || data.exp < Date.now() || data.kind !== kind) return null
+  return data
+}
+
+function channelKeyShare(token) {
+  return `share:${token}`
+}
+
+function channelKeyProject(projectKey) {
+  return `project:${projectKey}`
+}
+
+function publish(key, payload) {
+  const set = channels.get(key)
+  if (!set || !set.size) return
+  const line = `data: ${JSON.stringify(payload)}\n\n`
+  for (const client of set) {
+    try {
+      client.res.write(line)
+    } catch {
+      // 连接断开由 close 事件清理
+    }
+  }
+}
+
+function subscribe(key, res, hello) {
+  let set = channels.get(key)
+  if (!set) {
+    set = new Set()
+    channels.set(key, set)
+  }
+  const client = { res }
+  set.add(client)
+  res.write(`data: ${JSON.stringify(hello)}\n\n`)
+  const timer = setInterval(() => {
+    try {
+      res.write(': ping\n\n')
+    } catch {
+      // ignore
+    }
+  }, 20_000)
+  res.on('close', () => {
+    clearInterval(timer)
+    set.delete(client)
+    if (!set.size) channels.delete(key)
+    if (key.startsWith('share:')) {
+      const token = key.slice(6)
+      publish(key, { type: 'presence', token, count: set.size })
+    }
+  })
+  if (key.startsWith('share:')) {
+    const token = key.slice(6)
+    publish(key, { type: 'presence', token, count: set.size })
+  }
+  return client
+}
+
+function closeChannel(key, payload) {
+  const set = channels.get(key)
+  if (!set) return
+  const line = `data: ${JSON.stringify(payload)}\n\n`
+  for (const client of set) {
+    try {
+      client.res.write(line)
+      client.res.end()
+    } catch {
+      // ignore
+    }
+  }
+  channels.delete(key)
+}
+
+function viewerCount(token) {
+  return channels.get(channelKeyShare(token))?.size ?? 0
+}
+
+function shareJson(row, commentCount = 0) {
+  return {
+    token: row.token,
+    title: row.title,
+    projectKey: row.project_key,
+    revision: Number(row.revision),
+    sceneVersion: Number(row.scene_version),
+    liveMode: !!row.live_mode,
+    allowComment: !!row.allow_comment,
+    allowDownload: !!row.allow_download,
+    revoked: !!row.revoked_at,
+    viewerCount: viewerCount(row.token),
+    commentCount,
+    sceneSize: Number(row.scene_size ?? 0),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+function parseAnchor(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { point: [0, 0, 0] }
+  }
+  const point = Array.isArray(raw.point) ? raw.point.slice(0, 3).map(Number) : [0, 0, 0]
+  if (point.length !== 3 || point.some((n) => !Number.isFinite(n))) point.splice(0, 3, 0, 0, 0)
+  const anchor = { point }
+  if (raw.object && typeof raw.object === 'object') {
+    const kind = raw.object.kind === 'infra' ? 'infra' : raw.object.kind === 'booth' ? 'booth' : ''
+    const id = cleanText(raw.object.id, 64)
+    if (kind && id) anchor.object = { kind, id }
+  }
+  if (Array.isArray(raw.objectOrigin) && raw.objectOrigin.length === 2) {
+    const origin = raw.objectOrigin.map(Number)
+    if (origin.every((n) => Number.isFinite(n))) anchor.objectOrigin = origin
+  }
+  if (raw.camera && typeof raw.camera === 'object') {
+    const pos = Array.isArray(raw.camera.position) ? raw.camera.position.map(Number) : null
+    const target = Array.isArray(raw.camera.target) ? raw.camera.target.map(Number) : null
+    if (pos?.length === 3 && target?.length === 3 && [...pos, ...target].every((n) => Number.isFinite(n))) {
+      anchor.camera = { position: pos, target }
+    }
+  }
+  return anchor
+}
+
+function commentJson(row, share, mine = false) {
+  let anchor = { point: [0, 0, 0] }
+  try {
+    anchor = parseAnchor(JSON.parse(row.anchor_json))
+  } catch {
+    anchor = { point: [0, 0, 0] }
+  }
+  return {
+    id: Number(row.id),
+    parentId: row.parent_id ? Number(row.parent_id) : null,
+    shareToken: share.token,
+    shareTitle: share.title,
+    anchor,
+    authorName: row.author_name || (row.author_user_id ? '作者' : '访客'),
+    authorRole: row.author_user_id ? 'owner' : 'visitor',
+    content: row.content,
+    resolvedAt: row.resolved_at,
+    resolvedBy: row.resolved_by || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    mine: !!mine,
+  }
+}
+
+async function loadShare(token) {
+  const pool = getPool()
+  const [rows] = await pool.query('SELECT * FROM share_links WHERE token = ? LIMIT 1', [token])
+  return rows[0] ?? null
+}
+
+async function loadComment(shareId, commentId) {
+  const pool = getPool()
+  const [rows] = await pool.query(
+    'SELECT * FROM share_comments WHERE id = ? AND share_id = ? LIMIT 1',
+    [commentId, shareId],
+  )
+  return rows[0] ?? null
+}
+
+async function commentCount(shareId) {
+  const pool = getPool()
+  const [rows] = await pool.query(
+    'SELECT COUNT(*) AS n FROM share_comments WHERE share_id = ? AND deleted_at IS NULL',
+    [shareId],
+  )
+  return Number(rows[0]?.n ?? 0)
+}
+
+function hasVenueContent(scene) {
+  const points = scene?.venue?.points
+  return Array.isArray(points) && points.length >= 3
+}
+
+function applyScenePatch(scene, patch) {
+  if (!scene || typeof scene !== 'object' || Array.isArray(scene)) {
+    throw new Error('场景数据已损坏')
+  }
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    throw new Error('补丁格式不正确')
+  }
+  if (patch.venue !== undefined) scene.venue = patch.venue
+  if (patch.underlay !== undefined) scene.underlay = patch.underlay
+  if (patch.weather !== undefined) scene.weather = patch.weather
+  if (patch.weatherOn !== undefined) scene.weatherOn = !!patch.weatherOn
+  if (patch.sunProgress !== undefined && Number.isFinite(Number(patch.sunProgress))) {
+    scene.sunProgress = Number(patch.sunProgress)
+  }
+  if (patch.rules !== undefined) scene.rules = patch.rules
+
+  const mergeList = (field, delta) => {
+    if (!delta || typeof delta !== 'object') return
+    const list = Array.isArray(scene[field]) ? scene[field] : []
+    const map = new Map(list.map((item) => [item?.id, item]))
+    if (Array.isArray(delta.remove)) {
+      for (const id of delta.remove) map.delete(String(id))
+    }
+    if (Array.isArray(delta.upsert)) {
+      for (const item of delta.upsert) {
+        if (!item || typeof item !== 'object') continue
+        if (typeof item.id !== 'string' || !item.id) continue
+        map.set(item.id, item)
+      }
+    }
+    scene[field] = [...map.values()]
+  }
+
+  mergeList('booths', patch.booths)
+  mergeList('infras', patch.infras)
+  return scene
+}
+
+function publicComment(share, row, mine) {
+  return commentJson(row, share, mine)
+}
+
+function publishComment(share, comment) {
+  publish(channelKeyShare(share.token), { type: 'comment.created', comment })
+  publish(channelKeyProject(share.project_key), { type: 'comment.created', comment })
+}
+
+function publishCommentUpdate(share, comment) {
+  publish(channelKeyShare(share.token), { type: 'comment.updated', comment })
+  publish(channelKeyProject(share.project_key), { type: 'comment.updated', comment })
+}
+
+function publishCommentDelete(share, id) {
+  publish(channelKeyShare(share.token), { type: 'comment.deleted', shareToken: share.token, id })
+  publish(channelKeyProject(share.project_key), {
+    type: 'comment.deleted',
+    shareToken: share.token,
+    id,
+  })
+}
+
+export function registerShareRoutes(app) {
+  /* ---------------- 分享链接 ---------------- */
+
+  app.post(
+    '/api/shares',
+    requireDb,
+    requireAuth,
+    wrap(async (req, res) => {
+      const scene = req.body?.scene
+      if (!scene || typeof scene !== 'object' || Array.isArray(scene)) {
+        res.status(400).json({ error: '场景数据格式不正确' })
+        return
+      }
+      if (!hasVenueContent(scene)) {
+        res.status(400).json({ error: '场景还没有场馆内容，无法发布' })
+        return
+      }
+      const text = JSON.stringify(scene)
+      const size = Buffer.byteLength(text)
+      if (size > config.maxSceneMb * 1024 * 1024) {
+        res.status(413).json({ error: `场景超过 ${config.maxSceneMb}MB 上限` })
+        return
+      }
+
+      const projectKey = cleanText(
+        req.body?.projectKey || scene.projectKey,
+        32,
+      ) || randomKey(12)
+      if (!scene.projectKey) scene.projectKey = projectKey
+
+      const title = cleanText(req.body?.title, TITLE_MAX) || '未命名场景'
+      const liveMode = req.body?.liveMode !== false
+      const allowComment = req.body?.allowComment !== false
+      const allowDownload = req.body?.allowDownload === true
+      const pool = getPool()
+
+      let token = newShareToken()
+      for (let i = 0; i < 5; i++) {
+        const [exists] = await pool.query('SELECT id FROM share_links WHERE token = ? LIMIT 1', [token])
+        if (!exists.length) break
+        token = newShareToken()
+      }
+
+      const [result] = await pool.query(
+        `INSERT INTO share_links
+          (token, owner_user_id, project_key, title, scene_json, scene_size, live_mode, allow_comment, allow_download)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          token,
+          req.user.id,
+          projectKey,
+          title,
+          JSON.stringify(scene),
+          Buffer.byteLength(JSON.stringify(scene)),
+          liveMode ? 1 : 0,
+          allowComment ? 1 : 0,
+          allowDownload ? 1 : 0,
+        ],
+      )
+      const [rows] = await pool.query('SELECT * FROM share_links WHERE id = ? LIMIT 1', [result.insertId])
+      const share = rows[0]
+      const meta = shareJson(share, 0)
+      publish(channelKeyProject(projectKey), { type: 'share.created', share: meta })
+      res.status(201).json({ ...meta, projectKey })
+    }),
+  )
+
+  app.get(
+    '/api/shares',
+    requireDb,
+    requireAuth,
+    wrap(async (req, res) => {
+      const pool = getPool()
+      const [rows] = await pool.query(
+        'SELECT * FROM share_links WHERE owner_user_id = ? ORDER BY created_at DESC LIMIT 50',
+        [req.user.id],
+      )
+      const counts = new Map()
+      if (rows.length) {
+        const ids = rows.map((r) => r.id)
+        const [grouped] = await pool.query(
+          `SELECT share_id, COUNT(*) AS n FROM share_comments
+           WHERE share_id IN (?) AND deleted_at IS NULL GROUP BY share_id`,
+          [ids],
+        )
+        for (const g of grouped) counts.set(Number(g.share_id), Number(g.n))
+      }
+      res.json({
+        shares: rows.map((row) => shareJson(row, counts.get(Number(row.id)) ?? 0)),
+      })
+    }),
+  )
+
+  app.get(
+    '/api/shares/:token',
+    requireDb,
+    wrap(async (req, res) => {
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      res.json(shareJson(share, await commentCount(share.id)))
+    }),
+  )
+
+  app.get(
+    '/api/shares/:token/scene',
+    requireDb,
+    wrap(async (req, res) => {
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      if (share.revoked_at) {
+        res.status(410).json({ error: '分享链接已撤销', revoked: true })
+        return
+      }
+      let scene
+      try {
+        scene = JSON.parse(share.scene_json)
+      } catch {
+        res.status(500).json({ error: '分享场景数据已损坏' })
+        return
+      }
+      await getPool().query('UPDATE share_links SET view_count = view_count + 1 WHERE id = ?', [share.id])
+      res.json({ revision: Number(share.revision), sceneVersion: Number(share.scene_version), scene })
+    }),
+  )
+
+  app.patch(
+    '/api/shares/:token',
+    requireDb,
+    requireAuth,
+    wrap(async (req, res) => {
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      if (Number(share.owner_user_id) !== req.user.id) {
+        res.status(403).json({ error: '没有权限管理该链接' })
+        return
+      }
+      if (share.revoked_at) {
+        res.status(410).json({ error: '分享链接已撤销', revoked: true })
+        return
+      }
+
+      const pool = getPool()
+      const fields = []
+      const params = []
+      if (req.body?.title !== undefined) {
+        fields.push('title = ?')
+        params.push(cleanText(req.body.title, TITLE_MAX) || '未命名场景')
+      }
+      if (req.body?.liveMode !== undefined) {
+        fields.push('live_mode = ?')
+        params.push(req.body.liveMode ? 1 : 0)
+      }
+      if (req.body?.allowComment !== undefined) {
+        fields.push('allow_comment = ?')
+        params.push(req.body.allowComment ? 1 : 0)
+      }
+      if (req.body?.allowDownload !== undefined) {
+        fields.push('allow_download = ?')
+        params.push(req.body.allowDownload ? 1 : 0)
+      }
+
+      let sceneUpdated = false
+      if (req.body?.scene !== undefined) {
+        const scene = req.body.scene
+        if (!scene || typeof scene !== 'object' || Array.isArray(scene)) {
+          res.status(400).json({ error: '场景数据格式不正确' })
+          return
+        }
+        if (!hasVenueContent(scene)) {
+          res.status(400).json({ error: '场景还没有场馆内容，无法发布' })
+          return
+        }
+        const text = JSON.stringify(scene)
+        if (Buffer.byteLength(text) > config.maxSceneMb * 1024 * 1024) {
+          res.status(413).json({ error: `场景超过 ${config.maxSceneMb}MB 上限` })
+          return
+        }
+        fields.push('scene_json = ?', 'scene_size = ?', 'scene_version = scene_version + 1', 'revision = revision + 1')
+        params.push(text, Buffer.byteLength(text))
+        sceneUpdated = true
+      }
+
+      if (!fields.length) {
+        res.status(400).json({ error: '没有需要更新的字段' })
+        return
+      }
+
+      params.push(share.id)
+      await pool.query(`UPDATE share_links SET ${fields.join(', ')} WHERE id = ?`, params)
+      const next = await loadShare(share.token)
+      const meta = shareJson(next, await commentCount(next.id))
+      if (sceneUpdated) {
+        publish(channelKeyShare(next.token), {
+          type: 'scene.reset',
+          revision: meta.revision,
+          sceneVersion: meta.sceneVersion,
+        })
+      }
+      publish(channelKeyShare(next.token), { type: 'share.updated', share: meta })
+      publish(channelKeyProject(next.project_key), { type: 'share.updated', share: meta })
+      res.json(meta)
+    }),
+  )
+
+  app.delete(
+    '/api/shares/:token',
+    requireDb,
+    requireAuth,
+    wrap(async (req, res) => {
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      if (Number(share.owner_user_id) !== req.user.id) {
+        res.status(403).json({ error: '没有权限撤销该链接' })
+        return
+      }
+      await getPool().query('UPDATE share_links SET revoked_at = NOW() WHERE id = ?', [share.id])
+      closeChannel(channelKeyShare(share.token), { type: 'revoked' })
+      publish(channelKeyProject(share.project_key), {
+        type: 'share.revoked',
+        shareToken: share.token,
+      })
+      res.json({ ok: true })
+    }),
+  )
+
+  /* ---------------- 实时场景 ---------------- */
+
+  app.patch(
+    '/api/shares/:token/live',
+    requireDb,
+    requireAuth,
+    wrap(async (req, res) => {
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      if (Number(share.owner_user_id) !== req.user.id) {
+        res.status(403).json({ error: '没有权限写入该链接' })
+        return
+      }
+      if (share.revoked_at) {
+        res.status(410).json({ error: '分享链接已撤销', revoked: true })
+        return
+      }
+      if (!share.live_mode) {
+        res.status(409).json({ error: '该链接已冻结，不再接收实时更新', frozen: true })
+        return
+      }
+      const baseRevision = Number(req.body?.baseRevision)
+      if (baseRevision !== Number(share.revision)) {
+        res.status(409).json({ error: '场景版本已变化，请重新同步', revision: Number(share.revision) })
+        return
+      }
+      const patch = req.body?.patch
+      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+        res.status(400).json({ error: '补丁格式不正确' })
+        return
+      }
+      if (patch.venue !== undefined && !hasVenueContent({ venue: patch.venue })) {
+        res.status(400).json({ error: '场景还没有场馆内容，无法实时同步' })
+        return
+      }
+      const patchSize = Buffer.byteLength(JSON.stringify(patch))
+      if (patchSize > 4 * 1024 * 1024) {
+        res.status(413).json({ error: '单次更新过大' })
+        return
+      }
+
+      let scene
+      try {
+        scene = JSON.parse(share.scene_json)
+      } catch {
+        res.status(500).json({ error: '分享场景数据已损坏' })
+        return
+      }
+      let nextScene
+      try {
+        nextScene = applyScenePatch(scene, patch)
+      } catch (err) {
+        res.status(400).json({ error: err.message || '补丁无法应用' })
+        return
+      }
+      const text = JSON.stringify(nextScene)
+      if (Buffer.byteLength(text) > config.maxSceneMb * 1024 * 1024) {
+        res.status(413).json({ error: `场景超过 ${config.maxSceneMb}MB 上限` })
+        return
+      }
+
+      const revision = Number(share.revision) + 1
+      await getPool().query(
+        'UPDATE share_links SET scene_json = ?, scene_size = ?, revision = ? WHERE id = ?',
+        [text, Buffer.byteLength(text), revision, share.id],
+      )
+      publish(channelKeyShare(share.token), { type: 'scene.patch', revision, patch })
+      res.json({ revision })
+    }),
+  )
+
+  app.get(
+    '/api/shares/:token/live',
+    requireDb,
+    wrap(async (req, res) => {
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      if (share.revoked_at) {
+        res.status(410).json({ error: '分享链接已撤销', revoked: true })
+        return
+      }
+      const since = Number(req.query.since)
+      if (Number.isFinite(since) && since === Number(share.revision)) {
+        res.json({ revision: Number(share.revision), scene: null })
+        return
+      }
+      let scene
+      try {
+        scene = JSON.parse(share.scene_json)
+      } catch {
+        res.status(500).json({ error: '分享场景数据已损坏' })
+        return
+      }
+      res.json({ revision: Number(share.revision), scene })
+    }),
+  )
+
+  /* ---------------- 评论 ---------------- */
+
+  app.get(
+    '/api/shares/:token/comments',
+    requireDb,
+    wrap(async (req, res) => {
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      if (share.revoked_at) {
+        res.status(410).json({ error: '分享链接已撤销', revoked: true })
+        return
+      }
+      const authorToken = cleanText(req.query.authorToken, 64)
+      const user = readAuthUser(req)
+      const pool = getPool()
+      const [rows] = await pool.query(
+        'SELECT * FROM share_comments WHERE share_id = ? AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 500',
+        [share.id],
+      )
+      res.json({
+        comments: rows.map((row) =>
+          publicComment(
+            share,
+            row,
+            user ? Number(row.author_user_id) === user.id : !!authorToken && row.author_token === authorToken,
+          ),
+        ),
+      })
+    }),
+  )
+
+  app.post(
+    '/api/shares/:token/comments',
+    requireDb,
+    wrap(async (req, res) => {
+      const ip = req.ip || req.socket?.remoteAddress || 'unknown'
+      if (!allowRate(`c:${ip}:${req.params.token}`, 30, 60_000)) {
+        res.status(429).json({ error: '评论太频繁，请稍后再试' })
+        return
+      }
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      if (share.revoked_at) {
+        res.status(410).json({ error: '分享链接已撤销', revoked: true })
+        return
+      }
+      if (!share.allow_comment) {
+        res.status(403).json({ error: '该链接未开放评论' })
+        return
+      }
+
+      const content = cleanText(req.body?.content, COMMENT_MAX)
+      if (!content) {
+        res.status(400).json({ error: '评论内容不能为空' })
+        return
+      }
+      const user = readAuthUser(req)
+      const isOwner = !!user && Number(share.owner_user_id) === user.id
+      const authorToken = cleanText(req.body?.authorToken, 64)
+      if (!isOwner && authorToken.length < 8) {
+        res.status(400).json({ error: '访客标识缺失' })
+        return
+      }
+      const authorName = isOwner
+        ? cleanText(user.username, NAME_MAX) || '作者'
+        : cleanText(req.body?.authorName, NAME_MAX) || '访客'
+      const anchor = parseAnchor(req.body?.anchor)
+      if (Buffer.byteLength(JSON.stringify(anchor)) > 8 * 1024) {
+        res.status(413).json({ error: '评论锚点过大' })
+        return
+      }
+      const parentIdRaw = Number(req.body?.parentId)
+      const parentId = Number.isFinite(parentIdRaw) && parentIdRaw > 0 ? parentIdRaw : null
+      if (parentId) {
+        const parent = await loadComment(share.id, parentId)
+        if (!parent) {
+          res.status(400).json({ error: '回复的评论不存在' })
+          return
+        }
+      }
+      const clientId = cleanText(req.body?.clientId, 32)
+      const pool = getPool()
+      const [result] = await pool.query(
+        `INSERT INTO share_comments
+          (share_id, parent_id, anchor_json, scene_version, author_token, author_name, author_user_id, content, client_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          share.id,
+          parentId,
+          JSON.stringify(anchor),
+          Number(share.scene_version),
+          isOwner ? '' : authorToken,
+          authorName,
+          isOwner ? user.id : null,
+          content,
+          clientId,
+        ],
+      )
+      const row = await loadComment(share.id, result.insertId)
+      const comment = commentJson(row, share, true)
+      // 广播时不带 mine：mine 只对当前请求者有意义，客户端自行判定归属
+      publishComment(share, { ...comment, mine: false })
+      res.status(201).json({ comment })
+    }),
+  )
+
+  app.patch(
+    '/api/shares/:token/comments/:id',
+    requireDb,
+    wrap(async (req, res) => {
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      const commentId = Number(req.params.id)
+      const row = await loadComment(share.id, commentId)
+      if (!row || row.deleted_at) {
+        res.status(404).json({ error: '评论不存在' })
+        return
+      }
+      const user = readAuthUser(req)
+      const isOwner = !!user && Number(share.owner_user_id) === user.id
+      const authorToken = cleanText(req.body?.authorToken, 64)
+      const isAuthor = !!authorToken && row.author_token === authorToken
+      if (!isOwner && !isAuthor) {
+        res.status(403).json({ error: '没有权限修改该评论' })
+        return
+      }
+
+      const fields = []
+      const params = []
+      if (req.body?.content !== undefined) {
+        const content = cleanText(req.body.content, COMMENT_MAX)
+        if (!content) {
+          res.status(400).json({ error: '评论内容不能为空' })
+          return
+        }
+        fields.push('content = ?')
+        params.push(content)
+      }
+      if (req.body?.resolved !== undefined) {
+        if (req.body.resolved) {
+          fields.push('resolved_at = NOW()', 'resolved_by = ?')
+          params.push(isOwner ? cleanText(user.username, NAME_MAX) || '作者' : '访客')
+        } else {
+          fields.push('resolved_at = NULL', 'resolved_by = ?')
+          params.push('')
+        }
+      }
+      if (!fields.length) {
+        res.status(400).json({ error: '没有需要更新的字段' })
+        return
+      }
+      params.push(row.id)
+      await getPool().query(`UPDATE share_comments SET ${fields.join(', ')} WHERE id = ?`, params)
+      const next = await loadComment(share.id, row.id)
+      const comment = commentJson(next, share, isOwner || isAuthor)
+      publishCommentUpdate(share, { ...comment, mine: false })
+      res.json({ comment })
+    }),
+  )
+
+  app.delete(
+    '/api/shares/:token/comments/:id',
+    requireDb,
+    wrap(async (req, res) => {
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      const row = await loadComment(share.id, Number(req.params.id))
+      if (!row || row.deleted_at) {
+        res.status(404).json({ error: '评论不存在' })
+        return
+      }
+      const user = readAuthUser(req)
+      const isOwner = !!user && Number(share.owner_user_id) === user.id
+      const authorToken = cleanText(req.query.authorToken, 64)
+      const isAuthor = !!authorToken && row.author_token === authorToken
+      if (!isOwner && !isAuthor) {
+        res.status(403).json({ error: '没有权限删除该评论' })
+        return
+      }
+      const pool = getPool()
+      // 删除主评论时一并软删回复，避免刷新后回复变成无主评论
+      const [children] = row.parent_id
+        ? [[]]
+        : await pool.query(
+            'SELECT id FROM share_comments WHERE share_id = ? AND parent_id = ? AND deleted_at IS NULL',
+            [share.id, row.id],
+          )
+      await pool.query(
+        'UPDATE share_comments SET deleted_at = NOW() WHERE share_id = ? AND (id = ? OR parent_id = ?)',
+        [share.id, row.id, row.id],
+      )
+      publishCommentDelete(share, Number(row.id))
+      for (const child of children) publishCommentDelete(share, Number(child.id))
+      res.json({ ok: true })
+    }),
+  )
+
+  /* ---------------- 编辑器聚合 ---------------- */
+
+  app.get(
+    '/api/review/comments',
+    requireDb,
+    requireAuth,
+    wrap(async (req, res) => {
+      const projectKey = cleanText(req.query.projectKey, 32)
+      if (!projectKey) {
+        res.status(400).json({ error: '缺少项目标识' })
+        return
+      }
+      const pool = getPool()
+      const [shares] = await pool.query(
+        `SELECT * FROM share_links
+         WHERE owner_user_id = ? AND project_key = ? AND revoked_at IS NULL
+         ORDER BY created_at DESC LIMIT 20`,
+        [req.user.id, projectKey],
+      )
+      if (!shares.length) {
+        res.json({ links: [], comments: [], unresolved: 0 })
+        return
+      }
+      const ids = shares.map((s) => s.id)
+      const [rows] = await pool.query(
+        `SELECT * FROM share_comments
+         WHERE share_id IN (?) AND deleted_at IS NULL
+         ORDER BY created_at ASC LIMIT 500`,
+        [ids],
+      )
+      const byId = new Map(shares.map((s) => [Number(s.id), s]))
+      const comments = rows.map((row) => {
+        const share = byId.get(Number(row.share_id))
+        return commentJson(row, share, !!row.author_user_id)
+      })
+      res.json({
+        links: shares.map((s) => shareJson(s, 0)),
+        comments,
+        unresolved: comments.filter((c) => !c.resolvedAt).length,
+      })
+    }),
+  )
+
+  /* ---------------- SSE ticket 与流 ---------------- */
+
+  app.post(
+    '/api/shares/:token/stream-ticket',
+    requireDb,
+    wrap(async (req, res) => {
+      const ip = req.ip || req.socket?.remoteAddress || 'unknown'
+      if (!allowRate(`t:${ip}`, 60, 60_000)) {
+        res.status(429).json({ error: '请求太频繁' })
+        return
+      }
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      if (share.revoked_at) {
+        res.status(410).json({ error: '分享链接已撤销', revoked: true })
+        return
+      }
+      const ticket = issueTicket({ kind: 'share', token: share.token })
+      res.json({ ticket, expiresIn: Math.floor(TICKET_TTL / 1000) })
+    }),
+  )
+
+  app.get(
+    '/api/shares/:token/stream',
+    requireDb,
+    wrap(async (req, res) => {
+      const data = readTicket(req.query.ticket, 'share')
+      if (!data || data.token !== req.params.token) {
+        res.status(401).json({ error: '实时连接凭证无效' })
+        return
+      }
+      const share = await loadShare(req.params.token)
+      if (!share || share.revoked_at) {
+        res.status(410).json({ error: '分享链接已撤销', revoked: true })
+        return
+      }
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+      res.setHeader('Cache-Control', 'no-cache, no-transform')
+      res.setHeader('Connection', 'keep-alive')
+      res.setHeader('X-Accel-Buffering', 'no')
+      res.flushHeaders?.()
+      subscribe(channelKeyShare(share.token), res, {
+        type: 'hello',
+        revision: Number(share.revision),
+        viewerCount: viewerCount(share.token) + 1,
+      })
+    }),
+  )
+
+  app.post(
+    '/api/review/stream-ticket',
+    requireDb,
+    requireAuth,
+    wrap(async (req, res) => {
+      const projectKey = cleanText(req.body?.projectKey, 32)
+      if (!projectKey) {
+        res.status(400).json({ error: '缺少项目标识' })
+        return
+      }
+      const [owned] = await getPool().query(
+        `SELECT 1 FROM share_links
+         WHERE owner_user_id = ? AND project_key = ? AND revoked_at IS NULL
+         LIMIT 1`,
+        [req.user.id, projectKey],
+      )
+      if (!owned.length) {
+        res.status(403).json({ error: '没有该项目的有效分享链接' })
+        return
+      }
+      const ticket = issueTicket({ kind: 'project', projectKey, uid: req.user.id })
+      res.json({ ticket, expiresIn: Math.floor(TICKET_TTL / 1000) })
+    }),
+  )
+
+  app.get(
+    '/api/review/stream',
+    requireDb,
+    wrap(async (req, res) => {
+      const data = readTicket(req.query.ticket, 'project')
+      if (!data) {
+        res.status(401).json({ error: '实时连接凭证无效' })
+        return
+      }
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+      res.setHeader('Cache-Control', 'no-cache, no-transform')
+      res.setHeader('Connection', 'keep-alive')
+      res.setHeader('X-Accel-Buffering', 'no')
+      res.flushHeaders?.()
+      subscribe(channelKeyProject(data.projectKey), res, { type: 'hello' })
+    }),
+  )
+
+  /* ---------------- 清理 ---------------- */
+
+  const cleanup = setInterval(() => {
+    const now = Date.now()
+    for (const [key, value] of tickets) if (value.exp < now) tickets.delete(key)
+    for (const [key, list] of rateBuckets) {
+      const next = list.filter((t) => now - t < 65_000)
+      if (next.length) rateBuckets.set(key, next)
+      else rateBuckets.delete(key)
+    }
+  }, 60_000)
+  cleanup.unref?.()
+}
