@@ -60,6 +60,21 @@ export async function initDatabase() {
   for (const statement of splitSql(schema)) {
     await pool.query(statement)
   }
+  // 已有 share_comments 表不会因 CREATE TABLE IF NOT EXISTS 自动加列
+  const [replyColumns] = await pool.query(
+    "SHOW COLUMNS FROM share_comments LIKE 'reply_to_%'",
+  )
+  const columnNames = new Set(replyColumns.map((row) => row.Field))
+  if (!columnNames.has('reply_to_user_id')) {
+    await pool.query(
+      'ALTER TABLE share_comments ADD COLUMN reply_to_user_id BIGINT UNSIGNED NULL AFTER author_user_id',
+    )
+  }
+  if (!columnNames.has('reply_to_name')) {
+    await pool.query(
+      "ALTER TABLE share_comments ADD COLUMN reply_to_name VARCHAR(32) NOT NULL DEFAULT '' AFTER reply_to_user_id",
+    )
+  }
   return pool
 }
 

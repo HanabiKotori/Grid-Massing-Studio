@@ -1,0 +1,1281 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>场馆白膜 · 分享链接登录评论设计稿</title>
+<style>
+:root{
+  --bg:#08090a; --bg-1:#0b0c0e; --bg-2:#101113; --bg-3:#15161a; --bg-4:#1c1e22;
+  --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.12);
+  --tx:#ecedef; --tx-2:#9b9fa5; --tx-3:#63666c; --tx-4:#43464c;
+  --accent:#6f7ce8; --accent-2:#a7b0ff; --accent-soft:rgba(111,124,232,.14);
+  --sel:#e9a06a; --green:#5bbd8b; --amber:#e9a06a; --red:#eb5757;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","HarmonyOS Sans SC","MiSans","Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto 0;height:560px;background:radial-gradient(72% 100% at 50% 0%,rgba(111,124,232,.075),transparent 72%);pointer-events:none;z-index:0}
+.page{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:0 48px 120px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.sp{flex:1}
+.i{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
+
+/* head */
+.head{padding:74px 0 34px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-3)}
+.eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(111,124,232,.15)}
+h1{margin:18px 0 0;font-size:40px;line-height:1.15;font-weight:600;letter-spacing:-.025em}
+h1 em{font-style:normal;color:var(--tx-3)}
+.lede{margin:16px 0 0;max-width:760px;font-size:14.5px;line-height:1.7;color:var(--tx-2)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.chip{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid var(--line);border-radius:5px;background:var(--bg-2);font-size:11.5px;color:var(--tx-2)}
+.chip b{font-weight:500;color:var(--tx)}
+.chip .k{width:5px;height:5px;border-radius:1px;background:var(--tx-4)}
+.chip.good .k{background:var(--green)}
+.chip.warn .k{background:var(--sel)}
+.chip.acc .k{background:var(--accent)}
+
+/* toc */
+.toc{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:4px;height:48px;margin:0 -48px 8px;padding:0 48px;border-bottom:1px solid var(--line);background:rgba(8,9,10,.84);backdrop-filter:blur(16px) saturate(140%);overflow-x:auto;scrollbar-width:none}
+.toc::-webkit-scrollbar{display:none}
+.toc a{flex:none;display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:5px;font-size:12px;color:var(--tx-3);text-decoration:none}
+.toc a:hover{color:var(--tx-2);background:var(--bg-2)}
+.toc a.on{color:var(--tx);background:var(--bg-3)}
+.toc a i{font-family:var(--mono);font-size:9.5px;font-style:normal;color:var(--tx-4)}
+.toc a.on i{color:var(--accent)}
+
+/* section / frame / notes */
+.section{padding-top:64px;scroll-margin-top:56px}
+.section-head{display:flex;gap:40px;align-items:flex-end;justify-content:space-between;margin-bottom:28px}
+.section-head h2{margin:0;font-size:20px;font-weight:600;letter-spacing:-.015em}
+.section-head p{margin:0;max-width:560px;font-size:12.5px;line-height:1.75;color:var(--tx-3)}
+.proposal{margin-bottom:64px;scroll-margin-top:96px}
+.frame{position:relative;padding:22px;border:1px solid var(--line);border-radius:10px;background:radial-gradient(120% 90% at 50% -20%,rgba(111,124,232,.06),transparent 60%),var(--bg-1);overflow:hidden}
+.frame::after{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:24px 24px;mask-image:radial-gradient(90% 70% at 50% 40%,#000,transparent 78%);opacity:.5}
+.mock-scaler{position:relative;width:100%;overflow:hidden}
+.mock-scaler > .mock{transform-origin:top left}
+.notes{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:34px;padding-top:20px}
+.note h3{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.note h3 .idx{font-family:var(--mono);font-size:10px;color:var(--accent);margin-right:8px;letter-spacing:.08em}
+.note .tag{margin:6px 0 0;font-size:12.5px;color:var(--tx-3);line-height:1.65}
+.note .lbl{margin:16px 0 6px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx-4)}
+.note ul{margin:0;padding:0;list-style:none}
+.note li{position:relative;padding-left:14px;margin-bottom:4px;font-size:12px;line-height:1.65;color:var(--tx-2)}
+.note li::before{content:"";position:absolute;left:2px;top:8px;width:4px;height:1px;background:var(--tx-4)}
+.note li.plus::before{background:var(--green)}
+.note li.minus::before{background:var(--sel)}
+.note dl{margin:0;display:grid;grid-template-columns:84px 1fr;row-gap:5px;font-size:12px}
+.note dt{color:var(--tx-4);font-family:var(--mono);font-size:10px;padding-top:2px}
+.note dd{margin:0;color:var(--tx-2)}
+
+/* mock base */
+.mock{position:relative;width:1200px;height:680px;display:flex;flex-direction:column;border-radius:8px;overflow:hidden;background:var(--bg-1);color:var(--tx);font-size:12px;line-height:1.4;box-shadow:0 0 0 1px rgba(255,255,255,.09),0 50px 90px -40px rgba(0,0,0,.95);user-select:none}
+.tb{position:relative;z-index:8;flex:none;display:flex;align-items:center;gap:10px;height:46px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--bg-1)}
+.tb-brand{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+.tb-brand .mark{width:17px;height:17px;color:var(--accent);display:block}
+.tb-brand .mark svg{width:17px;height:17px;stroke-width:1.3}
+.tb-venue{display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:4px;font-size:12px;color:var(--tx-2)}
+.tb-menu{display:flex;align-items:center;gap:2px;margin-left:4px}
+.tb-menu a{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:4px;font-size:12px;color:var(--tx-3);text-decoration:none}
+.tb-menu a.on{color:var(--tx);background:var(--bg-3)}
+.ibtn{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:4px;color:var(--tx-3);background:none;border:0;padding:0;font-family:inherit}
+.ibtn:hover{background:var(--bg-3);color:var(--tx)}
+.vsep{width:1px;height:18px;background:var(--line);margin:0 4px;flex:none}
+.btn{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:5px;border:1px solid var(--line-2);background:var(--bg-3);font-family:inherit;font-size:11.5px;color:var(--tx);white-space:nowrap}
+.btn.pri{background:var(--accent);border-color:transparent;color:#fff}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--tx-2)}
+.btn.sm{height:22px;padding:0 8px;font-size:10.5px;border-radius:4px}
+.btn .i{width:13px;height:13px}
+.btn:disabled{opacity:.4}
+.ava{width:22px;height:22px;border-radius:50%;flex:none;background:linear-gradient(150deg,#3a3f52,#22252e);display:grid;place-items:center;font-size:9.5px;color:var(--tx-2);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.ava.sm{width:17px;height:17px;font-size:8px}
+.kbd{display:inline-flex;align-items:center;gap:2px;height:18px;padding:0 5px;border-radius:4px;border:1px solid var(--line);background:var(--bg-2);font-family:var(--mono);font-size:10px;color:var(--tx-3)}
+.status{display:flex;align-items:center;gap:12px;flex:none;height:26px;padding:0 12px;border-top:1px solid var(--line);background:var(--bg-1);font-family:var(--mono);font-size:10px;color:var(--tx-4)}
+.status .g{display:inline-flex;align-items:center;gap:5px}
+.status .on{color:var(--tx-2)}
+.status .vsep{height:10px}
+.vp{position:relative;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+.vp .scene{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hud{position:absolute;display:flex;align-items:center;gap:4px;z-index:4}
+.hud.tl{left:12px;top:10px}
+.hud.tr{right:12px;top:10px}
+.hud.bl{left:12px;bottom:10px}
+.hud.br{right:12px;bottom:10px}
+.hud-chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:5px;background:rgba(12,13,15,.78);border:1px solid var(--line);font-size:10.5px;color:var(--tx-2)}
+.hud-chip.on{color:var(--tx);border-color:var(--line-2)}
+.hud-chip .i{width:12px;height:12px}
+.hud-group{display:flex;align-items:center;gap:1px;padding:2px;border-radius:6px;background:rgba(12,13,15,.82);border:1px solid var(--line)}
+.hud-group button{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 7px;border:0;border-radius:4px;background:none;font-family:inherit;font-size:10.5px;color:var(--tx-3)}
+.hud-group button.on{background:rgba(255,255,255,.07);color:var(--tx)}
+.hud-group .i{width:12px;height:12px}
+.scalebar{display:flex;flex-direction:column;gap:3px}
+.scalebar i{display:block;height:5px;border-left:1px solid var(--tx-4);border-right:1px solid var(--tx-4);border-bottom:1px solid var(--tx-4)}
+.gizmo{width:46px;height:46px;display:block}
+.anno{position:absolute;z-index:30;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(111,124,232,.7);background:rgba(9,10,12,.92);font-family:var(--mono);font-size:9.5px;color:var(--accent-2);box-shadow:0 0 0 3px rgba(111,124,232,.1)}
+
+/* live atoms */
+.live-chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:11px;border:1px solid rgba(91,189,139,.3);background:rgba(91,189,139,.08);font-size:10px;color:#93d9b3;white-space:nowrap}
+.live-chip .dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(91,189,139,.13)}
+.live-chip.lock{border-color:rgba(233,160,106,.28);background:rgba(233,160,106,.07);color:#d8a27b}
+.live-chip.lock .dot{background:var(--sel);box-shadow:0 0 0 3px rgba(233,160,106,.12)}
+.sync-text{font-family:var(--mono);font-size:9.5px;color:var(--tx-4)}
+.live-pill{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:7;display:flex;align-items:center;gap:7px;height:26px;padding:0 10px;border-radius:13px;background:rgba(12,13,15,.92);border:1px solid rgba(111,124,232,.35);box-shadow:0 12px 30px -14px rgba(0,0,0,.9);font-size:10.5px;color:var(--tx-2);white-space:nowrap}
+.live-pill .pulse{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.7s infinite}
+.live-pill b{font-weight:500;color:var(--tx)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(111,124,232,.45)}55%{box-shadow:0 0 0 5px rgba(111,124,232,0)}}
+.new-badge{display:inline-flex;align-items:center;height:14px;padding:0 4px;border-radius:3px;background:rgba(91,189,139,.14);border:1px solid rgba(91,189,139,.28);font-size:8px;letter-spacing:.04em;color:#93d9b3}
+.role{display:inline-flex;align-items:center;height:14px;padding:0 4px;border-radius:3px;border:1px solid rgba(111,124,232,.28);background:var(--accent-soft);font-size:8px;letter-spacing:.03em;color:var(--accent-2)}
+.guest{display:inline-flex;align-items:center;height:14px;padding:0 4px;border-radius:3px;border:1px solid var(--line);font-size:8.5px;letter-spacing:.03em;color:var(--tx-4)}
+.event-line{display:flex;align-items:center;gap:5px;margin-top:6px;padding-left:22px;font-size:9.5px;color:var(--tx-4)}
+.event-line .i{width:10px;height:10px;color:var(--green)}
+.cm.new{background:rgba(91,189,139,.045);box-shadow:inset 2px 0 0 var(--green)}
+.locked-note{display:inline-flex;align-items:center;gap:4px;margin-left:auto;font-size:9px;color:var(--tx-4)}
+.locked-note .i{width:10px;height:10px}
+
+/* share viewer */
+.sh-top{display:flex;align-items:center;gap:10px;flex:none;position:relative;z-index:9;height:48px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--bg-1)}
+.sh-brand{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:-.01em}
+.sh-brand .mark{width:16px;height:16px;color:var(--accent)}
+.sh-brand .mark svg{width:16px;height:16px;stroke-width:1.3}
+.sh-title{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500}
+.sh-title .sub{color:var(--tx-3);font-weight:400}
+.ro{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:4px;border:1px solid var(--line);background:var(--bg-2);font-size:9px;letter-spacing:.06em;color:var(--tx-3);text-transform:uppercase}
+.ro .i{width:10px;height:10px}
+.sh-body{display:flex;flex:1;min-height:0}
+.sh-vp{position:relative;flex:1;min-width:0;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+.sh-vp .scene{position:absolute;inset:0;width:100%;height:100%}
+.sh-dock{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;padding:3px;border-radius:8px;background:rgba(12,13,15,.9);border:1px solid var(--line-2);box-shadow:0 20px 40px -22px rgba(0,0,0,.9);z-index:5}
+.sh-dock button{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border:0;border-radius:4px;background:none;font-family:inherit;font-size:10.5px;color:var(--tx-3)}
+.sh-dock button.on{background:var(--accent-soft);color:var(--accent-2)}
+.sh-dock button.lock{color:var(--tx-4);background:rgba(255,255,255,.03)}
+.sh-dock .zoom{font-family:var(--mono);font-size:10px;color:var(--tx-3);width:34px;text-align:center}
+.acct{display:inline-flex;align-items:center;height:14px;padding:0 4px;border-radius:3px;border:1px solid rgba(91,189,139,.24);background:rgba(91,189,139,.07);font-size:8px;letter-spacing:.03em;color:#93d9b3}
+.who{font-size:11px;color:var(--tx-2);white-space:nowrap}
+
+/* comments */
+.cpanel{width:348px;flex:none;display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--line);background:var(--bg-1)}
+.cp-head{display:flex;align-items:center;gap:8px;flex:none;height:46px;padding:0 14px;border-bottom:1px solid var(--line)}
+.cp-head h3{margin:0;font-size:12.5px;font-weight:600;letter-spacing:-.01em}
+.count{min-width:17px;height:17px;padding:0 5px;border-radius:9px;display:inline-grid;place-items:center;background:var(--bg-3);border:1px solid var(--line);font-family:var(--mono);font-size:9.5px;color:var(--tx-3)}
+.cp-filters{display:flex;align-items:center;gap:4px;flex:none;padding:9px 12px 7px;border-bottom:1px solid rgba(255,255,255,.04)}
+.fchip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:4px;font-size:10.5px;color:var(--tx-3)}
+.fchip b{font-family:var(--mono);font-size:9.5px;font-weight:400;color:var(--tx-4)}
+.fchip.on{background:var(--bg-3);color:var(--tx)}
+.fchip.on b{color:var(--tx-2)}
+.fchip.disabled{opacity:.4}
+.cp-list{flex:1;min-height:0;overflow:hidden}
+.cm{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.045);position:relative}
+.cm.on{background:rgba(111,124,232,.055);box-shadow:inset 2px 0 0 var(--accent)}
+.cm.resolved{opacity:.58}
+.cm-top{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--tx-4)}
+.cm-top b{font-size:11.5px;font-weight:500;color:var(--tx-2)}
+.cm-top .tm{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--tx-4)}
+.cm p{margin:5px 0 0;font-size:12px;line-height:1.6;color:var(--tx-2)}
+.cm-acts{display:flex;align-items:center;gap:12px;margin-top:7px;font-size:10px;color:var(--tx-3)}
+.cm-acts a{display:inline-flex;align-items:center;gap:4px;color:var(--tx-2);text-decoration:none}
+.cm-acts .i{width:11px;height:11px}
+.cm-link{margin-left:auto;padding:1px 5px;border:1px solid var(--line);border-radius:3px;font-family:var(--mono);font-size:9px;color:var(--tx-4)}
+.npin{width:16px;height:16px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--accent);color:#fff;font-family:var(--mono);font-size:8.5px;box-shadow:0 0 0 2px rgba(111,124,232,.16)}
+.npin.done{background:rgba(255,255,255,.12);color:var(--tx-3);box-shadow:none}
+.reply{margin:9px 0 0 22px;padding-left:10px;border-left:1px solid var(--line)}
+.reply .cm-top b{color:var(--tx-3)}
+.reply p{font-size:11.5px;color:var(--tx-3)}
+.compose{flex:none;border-top:1px solid var(--line);padding:10px 12px 11px;background:var(--bg-1)}
+.compose-box{border:1px solid var(--line);border-radius:6px;background:var(--bg-2);padding:8px 9px;min-height:44px}
+.compose-box .ph{font-size:11.5px;color:var(--tx-4)}
+.compose-box .hint{margin-top:12px;font-size:10px;color:var(--tx-4)}
+.compose-foot{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:10px;color:var(--tx-4)}
+.cp-more{padding:9px 14px;border-top:1px dashed rgba(255,255,255,.06);font-size:10px;color:var(--tx-4)}
+
+/* login gate */
+.login-gate{flex:none;padding:14px 14px 13px;border-top:1px solid rgba(111,124,232,.2);background:linear-gradient(180deg,rgba(111,124,232,.08),rgba(111,124,232,.02) 60%,transparent)}
+.lg-row{display:flex;gap:10px;align-items:flex-start}
+.lg-icon{width:30px;height:30px;flex:none;border-radius:8px;display:grid;place-items:center;border:1px solid rgba(111,124,232,.3);background:rgba(111,124,232,.12);color:var(--accent-2)}
+.lg-icon .i{width:14px;height:14px}
+.lg-copy b{display:block;font-size:12px;font-weight:600;letter-spacing:-.01em}
+.lg-copy span{display:block;margin-top:3px;font-size:10px;line-height:1.6;color:var(--tx-3)}
+.lg-actions{display:flex;align-items:center;gap:6px;margin-top:11px;padding-left:40px}
+.lg-foot{margin-top:7px;padding-left:40px;font-family:var(--mono);font-size:8.5px;color:var(--tx-4)}
+
+/* login modal */
+.dim{position:absolute;inset:0;z-index:20;background:rgba(4,5,7,.66);backdrop-filter:blur(3px) saturate(80%)}
+.login-modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:21;width:420px;border-radius:12px;overflow:hidden;border:1px solid var(--line-2);background:#0e0f12;box-shadow:0 44px 90px -30px rgba(0,0,0,.96),0 1px 0 rgba(255,255,255,.05) inset}
+.lm-head{display:flex;align-items:flex-start;gap:10px;padding:18px 20px 12px}
+.lm-title{font-size:15px;font-weight:600;letter-spacing:-.015em}
+.lm-sub{margin-top:4px;font-size:10.5px;line-height:1.65;color:var(--tx-3)}
+.lm-body{padding:0 20px}
+.lm-field{margin-top:11px}
+.lm-field .lbl{display:block;margin-bottom:5px}
+.lbl{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--tx-4)}
+.inp{display:flex;align-items:center;height:34px;padding:0 10px;border-radius:5px;border:1px solid var(--line);background:var(--bg-2);font-size:12px;color:var(--tx-2)}
+.inp.mono{font-family:var(--mono);font-size:11px;color:var(--tx-3)}
+.captcha{display:flex;gap:8px;align-items:center}
+.cap-img{width:132px;height:38px;flex:none;border-radius:5px;overflow:hidden;border:1px solid var(--line);background:#171a20;position:relative}
+.cap-img::before{content:"";position:absolute;inset:0;background:linear-gradient(135deg,#232833,#151820 55%,#2a2230);opacity:.95}
+.cap-img::after{content:"";position:absolute;left:78px;top:9px;width:20px;height:20px;border-radius:5px;background:var(--bg-1);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
+.cap-hole{position:absolute;left:78px;top:9px;width:20px;height:20px;border-radius:5px;border:1px solid rgba(111,124,232,.5);background:rgba(111,124,232,.14);z-index:2}
+.slider{flex:1;min-width:0;height:38px;border-radius:5px;border:1px solid var(--line);background:var(--bg-2);position:relative;display:flex;align-items:center;padding:0 10px 0 42px;font-size:9.5px;color:var(--tx-4)}
+.slider::before{content:"";position:absolute;left:3px;top:3px;width:30px;height:30px;border-radius:4px;background:var(--bg-4);border:1px solid var(--line-2);box-shadow:0 4px 10px -4px #000}
+.slider::after{content:"›";position:absolute;left:13px;top:6px;font-family:var(--mono);font-size:14px;color:var(--tx-3)}
+.lm-foot{display:flex;align-items:center;gap:8px;margin-top:16px;padding:12px 20px;border-top:1px solid var(--line);background:var(--bg-1)}
+.lm-note{padding:0 20px 16px;font-size:9.5px;line-height:1.6;color:var(--tx-4)}
+.lm-error{display:flex;align-items:center;gap:6px;margin-top:10px;padding:7px 8px;border-radius:5px;border:1px solid rgba(235,87,87,.24);background:rgba(235,87,87,.06);font-size:10px;color:#e98a8a}
+.lm-error .i{width:11px;height:11px}
+
+/* editor dialog */
+.b-canvas{position:relative;flex:1;min-height:0;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+.b-canvas .scene{position:absolute;inset:0;width:100%;height:100%}
+.b-canvas .dim{z-index:10}
+.dlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:11;width:560px;border-radius:12px;overflow:hidden;border:1px solid var(--line-2);background:#0e0f12;box-shadow:0 44px 90px -30px rgba(0,0,0,.96),0 1px 0 rgba(255,255,255,.05) inset}
+.dlg-head{display:flex;align-items:flex-start;gap:8px;padding:16px 18px 12px}
+.dlg-title{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.dlg-sub{margin-top:3px;font-size:10.5px;color:var(--tx-3)}
+.dlg-body{padding:0 18px}
+.dlg-scene{display:flex;gap:12px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg-2)}
+.thumb{width:88px;height:58px;flex:none;border-radius:5px;overflow:hidden;border:1px solid var(--line);background:#0b0d10}
+.thumb svg{display:block;width:100%;height:100%}
+.dlg-scene-meta{display:flex;flex-direction:column;justify-content:center;gap:3px;font-size:11px;color:var(--tx-2)}
+.dlg-scene-meta b{font-size:11.5px;font-weight:500;color:var(--tx)}
+.dlg-scene-meta span{font-size:10px;color:var(--tx-3)}
+.dlg-scene-meta .ok{display:inline-flex;align-items:center;gap:5px;color:#93d9b3}
+.access-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.access-card{display:flex;gap:8px;padding:9px 10px;border:1px solid var(--line);border-radius:7px;background:var(--bg-2)}
+.ac-icon{width:24px;height:24px;flex:none;border-radius:5px;display:grid;place-items:center;border:1px solid var(--line);background:var(--bg-3);color:var(--tx-3)}
+.ac-icon .i{width:12px;height:12px}
+.ac-copy{min-width:0;flex:1}
+.ac-copy b{display:block;font-size:10.5px;font-weight:500;color:var(--tx-2)}
+.ac-copy span{display:block;margin-top:1px;font-size:9px;line-height:1.5;color:var(--tx-4)}
+.fixed-chip{display:inline-flex;align-items:center;height:18px;padding:0 5px;border-radius:3px;border:1px solid rgba(91,189,139,.26);background:rgba(91,189,139,.07);font-size:8.5px;color:#93d9b3;white-space:nowrap;margin-left:auto}
+.dlg-rows{margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.dlg-row{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--bg-2)}
+.dlg-row + .dlg-row{border-top:1px solid var(--line)}
+.dlg-row b{display:block;font-size:11.5px;font-weight:500;color:var(--tx)}
+.dlg-row span{display:block;font-size:10px;color:var(--tx-4);margin-top:1px}
+.toggle{width:30px;height:17px;border-radius:9px;background:var(--bg-4);position:relative;flex:none}
+.toggle i{position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#8b8f98}
+.toggle.on{background:var(--accent)}
+.toggle.on i{left:15px;background:#fff}
+.dlg-link{margin-top:12px}
+.linkrow{display:flex;gap:6px;margin-top:5px}
+.linkrow .inp{flex:1;font-family:var(--mono);font-size:10.5px;color:var(--tx-3)}
+.dlg-note{margin-top:9px;font-size:9.5px;line-height:1.6;color:var(--tx-4)}
+.dlg-foot{display:flex;align-items:center;gap:8px;margin-top:13px;padding:12px 18px;border-top:1px solid var(--line);background:var(--bg-1)}
+.dlg-foot .btn.ghost{color:var(--tx-3)}
+
+/* change cards */
+.change-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.change-card{border:1px solid var(--line);border-radius:8px;padding:14px;background:rgba(255,255,255,.014)}
+.change-card .n{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--accent)}
+.change-card h3{margin:7px 0 6px;font-size:13px;font-weight:600;letter-spacing:-.01em}
+.change-card p{margin:0;font-size:11.5px;line-height:1.7;color:var(--tx-3)}
+.change-note{display:flex;gap:12px;align-items:flex-start;margin-top:16px;padding:12px 14px;border:1px solid var(--line);border-radius:7px;background:var(--bg-1)}
+.change-note .i{width:14px;height:14px;color:var(--accent-2);margin-top:2px}
+.change-note p{margin:0;font-size:11.5px;line-height:1.7;color:var(--tx-3)}
+.change-note b{color:var(--tx-2);font-weight:500}
+
+/* permission table */
+.perm-wrap{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--bg-1)}
+.perm{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11.5px}
+.perm th{padding:11px 12px;text-align:left;font-family:var(--mono);font-size:9px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--tx-4);border-bottom:1px solid var(--line);background:rgba(255,255,255,.014)}
+.perm th:first-child{width:27%}
+.perm th:nth-child(2),.perm th:nth-child(3),.perm th:nth-child(4),.perm th:nth-child(5){width:18.25%}
+.perm td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.045);color:var(--tx-3)}
+.perm tr:last-child td{border-bottom:0}
+.perm td:first-child{color:var(--tx-2);font-weight:500}
+.perm .yes{color:var(--green);font-family:var(--mono)}
+.perm .no{color:var(--tx-4);font-family:var(--mono)}
+.perm .ro{color:var(--tx-3);font-size:10px}
+.perm .me{color:var(--accent-2);font-family:var(--mono);font-size:10px}
+.perm-note{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;font-size:10px;color:var(--tx-4)}
+.perm-note span{display:inline-flex;align-items:center;gap:6px}
+.perm-note .k{width:5px;height:5px;border-radius:50%;background:var(--tx-4)}
+.perm-note .k.g{background:var(--green)}
+.perm-note .k.a{background:var(--accent)}
+
+/* states */
+.state-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.state-card{border:1px solid var(--line);border-radius:8px;padding:13px;background:rgba(255,255,255,.014)}
+.state-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.state-head .lbl{font-size:8.5px}
+.state-head .mono{font-size:8.5px;color:var(--tx-4)}
+.state-demo{display:flex;align-items:center;gap:7px;min-height:28px}
+.state-card h4{margin:0;font-size:11.5px;font-weight:500;color:var(--tx-2)}
+.state-card p{margin:7px 0 0;font-size:10.5px;line-height:1.6;color:var(--tx-4)}
+.state-card .btn.sm{height:22px;font-size:10px}
+.dim-ava{opacity:.45}
+.flow{margin-top:26px;border:1px solid var(--line);border-radius:9px;background:var(--bg-1);padding:14px 16px}
+.flow-label{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.flow-label .lbl{font-size:8.5px}
+.flow-track{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.node{display:inline-flex;align-items:center;height:27px;padding:0 9px;border:1px solid var(--line);border-radius:5px;background:var(--bg-2);font-size:10.5px;color:var(--tx-3);white-space:nowrap}
+.node.actor{border-color:var(--line-2);background:var(--bg-3);color:var(--tx)}
+.node.auth{border-color:rgba(111,124,232,.3);background:var(--accent-soft);color:var(--accent-2)}
+.node.view{border-color:rgba(91,189,139,.26);background:rgba(91,189,139,.07);color:#93d9b3}
+.arrow{font-family:var(--mono);font-size:10px;color:var(--tx-4)}
+.impl-grid{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:26px}
+.impl h3{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--tx-2)}
+.impl ul{margin:0;padding:0;list-style:none}
+.impl li{position:relative;padding-left:12px;font-size:11.5px;line-height:1.7;color:var(--tx-3);margin-bottom:4px}
+.impl li::before{content:"";position:absolute;left:0;top:9px;width:3px;height:1px;background:var(--tx-4)}
+.impl b{color:var(--tx-2);font-weight:500}
+.impl code{padding:1px 4px;border:1px solid var(--line);border-radius:3px;background:var(--bg-2);font-family:var(--mono);font-size:9.5px;color:var(--tx-3)}
+
+@media (max-width:1080px){
+  .change-grid{grid-template-columns:1fr 1fr}
+  .state-grid{grid-template-columns:1fr 1fr}
+  .impl-grid{grid-template-columns:1fr}
+  .notes{grid-template-columns:1fr}
+  .section-head{flex-direction:column;align-items:flex-start;gap:10px}
+  .page{padding:0 28px 90px}
+  .toc{margin:0 -28px 8px;padding:0 28px}
+}
+@media (max-width:720px){
+  h1{font-size:30px}
+  .change-grid{grid-template-columns:1fr}
+  .state-grid{grid-template-columns:1fr}
+  .perm{display:block;overflow-x:auto;white-space:nowrap}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="head">
+    <div class="eyebrow"><span class="dot"></span>Review access · Change 02</div>
+    <h1>分享链接 <em>·</em> 登录后评论</h1>
+    <p class="lede">查看保持公开，评论需要账号。匿名评论移除，已有匿名评论只读。布局沿用 <b style="color:var(--tx-2);font-weight:500">S-A 常驻评论栏 + E-B 属性 / 评审 Tab</b>，只改身份与入口，不改画布与评审结构。</p>
+    <div class="chips">
+      <span class="chip good"><span class="k"></span><b>查看</b> 公开，无需登录</span>
+      <span class="chip acc"><span class="k"></span><b>评论</b> 登录后可用</span>
+      <span class="chip warn"><span class="k"></span><b>匿名</b> 已移除</span>
+      <span class="chip"><span class="k"></span><b>作者</b> 权限不变</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <a href="#change" data-t="change" class="on"><i>01</i>需求变更</a>
+    <a href="#public" data-t="public"><i>02</i>未登录查看</a>
+    <a href="#login" data-t="login"><i>03</i>登录弹窗</a>
+    <a href="#signed" data-t="signed"><i>04</i>已登录评论</a>
+    <a href="#editor" data-t="editor"><i>05</i>发布设置</a>
+    <a href="#permission" data-t="permission"><i>06</i>权限矩阵</a>
+    <a href="#flow" data-t="flow"><i>07</i>状态与落地</a>
+  </nav>
+
+  <!-- ================= 01 需求变更 ================= -->
+  <section class="section" id="change">
+    <div class="section-head">
+      <h2>需求变更</h2>
+      <p>只收口评论身份；链接分享、实时场景、编辑器回显、评论锚点全部保留。</p>
+    </div>
+    <div class="change-grid">
+      <div class="change-card">
+        <div class="n">01 / VIEW</div>
+        <h3>查看保持公开</h3>
+        <p>拿到链接即可打开 3D 场景、旋转缩放、点引脚定位，不需要登录。分享页不出现登录遮罩。</p>
+      </div>
+      <div class="change-card">
+        <div class="n">02 / COMMENT</div>
+        <h3>评论必须登录</h3>
+        <p>发表评论、回复、解决自己的评论都要求登录。未登录只保留只读的评论列表与定位。</p>
+      </div>
+      <div class="change-card">
+        <div class="n">03 / IDENTITY</div>
+        <h3>匿名评论移除</h3>
+        <p>不再填写昵称，不生成 authorToken。新评论使用云端账号的用户名与头像，服务端记录 user_id。</p>
+      </div>
+      <div class="change-card">
+        <div class="n">04 / LEGACY</div>
+        <h3>历史匿名评论只读</h3>
+        <p>已有匿名评论继续展示，标记「历史匿名」，不可回复；作者可在编辑器删除。</p>
+      </div>
+    </div>
+    <div class="change-note">
+      <i data-ic="info"></i>
+      <p><b>不改的部分：</b>分享页 S-A 的 348px 常驻评论栏、编辑器 E-B 的 属性 / 评审 Tab、场景实时补丁、评论锚点跟随、链接冻结与撤销。</p>
+    </div>
+  </section>
+
+  <!-- ================= 02 未登录查看 ================= -->
+  <section class="section" id="public">
+    <div class="section-head">
+      <h2>分享页 · 未登录查看</h2>
+      <p>页面完全可看；评论列表面向所有人，写入操作统一收进登录门槛。</p>
+    </div>
+
+    <article class="proposal">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="680">
+            <div class="sh-top">
+              <div class="sh-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <span class="vsep"></span>
+              <div class="sh-title">W1 展馆 · 秋季车展 <span class="ro"><i data-ic="eye"></i>只读</span></div>
+              <div class="sp"></div>
+              <span class="live-chip"><span class="dot"></span>实时 · 3 人</span>
+              <span class="sync-text">已同步 · 刚刚</span>
+              <button class="btn pri sm"><i data-ic="user"></i>登录</button>
+              <button class="btn ghost sm"><i data-ic="link"></i>复制链接</button>
+            </div>
+
+            <div class="sh-body">
+              <div class="sh-vp">
+                <svg class="scene" data-scene="gateOut"></svg>
+                <div class="hud tl">
+                  <span class="hud-chip on"><i data-ic="eye"></i>只读</span>
+                  <span class="hud-chip">130 × 70 m</span>
+                </div>
+                <div class="live-pill"><span class="pulse"></span><b>作者正在编辑</b> W1A03<span class="mono" style="color:var(--tx-4)">实时</span></div>
+                <div class="hud bl"><div class="scalebar"><i style="width:62px"></i><span class="mono" style="font-size:9px;color:#6b6f76">10 m</span></div></div>
+                <div class="hud br"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+                <div class="sh-dock">
+                  <button>−</button><span class="zoom">86%</span><button>+</button>
+                  <span class="vsep" style="height:14px"></span>
+                  <button><i data-ic="expand"></i></button>
+                  <button class="lock" disabled><i data-ic="lock"></i>评论</button>
+                </div>
+              </div>
+
+              <aside class="cpanel">
+                <div class="cp-head">
+                  <h3>评论</h3><span class="count">4</span>
+                  <span class="sp"></span>
+                  <span class="live-chip"><span class="dot"></span>实时</span>
+                  <button class="ibtn"><i data-ic="refresh"></i></button>
+                </div>
+                <div class="cp-filters">
+                  <span class="fchip on">全部 <b>4</b></span>
+                  <span class="fchip">未解决 <b>2</b></span>
+                  <span class="fchip disabled"><i data-ic="lock" style="width:9px;height:9px"></i>我的</span>
+                </div>
+                <div class="cp-list">
+                  <article class="cm new on">
+                    <div class="cm-top">
+                      <span class="ava sm">王</span><b>王工</b><span class="acct">登录用户</span>
+                      <span class="new-badge">新</span><span class="tm">刚刚</span>
+                    </div>
+                    <p>入口开口方向反了，观众会从背面进入。建议把这面围挡的开口转到南侧。</p>
+                    <div class="cm-acts">
+                      <a><i data-ic="pin"></i>定位</a>
+                      <span class="locked-note"><i data-ic="lock"></i>登录后可回复</span>
+                    </div>
+                    <div class="reply">
+                      <div class="cm-top"><span class="ava sm">李</span><b>李设计</b><span class="role">作者</span><span class="tm">刚刚</span></div>
+                      <p>收到，这版先按南侧改，模型已同步。</p>
+                    </div>
+                  </article>
+
+                  <article class="cm resolved">
+                    <div class="cm-top"><span class="ava sm">陈</span><b>陈工</b><span class="acct">登录用户</span><span class="tm">1 小时前</span></div>
+                    <p>这段过道只有 1.2 m，消防可能不通过。</p>
+                    <div class="event-line"><i data-ic="check"></i>李设计 已解决 · 刚刚</div>
+                  </article>
+
+                  <article class="cm">
+                    <div class="cm-top"><span class="ava sm">客</span><b>客户 A</b><span class="acct">登录用户</span><span class="tm">09:40</span></div>
+                    <p>咖啡洽谈区可以再加两组圆桌，现在只有三组。</p>
+                    <div class="cm-acts"><a><i data-ic="pin"></i>定位</a><span class="locked-note"><i data-ic="lock"></i>登录后可回复</span></div>
+                  </article>
+                  <div class="cp-more">还有 1 条 · 查看全部 4 条</div>
+                </div>
+
+                <div class="login-gate">
+                  <div class="lg-row">
+                    <span class="lg-icon"><i data-ic="lock"></i></span>
+                    <div class="lg-copy">
+                      <b>登录后参与评论</b>
+                      <span>查看和定位无需登录。登录后可发表评论、回复，并解决或删除自己的评论。</span>
+                    </div>
+                  </div>
+                  <div class="lg-actions">
+                    <button class="btn pri sm"><i data-ic="user"></i>登录</button>
+                    <button class="btn ghost sm">注册新账号</button>
+                  </div>
+                  <div class="lg-foot">使用与编辑器相同的云端账号</div>
+                </div>
+              </aside>
+              <span class="anno" style="left:1016px;top:54px">1</span>
+              <span class="anno" style="left:600px;top:620px">2</span>
+              <span class="anno" style="left:866px;top:210px">3</span>
+              <span class="anno" style="left:866px;top:574px">4</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">A</span>公开查看</h3>
+          <p class="tag">链接即权限。未登录可以完整查看、旋转、缩放、点引脚定位，也能看到已有评论和作者回复。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 顶栏唯一的登录入口</li>
+            <li>② 评论 dock 显示锁定态</li>
+            <li>③ 评论列表只读，仅保留定位</li>
+            <li>④ 面板底部登录门槛，解释为什么需要账号</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">权限边界</div>
+          <dl>
+            <dt>查看</dt><dd>无需登录，不弹窗、不拦截</dd>
+            <dt>定位</dt><dd>无需登录，沿用相机书签</dd>
+            <dt>回复</dt><dd>登录后可用</dd>
+            <dt>解决</dt><dd>登录后，仅自己的评论</dd>
+            <dt>我的</dt><dd>未登录时隐藏或置灰</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">文案</div>
+          <ul>
+            <li class="plus">「登录后参与评论」比「请先登录」更明确</li>
+            <li class="plus">先说明查看不需要登录，降低误解</li>
+            <li class="minus">不在画布上放登录浮层，避免挡模型</li>
+            <li class="minus">不把整页做成登录墙</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= 03 登录弹窗 ================= -->
+  <section class="section" id="login">
+    <div class="section-head">
+      <h2>登录弹窗 · 只服务评论</h2>
+      <p>从顶栏或评论栏触发同一个登录弹窗；登录成功不刷新场景，保留当前视角、选中引脚和草稿。</p>
+    </div>
+
+    <article class="proposal">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="680">
+            <div class="sh-top">
+              <div class="sh-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <span class="vsep"></span>
+              <div class="sh-title">W1 展馆 · 秋季车展 <span class="ro"><i data-ic="eye"></i>只读</span></div>
+              <div class="sp"></div>
+              <span class="live-chip"><span class="dot"></span>实时 · 3 人</span>
+              <button class="btn pri sm"><i data-ic="user"></i>登录</button>
+              <button class="btn ghost sm"><i data-ic="link"></i>复制链接</button>
+            </div>
+
+            <div class="sh-body">
+              <div class="sh-vp">
+                <svg class="scene" data-scene="loginBg"></svg>
+                <div class="hud tl"><span class="hud-chip on">只读</span><span class="hud-chip">130 × 70 m</span></div>
+                <div class="hud br"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+                <div class="sh-dock">
+                  <button>−</button><span class="zoom">86%</span><button>+</button>
+                  <span class="vsep" style="height:14px"></span>
+                  <button class="lock" disabled><i data-ic="lock"></i>评论</button>
+                </div>
+              </div>
+              <aside class="cpanel">
+                <div class="cp-head"><h3>评论</h3><span class="count">4</span><span class="sp"></span><span class="live-chip"><span class="dot"></span>实时</span></div>
+                <div class="cp-filters"><span class="fchip on">全部 <b>4</b></span><span class="fchip">未解决 <b>2</b></span><span class="fchip disabled"><i data-ic="lock" style="width:9px;height:9px"></i>我的</span></div>
+                <div class="cp-list">
+                  <article class="cm on">
+                    <div class="cm-top"><span class="ava sm">王</span><b>王工</b><span class="acct">登录用户</span><span class="tm">刚刚</span></div>
+                    <p>入口开口方向反了，观众会从背面进入。</p>
+                    <div class="cm-acts"><a><i data-ic="pin"></i>定位</a><span class="locked-note"><i data-ic="lock"></i>登录后可回复</span></div>
+                  </article>
+                  <article class="cm resolved">
+                    <div class="cm-top"><span class="ava sm">陈</span><b>陈工</b><span class="acct">登录用户</span><span class="tm">1 小时前</span></div>
+                    <p>这段过道只有 1.2 m，消防可能不通过。</p>
+                  </article>
+                </div>
+                <div class="login-gate">
+                  <div class="lg-row"><span class="lg-icon"><i data-ic="lock"></i></span><div class="lg-copy"><b>登录后参与评论</b><span>查看和定位无需登录。</span></div></div>
+                </div>
+              </aside>
+              <span class="anno" style="left:370px;top:200px">1</span>
+              <span class="anno" style="left:370px;top:360px">2</span>
+              <span class="anno" style="left:820px;top:450px">3</span>
+            </div>
+
+            <div class="dim"></div>
+            <div class="login-modal">
+              <div class="lm-head">
+                <div>
+                  <div class="lm-title">登录后参与评论</div>
+                  <div class="lm-sub">查看链接不需要登录。登录仅用于评论身份、回复和解决状态。</div>
+                </div>
+                <span class="sp"></span>
+                <button class="ibtn"><i data-ic="close"></i></button>
+              </div>
+              <div class="lm-body">
+                <label class="lm-field"><span class="lbl">账号</span><div class="inp">wutao</div></label>
+                <label class="lm-field"><span class="lbl">密码</span><div class="inp mono">••••••••••</div></label>
+                <div class="lm-field">
+                  <span class="lbl">安全验证</span>
+                  <div class="captcha">
+                    <div class="cap-img"><span class="cap-hole"></span></div>
+                    <div class="slider">向右拖动滑块完成拼图</div>
+                  </div>
+                </div>
+              </div>
+              <div class="lm-foot">
+                <button class="btn ghost sm">取消</button>
+                <span class="sp"></span>
+                <button class="btn ghost sm">注册新账号</button>
+                <button class="btn pri sm">登录</button>
+              </div>
+              <div class="lm-note">登录成功后回到当前视角，已选位置与草稿不会丢失。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">L</span>登录只服务评论</h3>
+          <p class="tag">弹窗标题、说明、按钮文案都必须强调“查看不需要登录”，避免访客以为整页被锁。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 说明查看与评论的边界</li>
+            <li>② 复用现有账号与滑块验证码</li>
+            <li>③ 登录后保留视角、选中和草稿</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">交互</div>
+          <dl>
+            <dt>触发</dt><dd>顶栏登录 / 评论栏登录 / 评论 dock</dd>
+            <dt>成功</dt><dd>关闭弹窗，不刷新页面</dd>
+            <dt>取消</dt><dd>回到只读，不改变当前视角</dd>
+            <dt>失败</dt><dd>原地报错，不清空账号</dd>
+            <dt>过期</dt><dd>提示重新登录，保留草稿</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">复用</div>
+          <ul>
+            <li class="plus">使用 dataService 现有 <code>/api/auth/login</code></li>
+            <li class="plus">沿用 <code>gms.cloud.token</code></li>
+            <li class="plus">编辑器已登录时，分享页直接识别</li>
+            <li class="minus">不新增第三套账号体系</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= 04 已登录评论 ================= -->
+  <section class="section" id="signed">
+    <div class="section-head">
+      <h2>分享页 · 已登录评论</h2>
+      <p>登录后评论栏恢复完整能力：发表、回复、解决 / 取消解决自己的评论，删除自己的评论。</p>
+    </div>
+
+    <article class="proposal">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="680">
+            <div class="sh-top">
+              <div class="sh-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <span class="vsep"></span>
+              <div class="sh-title">W1 展馆 · 秋季车展 <span class="ro"><i data-ic="eye"></i>只读</span></div>
+              <div class="sp"></div>
+              <span class="live-chip"><span class="dot"></span>实时 · 3 人</span>
+              <span class="sync-text">已同步 · 刚刚</span>
+              <span class="ava sm">王</span><span class="who">王工</span><span class="acct">已登录</span>
+              <button class="btn ghost sm">退出</button>
+              <button class="btn ghost sm"><i data-ic="link"></i>复制链接</button>
+            </div>
+
+            <div class="sh-body">
+              <div class="sh-vp">
+                <svg class="scene" data-scene="signed"></svg>
+                <div class="hud tl"><span class="hud-chip on">只读</span><span class="hud-chip">130 × 70 m</span></div>
+                <div class="live-pill"><span class="pulse"></span><b>作者正在编辑</b> W1A03</div>
+                <div class="hud bl"><div class="scalebar"><i style="width:62px"></i><span class="mono" style="font-size:9px;color:#6b6f76">10 m</span></div></div>
+                <div class="hud br"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+                <div class="sh-dock">
+                  <button>−</button><span class="zoom">86%</span><button>+</button>
+                  <span class="vsep" style="height:14px"></span>
+                  <button><i data-ic="expand"></i></button>
+                  <button class="on"><i data-ic="comment"></i>评论</button>
+                </div>
+              </div>
+
+              <aside class="cpanel">
+                <div class="cp-head">
+                  <h3>评论</h3><span class="count">4</span>
+                  <span class="sp"></span>
+                  <span class="live-chip"><span class="dot"></span>实时</span>
+                  <button class="ibtn"><i data-ic="refresh"></i></button>
+                </div>
+                <div class="cp-filters">
+                  <span class="fchip on">全部 <b>4</b></span>
+                  <span class="fchip">未解决 <b>2</b></span>
+                  <span class="fchip">我的 <b>1</b></span>
+                </div>
+                <div class="cp-list">
+                  <article class="cm new on">
+                    <div class="cm-top"><span class="ava sm">王</span><b>王工</b><span class="acct">我的</span><span class="new-badge">新</span><span class="tm">刚刚</span></div>
+                    <p>入口开口方向反了，观众会从背面进入。</p>
+                    <div class="cm-acts">
+                      <a><i data-ic="check"></i>解决</a><a>回复</a><a>删除</a><a><i data-ic="pin"></i>定位</a>
+                    </div>
+                    <div class="reply">
+                      <div class="cm-top"><span class="ava sm">李</span><b>李设计</b><span class="role">作者</span><span class="tm">刚刚</span></div>
+                      <p>收到，这版先按南侧改，模型已同步。</p>
+                    </div>
+                  </article>
+
+                  <article class="cm">
+                    <div class="cm-top"><span class="ava sm">李</span><b>李设计</b><span class="role">作者</span><span class="tm">30 秒前</span></div>
+                    <p>标准展台顶板建议去掉，视线会挡住主舞台。</p>
+                    <div class="cm-acts"><a>回复</a><a><i data-ic="pin"></i>定位</a></div>
+                  </article>
+
+                  <article class="cm resolved">
+                    <div class="cm-top"><span class="ava sm">陈</span><b>陈工</b><span class="acct">登录用户</span><span class="tm">1 小时前</span></div>
+                    <p>这段过道只有 1.2 m，消防可能不通过。</p>
+                    <div class="event-line"><i data-ic="check"></i>李设计 已解决 · 刚刚</div>
+                  </article>
+                  <div class="cp-more">还有 1 条 · 查看全部 4 条</div>
+                </div>
+
+                <div class="compose">
+                  <div class="compose-box">
+                    <div class="ph">点击画布选择位置，或回复选中评论…</div>
+                    <div class="hint">已选 W1A03 · 入口</div>
+                  </div>
+                  <div class="compose-foot">
+                    <span class="ava sm">王</span><span>王工</span><span class="acct">已登录</span>
+                    <span class="sp"></span><span>⌘↵</span>
+                    <button class="btn pri sm">发送</button>
+                  </div>
+                </div>
+              </aside>
+              <span class="anno" style="left:1016px;top:54px">1</span>
+              <span class="anno" style="left:866px;top:220px">2</span>
+              <span class="anno" style="left:866px;top:600px">3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">S</span>登录态</h3>
+          <p class="tag">顶栏显示账号与退出，评论栏恢复输入；未登录时看到的所有评论与定位仍然可用。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 顶栏账号与退出入口</li>
+            <li>② 自己的评论出现解决 / 删除</li>
+            <li>③ 回复 / 解决后实时同步给作者与其他访客</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">操作权限</div>
+          <dl>
+            <dt>自己的</dt><dd>回复、解决、删除</dd>
+            <dt>他人的</dt><dd>回复、定位</dd>
+            <dt>作者</dt><dd>回复、解决、删除全部</dd>
+            <dt>退出</dt><dd>回到只读，不清空评论</dd>
+            <dt>过期</dt><dd>提示重新登录，保留草稿</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">取舍</div>
+          <ul>
+            <li class="plus">评论身份稳定，不再依赖浏览器随机 token</li>
+            <li class="plus">作者与访客使用同一套账号，不需要额外邀请</li>
+            <li class="minus">首次评论多一步登录，需要清楚的文案</li>
+            <li class="minus">历史匿名评论需要单独标识</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= 05 发布设置 ================= -->
+  <section class="section" id="editor">
+    <div class="section-head">
+      <h2>编辑器 · 发布设置</h2>
+      <p>发布弹窗只改一行：访问方式固定公开，评论权限固定登录用户；「允许评论」开关保留。</p>
+    </div>
+
+    <article class="proposal">
+      <div class="frame">
+        <div class="mock-scaler">
+          <div class="mock" data-w="1200" data-h="680">
+            <div class="tb">
+              <div class="tb-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+              <div class="tb-venue">W1 展馆</div>
+              <nav class="tb-menu"><a>文件</a><a class="on">视图</a><a>显示</a><a>数据</a><a>帮助</a></nav>
+              <div class="sp"></div>
+              <button class="btn ghost"><i data-ic="comment"></i>评论<span class="mono" style="color:var(--accent-2)">4</span></button>
+              <button class="btn"><i data-ic="link"></i>分享</button>
+              <button class="btn pri">导出</button>
+              <div class="ava">L</div>
+            </div>
+
+            <div class="b-canvas">
+              <svg class="scene" data-scene="dialog"></svg>
+              <div class="dim"></div>
+
+              <div class="dlg">
+                <div class="dlg-head">
+                  <div>
+                    <div class="dlg-title">分享查看链接</div>
+                    <div class="dlg-sub">拿到链接即可查看；评论需要登录云端账号</div>
+                  </div>
+                  <span class="sp"></span>
+                  <span class="live-chip"><span class="dot"></span>实时 · 3 人在看</span>
+                  <button class="ibtn"><i data-ic="close"></i></button>
+                </div>
+
+                <div class="dlg-body">
+                  <div class="dlg-scene">
+                    <div class="thumb"><svg data-scene="dialogSmall"></svg></div>
+                    <div class="dlg-scene-meta">
+                      <b>W1 展馆 · 秋季车展</b>
+                      <span>130 × 70 m · 19 个展台 · 66 个设施</span>
+                      <span class="ok"><span class="live-chip" style="height:18px;padding:0 6px;font-size:8.5px"><span class="dot"></span>实时同步中</span></span>
+                    </div>
+                  </div>
+
+                  <div class="access-grid">
+                    <div class="access-card">
+                      <span class="ac-icon"><i data-ic="eye"></i></span>
+                      <div class="ac-copy"><b>访问方式</b><span>公开链接 · 无需登录</span></div>
+                      <span class="fixed-chip">公开</span>
+                    </div>
+                    <div class="access-card">
+                      <span class="ac-icon"><i data-ic="user"></i></span>
+                      <div class="ac-copy"><b>评论权限</b><span>登录用户 · 匿名已移除</span></div>
+                      <span class="fixed-chip">登录</span>
+                    </div>
+                  </div>
+
+                  <div class="dlg-rows">
+                    <div class="dlg-row">
+                      <div><b>允许评论</b><span>访客登录后可评论；关闭后所有人只能查看</span></div>
+                      <span class="sp"></span>
+                      <span class="toggle on"><i></i></span>
+                    </div>
+                    <div class="dlg-row">
+                      <div><b>允许导出图片</b><span>开放俯视汇报图下载，默认关闭</span></div>
+                      <span class="sp"></span>
+                      <span class="toggle"><i></i></span>
+                    </div>
+                  </div>
+
+                  <div class="dlg-link">
+                    <span class="lbl">链接</span>
+                    <div class="linkrow"><div class="inp">https://…/#/share/9fK2mQ4xTb1L</div><button class="btn">复制</button></div>
+                  </div>
+                  <div class="dlg-note">匿名评论已移除。已有匿名评论保留为只读历史，作者可在编辑器删除。</div>
+                </div>
+
+                <div class="dlg-foot">
+                  <button class="btn ghost"><i data-ic="pin"></i>冻结当前版本</button>
+                  <span class="sp"></span>
+                  <button class="btn ghost">取消</button>
+                  <button class="btn pri">复制实时链接</button>
+                </div>
+              </div>
+              <span class="anno" style="left:300px;top:248px">1</span>
+              <span class="anno" style="left:300px;top:360px">2</span>
+              <span class="anno" style="left:860px;top:540px">3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <div class="note">
+          <h3><span class="idx">D</span>发布设置</h3>
+          <p class="tag">不增加新开关。访问方式与评论权限是固定规则，只有「允许评论」由作者决定。</p>
+          <div class="lbl">标注</div>
+          <ul>
+            <li>① 访问方式固定公开</li>
+            <li>② 评论权限固定登录用户</li>
+            <li>③ 允许评论关闭后，分享页只读</li>
+          </ul>
+        </div>
+        <div class="note">
+          <div class="lbl">变化</div>
+          <dl>
+            <dt>移除</dt><dd>允许匿名评论</dd>
+            <dt>新增</dt><dd>访问方式 / 评论权限说明</dd>
+            <dt>保留</dt><dd>允许评论、导出、实时、冻结</dd>
+            <dt>历史</dt><dd>旧匿名评论只读，不迁移身份</dd>
+          </dl>
+        </div>
+        <div class="note">
+          <div class="lbl">编辑器</div>
+          <ul>
+            <li class="plus">评审 Tab 仍按项目聚合评论</li>
+            <li class="plus">新评论显示账号名与头像</li>
+            <li class="plus">作者回复 / 解决 / 删除不变</li>
+            <li class="minus">不再显示匿名昵称输入</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ================= 06 权限矩阵 ================= -->
+  <section class="section" id="permission">
+    <div class="section-head">
+      <h2>权限矩阵</h2>
+      <p>一句话：查看永远公开，写操作看登录态与归属；作者保留管理权。</p>
+    </div>
+
+    <div class="perm-wrap">
+      <table class="perm">
+        <thead>
+          <tr><th>操作</th><th>未登录访客</th><th>登录访客</th><th>作者</th><th>评论关闭</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>查看场景 / 旋转缩放</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>点引脚定位 / 查看评论</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>复制链接</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>发表评论 / 回复</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td></tr>
+          <tr><td>解决 / 删除自己的评论</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">—</td></tr>
+          <tr><td>解决 / 删除他人评论</td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td><td class="no">—</td></tr>
+          <tr><td>撤销 / 设置链接</td><td class="no">—</td><td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><td>历史匿名评论</td><td class="ro">只读</td><td class="ro">只读</td><td class="me">可删除</td><td class="ro">只读</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="perm-note">
+      <span><span class="k g"></span>允许</span>
+      <span><span class="k a"></span>作者专属</span>
+      <span><span class="k"></span>不可用 / 只读</span>
+      <span>评论关闭只影响分享页；作者仍可在编辑器管理已有评论。</span>
+    </div>
+  </section>
+
+  <!-- ================= 07 状态与落地 ================= -->
+  <section class="section" id="flow">
+    <div class="section-head">
+      <h2>状态与落地</h2>
+      <p>登录是评论的前置步骤，不是查看的前置步骤；所有失败都不应该把访客赶出场景。</p>
+    </div>
+
+    <div class="state-grid">
+      <div class="state-card">
+        <div class="state-head"><span class="lbl">未登录</span><span class="mono">PUBLIC</span></div>
+        <div class="state-demo"><span class="lg-icon" style="width:26px;height:26px"><i data-ic="lock"></i></span><h4>登录后参与评论</h4></div>
+        <p>查看、定位、复制链接全部可用；面板底部显示登录 / 注册。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl">登录中</span><span class="mono">SUBMIT</span></div>
+        <div class="state-demo"><span class="live-chip lock"><span class="dot"></span>正在登录…</span></div>
+        <p>按钮进入 loading；失败原地报错，不清空账号与密码。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl">已登录</span><span class="mono">SIGNED</span></div>
+        <div class="state-demo"><span class="ava sm">王</span><h4>王工</h4><span class="acct">已登录</span></div>
+        <p>评论栏恢复输入；自己的评论出现解决 / 删除。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl">会话过期</span><span class="mono">401</span></div>
+        <div class="state-demo"><span class="live-chip lock"><span class="dot"></span>登录已过期</span><button class="btn sm">重新登录</button></div>
+        <p>停在当前视角，保留草稿；重新登录后继续发送。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl">评论关闭</span><span class="mono">READ ONLY</span></div>
+        <div class="state-demo"><span class="live-chip lock"><span class="dot"></span>该链接未开放评论</span></div>
+        <p>无论是否登录都只读；作者在编辑器仍可管理。</p>
+      </div>
+      <div class="state-card">
+        <div class="state-head"><span class="lbl">历史匿名</span><span class="mono">LEGACY</span></div>
+        <div class="state-demo"><span class="ava sm">访</span><h4>访客</h4><span class="guest">历史匿名</span></div>
+        <p>保留内容与引脚；不可回复，作者可在编辑器删除。</p>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-label"><span class="lbl">评论路径</span><span class="mono" style="font-size:9px;color:var(--tx-4)">VIEW → LOGIN → COMMENT</span></div>
+      <div class="flow-track">
+        <span class="node view">打开链接 · 无需登录</span><span class="arrow">→</span>
+        <span class="node">查看 / 定位 / 筛选</span><span class="arrow">→</span>
+        <span class="node actor">点「评论」或输入框</span><span class="arrow">→</span>
+        <span class="node auth">登录 / 注册</span><span class="arrow">→</span>
+        <span class="node">回到当前视角</span><span class="arrow">→</span>
+        <span class="node view">发表评论</span>
+      </div>
+    </div>
+
+    <div class="impl-grid">
+      <div class="impl">
+        <h3>后端 / 接口</h3>
+        <ul>
+          <li><code>POST /comments</code> 改为必须带 Bearer；作者从 JWT 取，不再接收 <code>authorName</code> / <code>authorToken</code>。</li>
+          <li><code>GET /comments</code> 仍公开；带登录态时额外返回 <code>mine</code>，用于自己的评论操作。</li>
+          <li><code>PATCH / DELETE</code> 使用 JWT 身份，仅作者本人或链接 owner 可操作。</li>
+          <li><code>allow_comment</code> 继续作为链接级开关；关闭后登录用户也不能写。</li>
+          <li>历史匿名评论保留 <code>author_token</code>，标记 <code>legacy</code>，只读。</li>
+        </ul>
+      </div>
+      <div class="impl">
+        <h3>前端</h3>
+        <ul>
+          <li>分享页增加轻量登录弹窗，复用 <code>/api/auth/login</code> 与滑块验证码。</li>
+          <li>登录 token 继续使用 <code>gms.cloud.token</code>；已登录的编辑器用户打开链接直接是评论态。</li>
+          <li>未登录时评论栏只读；隐藏回复 / 解决 / 删除，保留定位。</li>
+          <li>登录成功不刷新场景，保留相机、选中引脚、草稿与滚动位置。</li>
+          <li>发布弹窗移除“允许匿名评论”，改为固定的“访问方式 / 评论权限”说明。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="change-note" style="margin-top:22px">
+      <i data-ic="check"></i>
+      <p><b>拍板点：</b>登录用户是否允许解决自己的评论？本稿按“允许”设计；如果希望解决只由作者操作，只需把“解决”从登录访客的操作集中移除，其余布局不变。</p>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var ICONS = {
+    user: '<circle cx="12" cy="8" r="3.4"/><path d="M5.5 20c.6-3.3 3-5.2 6.5-5.2s5.9 1.9 6.5 5.2"/>',
+    lock: '<rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/>',
+    link: '<path d="M10 13.8a3.6 3.6 0 005.1 0l3.3-3.3a3.6 3.6 0 00-5.1-5.1L11.6 7"/><path d="M14 10.2a3.6 3.6 0 00-5.1 0l-3.3 3.3a3.6 3.6 0 005.1 5.1l1.7-1.7"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    refresh: '<path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 5v6h-6"/>',
+    eye: '<path d="M2.5 12s3.5-5.5 9.5-5.5S21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.4"/>',
+    comment: '<path d="M20.4 12c0 4.2-3.8 7.4-8.4 7.4-1 0-2-.15-2.9-.42L4 20.4l1.3-3.6A7 7 0 013.6 12c0-4.2 3.8-7.4 8.4-7.4s8.4 3.2 8.4 7.4z"/>',
+    check: '<path d="M5 12.5l4.2 4L19 6.8"/>',
+    pin: '<path d="M12 21s6-6.1 6-11a6 6 0 10-12 0c0 4.9 6 11 6 11z"/><circle cx="12" cy="10" r="2"/>',
+    expand: '<path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/>',
+    alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.1"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.1"/>'
+  };
+  document.querySelectorAll('[data-ic]').forEach(function (n) {
+    var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('class', 'i');
+    s.setAttribute('viewBox', '0 0 24 24');
+    s.innerHTML = ICONS[n.dataset.ic] || '';
+    n.parentNode.replaceChild(s, n);
+  });
+
+  var NS = 'http://www.w3.org/2000/svg';
+  var K = Math.sqrt(3) / 2;
+  function P(x, y, z) { return [(x - y) * K, (x + y) * 0.5 - (z || 0)]; }
+  function mk(name, attrs) {
+    var n = document.createElementNS(NS, name);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+  function pts(arr) {
+    return arr.map(function (p) { return P(p[0], p[1], p[2] || 0); })
+      .map(function (p) { return p[0].toFixed(2) + ',' + p[1].toFixed(2); }).join(' ');
+  }
+
+  var VENUE = { x: -26, y: -16, w: 52, d: 32, h: 7 };
+  var BOOTHS = [
+    { x: -22, y: -12, w: 9, d: 7, h: 3.2, lab: 'W1A01' },
+    { x: -11, y: -12, w: 7, d: 7, h: 2.6, lab: 'W1A02' },
+    { x: -2, y: -12, w: 10, d: 7, h: 4.0, lab: 'W1A03' },
+    { x: 10, y: -12, w: 8, d: 7, h: 2.4, lab: 'W1A04' },
+    { x: -22, y: -3.5, w: 6, d: 6, h: 2.8 },
+    { x: -13, y: -3.5, w: 5, d: 6, h: 2.2 },
+    { x: 2, y: -3.5, w: 8, d: 6, h: 3.6, lab: 'W1B03' },
+    { x: 12, y: -3.5, w: 6, d: 6, h: 2.0 },
+    { x: -22, y: 5, w: 8, d: 8, h: 3.0 },
+    { x: -11, y: 5, w: 5, d: 8, h: 2.4 },
+    { x: 6, y: 5, w: 7, d: 8, h: 2.8, lab: '咖啡区' },
+    { x: 15, y: 5, w: 6, d: 8, h: 2.2 }
+  ];
+
+  var SCENES = {
+    gateOut: { vb: '-44 -31 88 55', grid: 2, sel: 2, pins: [[-14, -8, 5.2, 1, 'active'], [0, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved']] },
+    loginBg: { vb: '-44 -31 88 55', grid: 2, sel: 2, pins: [[-14, -8, 5.2, 1, 'active'], [0, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved']] },
+    signed: { vb: '-44 -31 88 55', grid: 2, sel: 2, pins: [[-14, -8, 5.2, 1, 'active'], [0, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved']] },
+    dialog: { vb: '-44 -31 88 55', grid: 4, sel: 2, pins: [] },
+    dialogSmall: { vb: '-44 -31 88 55', grid: 4, sel: 2, pins: [] }
+  };
+
+  function drawPins(svg, cfg) {
+    (cfg.pins || []).forEach(function (p) {
+      var xy = P(p[0], p[1], p[2]);
+      var n = p[3], st = p[4] || 'open';
+      var on = st !== 'resolved';
+      if (st === 'active') {
+        svg.appendChild(mk('circle', { cx: xy[0], cy: xy[1], r: 2.8, fill: 'rgba(111,124,232,.13)' }));
+        svg.appendChild(mk('circle', { cx: xy[0], cy: xy[1], r: 2.1, fill: 'none', stroke: 'rgba(111,124,232,.42)', 'stroke-width': '.2' }));
+      }
+      svg.appendChild(mk('circle', {
+        cx: xy[0], cy: xy[1], r: 1.32,
+        fill: on ? '#6f7ce8' : 'rgba(255,255,255,.10)',
+        stroke: on ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.22)',
+        'stroke-width': '.18'
+      }));
+      var t = mk('text', {
+        x: xy[0], y: xy[1] + 0.06, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        'font-size': '1.22', 'font-family': 'ui-monospace,monospace',
+        fill: on ? '#fff' : '#8b8f98'
+      });
+      t.textContent = n;
+      svg.appendChild(t);
+    });
+  }
+
+  var sceneSeq = 0;
+  function drawScene(svg, key) {
+    var cfg = SCENES[key] || SCENES.gateOut;
+    var uid = 'lg' + key + '-' + (sceneSeq++);
+    svg.setAttribute('viewBox', cfg.vb);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+    svg.innerHTML = '';
+
+    var defs = mk('defs');
+    var clip = mk('clipPath', { id: uid + '-clip' });
+    clip.appendChild(mk('polygon', {
+      points: pts([[VENUE.x, VENUE.y], [VENUE.x + VENUE.w, VENUE.y],
+        [VENUE.x + VENUE.w, VENUE.y + VENUE.d], [VENUE.x, VENUE.y + VENUE.d]])
+    }));
+    defs.appendChild(clip);
+    svg.appendChild(defs);
+
+    svg.appendChild(mk('polygon', {
+      points: pts([[VENUE.x, VENUE.y], [VENUE.x + VENUE.w, VENUE.y],
+        [VENUE.x + VENUE.w, VENUE.y + VENUE.d], [VENUE.x, VENUE.y + VENUE.d]]),
+      fill: 'rgba(255,255,255,.022)'
+    }));
+
+    var g = mk('g', { 'clip-path': 'url(#' + uid + '-clip)' });
+    for (var x = VENUE.x; x <= VENUE.x + VENUE.w; x += cfg.grid) {
+      var a = P(x, VENUE.y), b = P(x, VENUE.y + VENUE.d);
+      g.appendChild(mk('line', {
+        x1: a[0], y1: a[1], x2: b[0], y2: b[1],
+        stroke: x === 0 ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.042)', 'stroke-width': '.28'
+      }));
+    }
+    for (var y = VENUE.y; y <= VENUE.y + VENUE.d; y += cfg.grid) {
+      var c = P(VENUE.x, y), d = P(VENUE.x + VENUE.w, y);
+      g.appendChild(mk('line', {
+        x1: c[0], y1: c[1], x2: d[0], y2: d[1],
+        stroke: y === 0 ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.042)', 'stroke-width': '.28'
+      }));
+    }
+    svg.appendChild(g);
+
+    var ring = [[VENUE.x, VENUE.y], [VENUE.x + VENUE.w, VENUE.y],
+      [VENUE.x + VENUE.w, VENUE.y + VENUE.d], [VENUE.x, VENUE.y + VENUE.d]];
+    svg.appendChild(mk('polygon', {
+      points: ring.map(function (p) { return P(p[0], p[1], VENUE.h); }).map(function (p) {
+        return p[0].toFixed(2) + ',' + p[1].toFixed(2);
+      }).join(' '),
+      fill: 'none', stroke: 'rgba(255,255,255,.17)', 'stroke-width': '.45', 'stroke-dasharray': '2 1.6'
+    }));
+    ring.forEach(function (p) {
+      var t = P(p[0], p[1], VENUE.h), bt = P(p[0], p[1], 0);
+      svg.appendChild(mk('line', {
+        x1: bt[0], y1: bt[1], x2: t[0], y2: t[1], stroke: 'rgba(255,255,255,.13)', 'stroke-width': '.4'
+      }));
+    });
+
+    var order = BOOTHS.map(function (b, i) {
+      return { b: b, i: i, z: (b.x + b.w / 2) + (b.y + b.d / 2) };
+    }).sort(function (p, q) { return p.z - q.z; });
+
+    order.forEach(function (it) {
+      var b = it.b, x = b.x, y = b.y, w = b.w, d = b.d, h = b.h;
+      var on = cfg.sel === it.i;
+      var fTop = on ? 'rgba(233,160,106,.34)' : '#2a2f36';
+      var fA = on ? 'rgba(233,160,106,.18)' : '#1d2126';
+      var fB = on ? 'rgba(233,160,106,.10)' : '#171a1f';
+      var stroke = on ? '#e9a06a' : 'rgba(255,255,255,.10)';
+      var sw = on ? '0.55' : '0.3';
+
+      svg.appendChild(mk('polygon', {
+        points: pts([[x, y + d, 0], [x + w, y + d, 0], [x + w, y + d, h], [x, y + d, h]]),
+        fill: fA, stroke: stroke, 'stroke-width': sw
+      }));
+      svg.appendChild(mk('polygon', {
+        points: pts([[x + w, y, 0], [x + w, y + d, 0], [x + w, y + d, h], [x + w, y, h]]),
+        fill: fB, stroke: stroke, 'stroke-width': sw
+      }));
+      svg.appendChild(mk('polygon', {
+        points: pts([[x, y, h], [x + w, y, h], [x + w, y + d, h], [x, y + d, h]]),
+        fill: fTop, stroke: stroke, 'stroke-width': sw
+      }));
+
+      if (b.lab) {
+        var lp = P(x + w / 2, y + d / 2, h);
+        var lt = mk('text', {
+          x: lp[0], y: lp[1] + 0.5, 'text-anchor': 'middle',
+          'font-size': '1.18', 'font-family': 'ui-monospace,monospace',
+          fill: on ? '#f4c9a6' : 'rgba(255,255,255,.34)'
+        });
+        lt.textContent = b.lab;
+        svg.appendChild(lt);
+      }
+    });
+
+    drawPins(svg, cfg);
+  }
+
+  document.querySelectorAll('[data-scene]').forEach(function (s) {
+    drawScene(s, s.dataset.scene);
+  });
+
+  document.querySelectorAll('[data-gizmo]').forEach(function (s) {
+    s.setAttribute('viewBox', '0 0 44 44');
+    var cx = 22, cy = 24, L = 14;
+    [
+      { d: [cx - L * 0.87, cy + L * 0.5], k: '#c96b5e', t: 'X', tx: -6, ty: 5 },
+      { d: [cx + L * 0.87, cy + L * 0.5], k: '#5e9c6b', t: 'Z', tx: 5, ty: 5 },
+      { d: [cx, cy - L], k: '#6f7ce8', t: 'Y', tx: 0, ty: -3 }
+    ].forEach(function (a) {
+      s.appendChild(mk('line', {
+        x1: cx, y1: cy, x2: a.d[0], y2: a.d[1], stroke: a.k, 'stroke-width': '1.8', 'stroke-linecap': 'round'
+      }));
+      var t = mk('text', {
+        x: a.d[0] + a.tx, y: a.d[1] + a.ty, fill: a.k,
+        'font-size': '8', 'font-family': 'ui-monospace,monospace', 'font-weight': '500'
+      });
+      t.textContent = a.t;
+      s.appendChild(t);
+    });
+  });
+
+  function fit() {
+    document.querySelectorAll('.mock-scaler').forEach(function (w) {
+      var inner = w.querySelector('.mock');
+      if (!inner) return;
+      var bw = parseFloat(inner.dataset.w) || 1200;
+      var bh = parseFloat(inner.dataset.h) || 680;
+      var s = Math.min(1, w.clientWidth / bw);
+      inner.style.width = bw + 'px';
+      inner.style.height = bh + 'px';
+      inner.style.transform = 'scale(' + s + ')';
+      w.style.height = (bh * s) + 'px';
+    });
+  }
+  fit();
+  window.addEventListener('resize', fit, { passive: true });
+
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[data-t]'));
+  var map = {};
+  links.forEach(function (l) { map[l.dataset.t] = l; });
+  var targets = [];
+  ['change', 'public', 'login', 'signed', 'editor', 'permission', 'flow'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) targets.push(el);
+  });
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (l) { l.classList.remove('on'); });
+        if (map[en.target.id]) map[en.target.id].classList.add('on');
+      });
+    }, { rootMargin: '-20% 0px -65% 0px' });
+    targets.forEach(function (t) { io.observe(t); });
+  }
+})();
+</script>
+</body>
+</html>

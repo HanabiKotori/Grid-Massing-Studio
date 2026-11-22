@@ -9,11 +9,13 @@ import {
 } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppToolbar from '../components/AppToolbar.vue'
+import ToastHost from '../components/ToastHost.vue'
 import SceneStatus from '../components/SceneStatus.vue'
 import WalkMinimap from '../components/WalkMinimap.vue'
 import WalkOverlay from '../components/WalkOverlay.vue'
 import WeatherPanel from '../components/WeatherPanel.vue'
 import type { LiveWeather } from '../core/amapWeather'
+import { pushMessage } from '../core/messageCenter'
 import {
   Stage,
   type QualityLevel,
@@ -89,7 +91,6 @@ const sunPlaying = ref(true)
 const hostLeft = ref(false)
 const closeTitle = ref('房主已退出')
 const closeMessage = ref('房间已解散，正在返回默认页面…')
-const toastMsg = ref('')
 const lastPose = ref({ x: 0, z: 0 })
 const messageOpen = ref(false)
 const messageDraft = ref('')
@@ -206,7 +207,6 @@ let listTimer: number | null = null
 let timeSyncTimer: number | null = null
 let lastTimeSyncAt = 0
 let redirectTimer: number | null = null
-let toastTimer: number | null = null
 let intentionalClose = false
 let leaving = false
 let pendingHostScene: LoadedMultiplayerScene | null = null
@@ -216,12 +216,11 @@ let fullscreenAttempted = false
 let portraitExitTimer: number | null = null
 
 function toast(text: string) {
-  toastMsg.value = text
-  if (toastTimer !== null) window.clearTimeout(toastTimer)
-  toastTimer = window.setTimeout(() => {
-    toastMsg.value = ''
-    toastTimer = null
-  }, 2200)
+  pushMessage({
+    scope: 'multiplayer',
+    type: 'action',
+    title: text,
+  })
 }
 
 function clearPortraitExitTimer() {
@@ -1549,7 +1548,6 @@ onBeforeUnmount(() => {
   stopStateTimer()
   if (listTimer !== null) window.clearTimeout(listTimer)
   if (redirectTimer !== null) window.clearTimeout(redirectTimer)
-  if (toastTimer !== null) window.clearTimeout(toastTimer)
   clearPortraitExitTimer()
   intentionalClose = true
   cleanupStage()
@@ -2129,7 +2127,7 @@ onBeforeUnmount(() => {
       @close="closeWeather"
     />
 
-    <div v-if="toastMsg" class="mp-toast">{{ toastMsg }}</div>
+    <ToastHost scope="multiplayer" kind="action" placement="top-center" offset="64px" />
   </div>
 </template>
 

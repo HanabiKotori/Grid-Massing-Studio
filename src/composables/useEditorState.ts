@@ -1,4 +1,5 @@
 import { computed, ref, shallowRef } from 'vue'
+import { pushMessage } from '../core/messageCenter'
 import { newProjectKey } from '../core/projectKey'
 import type { QualityLevel, WalkState, WalkView } from '../core/Stage'
 import type { WalkTourInfo } from '../core/walkTour'
@@ -63,7 +64,6 @@ export function useEditorState() {
   const furnitureLabelsOn = ref(false)
   const areaOn = ref(false)
   const venueNoTop = ref(true)
-  const toastMsg = ref('')
   const showHelp = ref(false)
   const showWeather = ref(false)
   const toolMenu = ref<'view' | 'display' | 'quality' | 'data' | null>(null)
@@ -103,8 +103,6 @@ export function useEditorState() {
   /** 初次加载：查询 / 恢复 IndexedDB 期间隐藏欢迎弹窗与编辑面板 */
   const appBooting = ref(true)
   const dockExpanded = ref(false)
-
-  let toastTimer = 0
 
   const qualityLabel = computed(() => QUALITY_LABELS[quality.value])
   const simTime = computed(() => {
@@ -189,9 +187,11 @@ export function useEditorState() {
   }
 
   function toast(text: string) {
-    toastMsg.value = text
-    window.clearTimeout(toastTimer)
-    toastTimer = window.setTimeout(() => (toastMsg.value = ''), 2800)
+    pushMessage({
+      scope: 'editor',
+      type: 'action',
+      title: text,
+    })
   }
 
   /** 绘制和常态浏览都需要鼠标坐标；值变化时才写入响应式状态 */
@@ -210,7 +210,7 @@ export function useEditorState() {
   }
 
   function dispose() {
-    window.clearTimeout(toastTimer)
+    // 消息生命周期由 ToastHost 管理
   }
 
   return {
@@ -245,7 +245,6 @@ export function useEditorState() {
     furnitureLabelsOn,
     areaOn,
     venueNoTop,
-    toastMsg,
     showHelp,
     showWeather,
     toolMenu,

@@ -118,7 +118,7 @@ function update() {
           <div>
             <div class="sd-title">分享查看链接</div>
             <div class="sd-sub">
-              {{ existing ? statusText : '作者修改后，链接内容自动更新，访客无需刷新' }}
+              {{ existing ? statusText : '拿到链接即可查看；评论需要登录云端账号' }}
             </div>
           </div>
           <span class="rp-sp" />
@@ -134,7 +134,7 @@ function update() {
             <div class="sd-thumb">3D</div>
             <div class="sd-scene-meta">
               <b>{{ venueName || '未命名场景' }}</b>
-              <span>{{ existing ? `第 ${existing.revision} 次修订 · ${existing.commentCount} 条评论` : '只读场景 · 支持匿名评论' }}</span>
+              <span>{{ existing ? `第 ${existing.revision} 次修订 · ${existing.commentCount} 条评论` : '只读场景 · 评论需登录' }}</span>
               <span v-if="existing && existing.liveMode">实时同步中 · {{ existing.viewerCount }} 人正在查看</span>
             </div>
           </div>
@@ -145,6 +145,22 @@ function update() {
           </label>
 
           <div class="sd-rows">
+            <div class="sd-row sd-row-static">
+              <div>
+                <b>访问方式</b>
+                <span>拿到链接即可查看，无需登录</span>
+              </div>
+              <span class="rp-sp" />
+              <span class="sd-fixed">公开</span>
+            </div>
+            <div class="sd-row sd-row-static">
+              <div>
+                <b>评论权限</b>
+                <span>登录云端账号后才能评论</span>
+              </div>
+              <span class="rp-sp" />
+              <span class="sd-fixed">登录用户</span>
+            </div>
             <div class="sd-row">
               <div>
                 <b>实时同步</b>
@@ -161,8 +177,8 @@ function update() {
             </div>
             <div class="sd-row">
               <div>
-                <b>允许匿名评论</b>
-                <span>访客填写昵称即可在画布上留评论</span>
+                <b>允许评论</b>
+                <span>登录后可评论；关闭后所有人只能查看</span>
               </div>
               <span class="rp-sp" />
               <button
@@ -200,7 +216,7 @@ function update() {
           </div>
 
           <div class="sd-hint">
-            冻结后会生成独立快照链接，评论位置固定在该版本，适合归档或验收。当前版本不提供口令与有效期。
+            冻结后会生成独立快照链接，评论位置固定在该版本，适合归档或验收。当前版本不提供口令与有效期。匿名评论已移除，已有匿名评论保留为只读历史。
           </div>
 
           <div v-if="!cloudEnabled" class="sd-error">未开启 dataService，分享与实时评论不可用。</div>

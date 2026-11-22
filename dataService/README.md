@@ -9,7 +9,7 @@
 - 随机 SVG 图片滑块验证码（缺口坐标只保存在服务端，5 分钟过期、最多 4 次尝试）；
 - 每个账号固定 10 个存储位置（slot 1-10），每个位置保存一份场景快照；
 - 登录状态下自动保存写入所选位置，支持手动保存 / 加载 / 删除；
-- 分享链接：实时 / 冻结快照、匿名评论、项目级评论聚合；
+- 分享链接：实时 / 冻结快照、公开查看、登录评论、项目级评论聚合；
 - 实时通道：SSE 广播场景增量补丁、评论新增 / 状态变更 / 删除；
 - MySQL 表结构在启动时自动创建（`schema.sql` 也可手动执行）。
 
@@ -93,13 +93,16 @@ SOURCE schema.sql;
 | DELETE | `/api/shares/:token` | owner | 撤销链接并关闭 SSE |
 | PATCH | `/api/shares/:token/live` | owner | 实时增量补丁：`{ baseRevision, patch }` |
 | GET | `/api/shares/:token/live?since=` | 公开 | 断线追平：同 revision 返回空，否则返回完整场景 |
-| GET / POST | `/api/shares/:token/comments` | 公开 | 评论列表 / 新建与回复 |
-| PATCH / DELETE | `/api/shares/:token/comments/:id` | owner 或作者 token | 编辑、解决、删除 |
+| GET | `/api/shares/:token/comments` | 公开 | 评论列表；带 JWT 时返回当前账号的 `mine` |
+| POST | `/api/shares/:token/comments` | 登录 | 新建 / 回复；作者从 JWT 取，匿名评论已移除 |
+| PATCH / DELETE | `/api/shares/:token/comments/:id` | 登录（owner 或作者） | 编辑、解决、删除；历史匿名评论仅 owner 可删除 |
 | GET | `/api/review/comments?projectKey=` | 登录 | 编辑器按项目聚合评论 |
 | POST | `/api/shares/:token/stream-ticket` | 公开 | 分享页 SSE 短时 ticket（60 秒） |
 | GET | `/api/shares/:token/stream` | ticket | 分享页 SSE：场景补丁、评论、在线人数 |
 | POST | `/api/review/stream-ticket` | 登录 | 编辑器项目流 ticket；需该项目下存在自己的有效链接 |
 | GET | `/api/review/stream` | ticket | 编辑器 SSE：项目内评论新增 / 更新 / 删除 |
+
+评论写入统一要求 `Authorization: Bearer <token>`；历史匿名评论（`author_user_id` 为空、仅有 `author_token`）保留只读，不能回复或解决，仅链接 owner 可删除。查看分享页与评论列表仍然公开。
 
 SSE 连接保存在进程内存中，建议单实例运行；多实例需要 Redis pub/sub。Nginx 需要关闭响应缓冲：
 

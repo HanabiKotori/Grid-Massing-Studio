@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>场馆白膜 · 消息通知音效选项</title>
+<style>
+:root{
+  --bg:#08090a; --bg-1:#0b0c0e; --bg-2:#101113; --bg-3:#15161a; --bg-4:#1c1e22;
+  --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.12);
+  --tx:#ecedef; --tx-2:#9b9fa5; --tx-3:#63666c; --tx-4:#43464c;
+  --accent:#6f7ce8; --accent-2:#a7b0ff; --accent-soft:rgba(111,124,232,.14);
+  --green:#5bbd8b; --amber:#e9a06a; --red:#eb5757;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","HarmonyOS Sans SC","MiSans","Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto 0;height:520px;background:radial-gradient(70% 100% at 50% 0%,rgba(111,124,232,.08),transparent 72%);pointer-events:none;z-index:0}
+.page{position:relative;z-index:1;max-width:1120px;margin:0 auto;padding:0 48px 100px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.head{padding:72px 0 34px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-3)}
+.eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(111,124,232,.15)}
+h1{margin:18px 0 0;font-size:38px;line-height:1.15;font-weight:600;letter-spacing:-.025em}
+h1 em{font-style:normal;color:var(--tx-3)}
+.lede{margin:16px 0 0;max-width:760px;font-size:14px;line-height:1.75;color:var(--tx-2)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.chip{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid var(--line);border-radius:5px;background:var(--bg-2);font-size:11.5px;color:var(--tx-2)}
+.chip b{font-weight:500;color:var(--tx)}
+.chip .k{width:5px;height:5px;border-radius:1px;background:var(--tx-4)}
+.chip.good .k{background:var(--green)}
+.chip.acc .k{background:var(--accent)}
+
+.toc{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:4px;height:46px;margin:0 -48px 8px;padding:0 48px;border-bottom:1px solid var(--line);background:rgba(8,9,10,.86);backdrop-filter:blur(16px) saturate(140%);overflow-x:auto;scrollbar-width:none}
+.toc::-webkit-scrollbar{display:none}
+.toc a{flex:none;display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:5px;font-size:12px;color:var(--tx-3);text-decoration:none}
+.toc a:hover{color:var(--tx-2);background:var(--bg-2)}
+.toc a.on{color:var(--tx);background:var(--bg-3)}
+.toc a i{font-family:var(--mono);font-size:9.5px;font-style:normal;color:var(--tx-4)}
+.toc a.on i{color:var(--accent)}
+
+.section{padding-top:54px;scroll-margin-top:56px}
+.section-head{display:flex;gap:36px;align-items:flex-end;justify-content:space-between;margin-bottom:24px}
+.section-head h2{margin:0;font-size:20px;font-weight:600;letter-spacing:-.015em}
+.section-head p{margin:0;max-width:560px;font-size:12.5px;line-height:1.75;color:var(--tx-3)}
+.lbl{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx-4)}
+
+.now{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.now-card{border:1px solid var(--line);border-radius:8px;padding:14px;background:rgba(255,255,255,.014)}
+.now-card h3{margin:0 0 7px;font-size:12.5px;font-weight:600;color:var(--tx-2)}
+.now-card p{margin:0;font-size:11.5px;line-height:1.7;color:var(--tx-3)}
+.now-card .tag{display:inline-flex;align-items:center;gap:5px;height:18px;margin-bottom:8px;padding:0 6px;border:1px solid rgba(233,160,106,.24);border-radius:3px;background:rgba(233,160,106,.06);font-family:var(--mono);font-size:8.5px;color:#d8a27b}
+.now-card .tag.ok{border-color:rgba(91,189,139,.24);background:rgba(91,189,139,.06);color:#93d9b3}
+
+.sound-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.sound-card{border:1px solid var(--line);border-radius:9px;padding:16px;background:linear-gradient(180deg,rgba(255,255,255,.018),rgba(255,255,255,.008));position:relative;overflow:hidden}
+.sound-card.recommend{border-color:rgba(111,124,232,.3);background:linear-gradient(180deg,rgba(111,124,232,.07),rgba(255,255,255,.008))}
+.sound-top{display:flex;align-items:flex-start;gap:10px}
+.sound-id{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--accent)}
+.sound-name{margin:4px 0 0;font-size:14px;font-weight:600;letter-spacing:-.01em}
+.sound-en{font-family:var(--mono);font-size:9px;color:var(--tx-4);margin-top:2px}
+.sound-play{margin-left:auto;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border:1px solid var(--line-2);border-radius:5px;background:var(--bg-3);color:var(--tx);font:inherit;font-size:10.5px;cursor:pointer;flex:none}
+.sound-play:hover{background:var(--bg-4)}
+.sound-play svg{width:12px;height:12px}
+.sound-card.playing .sound-play{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-2)}
+.sound-card.playing .bar{animation:bar .45s ease-in-out}
+@keyframes bar{0%,100%{transform:scaleY(.55)}45%{transform:scaleY(1)}}
+.wave{display:flex;align-items:flex-end;gap:3px;height:22px;margin:12px 0 9px}
+.wave .bar{width:3px;border-radius:1px;background:var(--tx-4);transform-origin:bottom;height:var(--h,45%)}
+.sound-card.recommend .wave .bar{background:rgba(111,124,232,.5)}
+.sound-desc{margin:0;font-size:11.5px;line-height:1.7;color:var(--tx-3)}
+.sound-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px}
+.sound-meta span{display:inline-flex;align-items:center;height:19px;padding:0 6px;border:1px solid var(--line);border-radius:3px;font-family:var(--mono);font-size:8.5px;color:var(--tx-4)}
+.sound-meta .good{color:#93d9b3;border-color:rgba(91,189,139,.24);background:rgba(91,189,139,.05)}
+.sound-meta .warn{color:#d8a27b;border-color:rgba(233,160,106,.24);background:rgba(233,160,106,.05)}
+.recommend-badge{position:absolute;right:14px;top:14px;font-family:var(--mono);font-size:8px;letter-spacing:.08em;color:var(--accent-2);border:1px solid rgba(111,124,232,.3);border-radius:3px;padding:2px 5px;background:var(--accent-soft)}
+.sound-top .sound-play{margin-right:0}
+.sound-card.recommend .sound-top .sound-play{margin-right:58px}
+.volume{display:flex;align-items:center;gap:12px;margin-top:14px;padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:var(--bg-1)}
+.volume span{font-family:var(--mono);font-size:9px;color:var(--tx-4);white-space:nowrap}
+.volume input{flex:1;accent-color:var(--accent)}
+.volume b{font-family:var(--mono);font-size:9px;font-weight:400;color:var(--tx-3);width:30px;text-align:right}
+.audio-note{margin-top:8px;font-size:9.5px;color:var(--tx-4)}
+
+.behavior-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}
+.behavior{border:1px solid var(--line);border-radius:8px;padding:14px;background:rgba(255,255,255,.014)}
+.behavior.recommend{border-color:rgba(111,124,232,.3);background:rgba(111,124,232,.05)}
+.behavior .b-id{font-family:var(--mono);font-size:9px;color:var(--accent)}
+.behavior h3{margin:6px 0 5px;font-size:12.5px;font-weight:600}
+.behavior p{margin:0;font-size:11px;line-height:1.65;color:var(--tx-3)}
+.behavior ul{margin:8px 0 0;padding:0;list-style:none}
+.behavior li{position:relative;padding-left:11px;font-size:10px;line-height:1.65;color:var(--tx-4)}
+.behavior li::before{content:"";position:absolute;left:0;top:7px;width:3px;height:1px;background:var(--tx-4)}
+
+.event-table{width:100%;border-collapse:collapse;margin-top:22px;font-size:11.5px;table-layout:fixed}
+.event-table th{padding:0 10px 8px;text-align:left;font-family:var(--mono);font-size:9px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--tx-4);border-bottom:1px solid var(--line)}
+.event-table th:nth-child(1){width:28%}
+.event-table th:nth-child(2),.event-table th:nth-child(3),.event-table th:nth-child(4){width:24%}
+.event-table td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.045);color:var(--tx-3);line-height:1.6}
+.event-table td:first-child{color:var(--tx-2);font-weight:500}
+.event-table .yes{color:var(--green);font-family:var(--mono);font-size:10px}
+.event-table .no{color:var(--tx-4);font-family:var(--mono);font-size:10px}
+.event-table .soft{color:var(--amber);font-family:var(--mono);font-size:10px}
+
+.share-spec{display:grid;grid-template-columns:1.1fr 1fr;gap:26px;margin-top:18px}
+.spec-card{border:1px solid var(--line);border-radius:9px;padding:16px;background:var(--bg-1)}
+.spec-card h3{margin:0 0 8px;font-size:13px;font-weight:600}
+.spec-card p{margin:0;font-size:11.5px;line-height:1.7;color:var(--tx-3)}
+.spec-card ul{margin:10px 0 0;padding:0;list-style:none}
+.spec-card li{position:relative;padding-left:13px;margin-bottom:5px;font-size:11.5px;line-height:1.65;color:var(--tx-2)}
+.spec-card li::before{content:"";position:absolute;left:1px;top:8px;width:4px;height:1px;background:var(--tx-4)}
+.spec-card li.good::before{background:var(--green)}
+.spec-card li.warn::before{background:var(--amber)}
+.notif-demo{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.notif{display:flex;align-items:center;gap:9px;padding:9px 10px;border:1px solid var(--line-2);border-radius:7px;background:#0e0f12;box-shadow:0 12px 30px -20px #000}
+.notif .n-ico{width:24px;height:24px;flex:none;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(111,124,232,.3);background:var(--accent-soft);color:var(--accent-2);font-family:var(--mono);font-size:9px}
+.notif .n-ico.green{border-color:rgba(91,189,139,.28);background:rgba(91,189,139,.08);color:#93d9b3}
+.notif div{min-width:0}
+.notif b{display:block;font-size:10.5px;font-weight:500;color:var(--tx)}
+.notif span{display:block;margin-top:1px;font-size:9.5px;color:var(--tx-4)}
+.notif .n-count{margin-left:auto;min-width:16px;height:16px;padding:0 4px;display:grid;place-items:center;border-radius:8px;background:var(--accent);color:#fff;font-family:var(--mono);font-size:8px}
+.fab-demo{display:inline-flex;align-items:center;gap:7px;height:32px;margin-top:10px;padding:0 11px;border:1px solid var(--line-2);border-radius:16px;background:rgba(12,13,15,.94);font-size:10.5px;color:var(--tx-2);width:max-content}
+.fab-demo b{min-width:16px;height:16px;display:grid;place-items:center;border-radius:8px;background:var(--accent);color:#fff;font-family:var(--mono);font-size:8px;font-weight:400}
+.decision{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}
+.decision-card{border:1px solid var(--line);border-radius:8px;padding:13px;background:rgba(255,255,255,.014)}
+.decision-card .lbl{margin-bottom:6px}
+.decision-card p{margin:0;font-size:11px;line-height:1.65;color:var(--tx-3)}
+.decision-card b{color:var(--tx-2);font-weight:500}
+.recommend-box{margin-top:18px;display:flex;gap:11px;padding:13px 14px;border:1px solid rgba(111,124,232,.28);border-radius:8px;background:rgba(111,124,232,.06)}
+.recommend-box .i{width:15px;height:15px;color:var(--accent-2);flex:none;margin-top:2px}
+.recommend-box p{margin:0;font-size:11.5px;line-height:1.7;color:var(--tx-2)}
+.recommend-box b{color:var(--tx);font-weight:500}
+.foot{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);font-size:10px;color:var(--tx-4);display:flex;justify-content:space-between;gap:20px}
+
+@media (max-width:980px){
+  .sound-grid,.now,.share-spec{grid-template-columns:1fr}
+  .behavior-grid{grid-template-columns:1fr}
+  .decision{grid-template-columns:1fr 1fr}
+  .page{padding:0 26px 80px}
+  .toc{margin:0 -26px 8px;padding:0 26px}
+  .section-head{flex-direction:column;align-items:flex-start;gap:8px}
+}
+@media (max-width:620px){
+  h1{font-size:29px}
+  .decision{grid-template-columns:1fr}
+  .event-table{display:block;overflow-x:auto;white-space:nowrap}
+  .sound-top .sound-play{margin-right:0}
+  .recommend-badge{position:static;margin-bottom:6px;width:max-content}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="head">
+    <div class="eyebrow"><span class="dot"></span>Notification audio · options</div>
+    <h1>消息通知 <em>·</em> 音效与触发策略</h1>
+    <p class="lede">编辑器已有评论 Toast 但还没有声音；分享页目前只有“作者回复”会提示，其他访客的新评论没有通知。下面有 12 个可试听的音色和 3 套触发策略，先选方向，再改代码。</p>
+    <div class="chips">
+      <span class="chip acc"><span class="k"></span><b>音色</b> 12 个候选</span>
+      <span class="chip good"><span class="k"></span><b>你的偏好</b> S2 玻璃双音 / S7 三音风铃</span>
+      <span class="chip"><span class="k"></span><b>默认</b> 首次交互后解锁音频</span>
+      <span class="chip"><span class="k"></span><b>可静音</b> 顶栏持久化</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <a href="#now" data-t="now" class="on"><i>01</i>现状缺口</a>
+    <a href="#sounds" data-t="sounds"><i>02</i>音色候选</a>
+    <a href="#behavior" data-t="behavior"><i>03</i>触发策略</a>
+    <a href="#share" data-t="share"><i>04</i>分享页通知</a>
+    <a href="#decision" data-t="decision"><i>05</i>拍板</a>
+  </nav>
+
+  <section class="section" id="now">
+    <div class="section-head">
+      <h2>现状缺口</h2>
+      <p>不是“没有通知”，而是两边不一致：编辑器有评论 Toast，分享页只对作者回复弹提示。</p>
+    </div>
+    <div class="now">
+      <div class="now-card">
+        <span class="tag ok">已有视觉提示</span>
+        <h3>编辑器</h3>
+        <p>访客新评论 → 右上角 Toast + 评审 Tab 未读 + 评论引脚；但没有音效。作者自己的操作不会提示。</p>
+      </div>
+      <div class="now-card">
+        <span class="tag">缺少通知</span>
+        <h3>分享页</h3>
+        <p>只有作者回复会弹 Toast；其他访客的新评论、作者解决状态都不会通知。移动端评论抽屉关闭时也没有未读入口。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="sounds">
+    <div class="section-head">
+      <h2>音色候选</h2>
+      <p>S9–S12 是 S2 / S7 的玻璃与风铃同族：更低、更暖、下行收束和单音水晶。点击「试听」即可播放。</p>
+    </div>
+
+    <div class="sound-grid">
+      <article class="sound-card" data-card="s1">
+        <div class="sound-top">
+          <div><div class="sound-id">S1 / WOOD</div><h3 class="sound-name">木质轻点</h3><div class="sound-en">short wood tap</div></div>
+          <button class="sound-play" data-sound="s1" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:36%"></i><i class="bar" style="--h:62%"></i><i class="bar" style="--h:88%"></i><i class="bar" style="--h:54%"></i><i class="bar" style="--h:30%"></i><i class="bar" style="--h:46%"></i><i class="bar" style="--h:24%"></i><i class="bar" style="--h:14%"></i>
+        </div>
+        <p class="sound-desc">一声低中频木块，起音快、尾音短。像在桌面轻敲一下，不刺耳，连续评论也不会烦。</p>
+        <div class="sound-meta"><span>约 100 ms</span><span class="good">低侵略</span><span>适合高频评论</span></div>
+      </article>
+
+      <article class="sound-card recommend" data-card="s2">
+        <div class="recommend-badge">你的偏好</div>
+        <div class="sound-top">
+          <div><div class="sound-id">S2 / GLASS</div><h3 class="sound-name">玻璃双音</h3><div class="sound-en">two-note glass</div></div>
+          <button class="sound-play" data-sound="s2" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:22%"></i><i class="bar" style="--h:40%"></i><i class="bar" style="--h:68%"></i><i class="bar" style="--h:82%"></i><i class="bar" style="--h:58%"></i><i class="bar" style="--h:76%"></i><i class="bar" style="--h:44%"></i><i class="bar" style="--h:26%"></i><i class="bar" style="--h:18%"></i>
+        </div>
+        <p class="sound-desc">C6 → G6 两音，带一点高频泛音。更友好、更像“收到消息”，适合给客户用的分享页。</p>
+        <div class="sound-meta"><span>约 200 ms</span><span class="good">清晰</span><span class="warn">比 S1 更显眼</span></div>
+      </article>
+
+      <article class="sound-card" data-card="s3">
+        <div class="sound-top">
+          <div><div class="sound-id">S3 / DIGITAL</div><h3 class="sound-name">数字脉冲</h3><div class="sound-en">double blip</div></div>
+          <button class="sound-play" data-sound="s3" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:50%"></i><i class="bar" style="--h:80%"></i><i class="bar" style="--h:30%"></i><i class="bar" style="--h:70%"></i><i class="bar" style="--h:90%"></i><i class="bar" style="--h:24%"></i><i class="bar" style="--h:12%"></i>
+        </div>
+        <p class="sound-desc">两声短促的高频脉冲，干净、工具感强。适合内部编辑器，但音量稍大时容易显得尖锐。</p>
+        <div class="sound-meta"><span>约 90 ms</span><span>极短</span><span class="warn">偏冷 / 偏尖</span></div>
+      </article>
+
+      <article class="sound-card" data-card="s4">
+        <div class="sound-top">
+          <div><div class="sound-id">S4 / PAPER</div><h3 class="sound-name">纸片轻响</h3><div class="sound-en">soft paper pop</div></div>
+          <button class="sound-play" data-sound="s4" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:30%"></i><i class="bar" style="--h:58%"></i><i class="bar" style="--h:44%"></i><i class="bar" style="--h:66%"></i><i class="bar" style="--h:28%"></i><i class="bar" style="--h:18%"></i>
+        </div>
+        <p class="sound-desc">带滤波的短噪声 + 一点点低频，像纸片翻动。最不“电子”，但笔记本扬声器上可能偏轻。</p>
+        <div class="sound-meta"><span>约 80 ms</span><span class="good">自然</span><span class="warn">小音量下可能听不清</span></div>
+      </article>
+
+      <article class="sound-card" data-card="s5">
+        <div class="sound-top">
+          <div><div class="sound-id">S5 / DEEP</div><h3 class="sound-name">深水低音</h3><div class="sound-en">low water drop</div></div>
+          <button class="sound-play" data-sound="s5" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:78%"></i><i class="bar" style="--h:52%"></i><i class="bar" style="--h:38%"></i><i class="bar" style="--h:46%"></i><i class="bar" style="--h:30%"></i><i class="bar" style="--h:20%"></i><i class="bar" style="--h:12%"></i>
+        </div>
+        <p class="sound-desc">像一滴水落在低音木板上，低、暖、尾音短。比 S1 更沉一点，适合长时间开着编辑器的场景。</p>
+        <div class="sound-meta"><span>约 200 ms</span><span class="good">温暖</span><span class="warn">依赖低频扬声器</span></div>
+      </article>
+
+      <article class="sound-card" data-card="s6">
+        <div class="sound-top">
+          <div><div class="sound-id">S6 / RETRO</div><h3 class="sound-name">复古滴答</h3><div class="sound-en">lo-fi double tick</div></div>
+          <button class="sound-play" data-sound="s6" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:44%"></i><i class="bar" style="--h:76%"></i><i class="bar" style="--h:42%"></i><i class="bar" style="--h:58%"></i><i class="bar" style="--h:82%"></i><i class="bar" style="--h:34%"></i><i class="bar" style="--h:18%"></i>
+        </div>
+        <p class="sound-desc">两声略带电子感的短滴答，像老式终端确认输入。个性强，但和深色工具界面是否协调需要试。</p>
+        <div class="sound-meta"><span>约 110 ms</span><span>有辨识度</span><span class="warn">可能出戏</span></div>
+      </article>
+
+      <article class="sound-card" data-card="s7">
+        <div class="sound-top">
+          <div><div class="sound-id">S7 / CHIME</div><h3 class="sound-name">三音风铃</h3><div class="sound-en">three-note chime</div></div>
+          <button class="sound-play" data-sound="s7" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:20%"></i><i class="bar" style="--h:44%"></i><i class="bar" style="--h:62%"></i><i class="bar" style="--h:84%"></i><i class="bar" style="--h:56%"></i><i class="bar" style="--h:72%"></i><i class="bar" style="--h:40%"></i><i class="bar" style="--h:20%"></i>
+        </div>
+        <p class="sound-desc">C6–E6–G6 三音上行，清晰、友好、有“消息到了”的完成感。比 S2 更长，存在感也更强。</p>
+        <div class="sound-meta"><span>约 360 ms</span><span class="good">悦耳</span><span class="good">你已选</span><span class="warn">比双音更抢注意</span></div>
+      </article>
+
+      <article class="sound-card" data-card="s8">
+        <div class="sound-top">
+          <div><div class="sound-id">S8 / THUMP</div><h3 class="sound-name">轻鼓双击</h3><div class="sound-en">soft double thump</div></div>
+          <button class="sound-play" data-sound="s8" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:86%"></i><i class="bar" style="--h:48%"></i><i class="bar" style="--h:22%"></i><i class="bar" style="--h:34%"></i><i class="bar" style="--h:70%"></i><i class="bar" style="--h:32%"></i><i class="bar" style="--h:14%"></i>
+        </div>
+        <p class="sound-desc">低频轻鼓 + 一点纸面噪声，两声一组。最有“打断感”，适合希望绝对不漏消息的编辑场景。</p>
+        <div class="sound-meta"><span>约 240 ms</span><span>最明显</span><span class="warn">可能偏重 / 惊扰</span></div>
+      </article>
+
+      <article class="sound-card" data-card="s9">
+        <div class="sound-top">
+          <div><div class="sound-id">S9 / FIFTH</div><h3 class="sound-name">纯五度玻璃</h3><div class="sound-en">warm glass fifth</div></div>
+          <button class="sound-play" data-sound="s9" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:24%"></i><i class="bar" style="--h:46%"></i><i class="bar" style="--h:72%"></i><i class="bar" style="--h:58%"></i><i class="bar" style="--h:66%"></i><i class="bar" style="--h:38%"></i><i class="bar" style="--h:20%"></i>
+        </div>
+        <p class="sound-desc">C5–G5，比 S2 低一个八度。仍然是玻璃双音，但更暖、更沉，适合编辑器或长时间评审。</p>
+        <div class="sound-meta"><span>约 220 ms</span><span class="good">温暖</span><span>S2 同族</span><span>比 S2 低</span></div>
+      </article>
+
+      <article class="sound-card" data-card="s10">
+        <div class="sound-top">
+          <div><div class="sound-id">S10 / DESCEND</div><h3 class="sound-name">风铃下行</h3><div class="sound-en">descending chime</div></div>
+          <button class="sound-play" data-sound="s10" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:72%"></i><i class="bar" style="--h:84%"></i><i class="bar" style="--h:60%"></i><i class="bar" style="--h:52%"></i><i class="bar" style="--h:38%"></i><i class="bar" style="--h:26%"></i><i class="bar" style="--h:14%"></i>
+        </div>
+        <p class="sound-desc">G6–E6–C6 三音下行，句尾收束，不催促。和 S7 同一家族，但比上行版本更平静，适合分享页。</p>
+        <div class="sound-meta"><span>约 340 ms</span><span class="good">平静</span><span>S7 同族</span><span>存在感适中</span></div>
+      </article>
+
+      <article class="sound-card" data-card="s11">
+        <div class="sound-top">
+          <div><div class="sound-id">S11 / MARIMBA</div><h3 class="sound-name">木质双音</h3><div class="sound-en">warm marimba pair</div></div>
+          <button class="sound-play" data-sound="s11" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:34%"></i><i class="bar" style="--h:60%"></i><i class="bar" style="--h:78%"></i><i class="bar" style="--h:48%"></i><i class="bar" style="--h:54%"></i><i class="bar" style="--h:28%"></i><i class="bar" style="--h:16%"></i>
+        </div>
+        <p class="sound-desc">E5–A5 的木质双音，像马林巴。它是 S1 和 S2 之间的桥：有双音提示，但不那么亮、不那么“电子”。</p>
+        <div class="sound-meta"><span>约 180 ms</span><span class="good">温暖</span><span>S2 同族</span><span>不如玻璃清亮</span></div>
+      </article>
+
+      <article class="sound-card" data-card="s12">
+        <div class="sound-top">
+          <div><div class="sound-id">S12 / CRYSTAL</div><h3 class="sound-name">水晶单音</h3><div class="sound-en">single crystal strike</div></div>
+          <button class="sound-play" data-sound="s12" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>试听</button>
+        </div>
+        <div class="wave" aria-hidden="true">
+          <i class="bar" style="--h:38%"></i><i class="bar" style="--h:70%"></i><i class="bar" style="--h:86%"></i><i class="bar" style="--h:44%"></i><i class="bar" style="--h:30%"></i><i class="bar" style="--h:20%"></i><i class="bar" style="--h:12%"></i>
+        </div>
+        <p class="sound-desc">单音 G6，带高阶泛音，像轻敲水晶。信息量最低、最精致；适合只想听到“有动静”的编辑器。</p>
+        <div class="sound-meta"><span>约 350 ms</span><span class="good">精致</span><span>S2/S7 同族</span><span>不强调旋律</span></div>
+      </article>
+    </div>
+
+    <div class="volume">
+      <span>试听音量</span>
+      <input id="volume" type="range" min="0" max="100" value="55" aria-label="试听音量" />
+      <b id="volumeValue">55</b>
+    </div>
+    <p class="audio-note">音效为 Web Audio 实时合成，没有外部音频文件；最终实现会使用同一套合成参数，避免额外资源请求。</p>
+  </section>
+
+  <section class="section" id="behavior">
+    <div class="section-head">
+      <h2>触发策略</h2>
+      <p>同一套音效，不同的“什么时候响”。推荐先安静，再让用户自己打开更积极的提醒。</p>
+    </div>
+
+    <div class="behavior-grid">
+      <div class="behavior recommend">
+        <div class="b-id">N1 / QUIET</div>
+        <h3>安静优先</h3>
+        <p>只在页面不可见、或评论面板关闭时响；连续评论合并为一次。</p>
+        <ul><li>不打断输入</li><li>桌面端更安静</li><li>移动端不会连续叮</li></ul>
+      </div>
+      <div class="behavior">
+        <div class="b-id">N2 / IMMEDIATE</div>
+        <h3>即时提醒</h3>
+        <p>每条新评论 / 回复都响，1.5 秒内合并；评论面板打开时也响。</p>
+        <ul><li>最不容易漏消息</li><li>高频评论时会吵</li><li>需要更明显的静音入口</li></ul>
+      </div>
+      <div class="behavior">
+        <div class="b-id">N3 / KEY ONLY</div>
+        <h3>只看关键事件</h3>
+        <p>只对作者回复 / 解决状态响；普通访客评论只更新未读和 Toast。</p>
+        <ul><li>适合客户链接</li><li>会漏掉其他访客评论</li><li>编辑器需要单独配置</li></ul>
+      </div>
+    </div>
+
+    <table class="event-table">
+      <thead><tr><th>事件</th><th>编辑器</th><th>分享页</th><th>音效</th></tr></thead>
+      <tbody>
+        <tr><td>其他访客新评论</td><td>Toast + 未读 + 引脚</td><td>Toast + 未读 + 引脚</td><td class="yes">N1 条件下响</td></tr>
+        <tr><td>新回复</td><td>Toast + 未读</td><td>Toast + 未读</td><td class="yes">N1 条件下响</td></tr>
+        <tr><td>作者回复</td><td>—</td><td>Toast + 未读</td><td class="yes">N1 条件下响</td></tr>
+        <tr><td>解决 / 取消解决</td><td>卡片状态更新</td><td>卡片状态更新</td><td class="no">不响</td></tr>
+        <tr><td>自己的评论 / 操作</td><td>不提示</td><td>不提示</td><td class="no">不响</td></tr>
+        <tr><td>作者编辑场景</td><td>—</td><td>“作者正在编辑”轻提示</td><td class="no">不响</td></tr>
+        <tr><td>评论面板打开</td><td>卡片高亮，不抢焦点</td><td>原地插入，不抢焦点</td><td class="soft">仅 Toast，不响</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section" id="share">
+    <div class="section-head">
+      <h2>分享页通知补齐</h2>
+      <p>分享页需要和编辑器一样有“消息到达”的视觉反馈，不只是音效。</p>
+    </div>
+    <div class="share-spec">
+      <div class="spec-card">
+        <h3>通知规则</h3>
+        <ul>
+          <li class="good">其他访客新评论 / 回复：Toast + 评论 dock 未读 + 引脚</li>
+          <li class="good">作者回复 / 解决：Toast 标明“作者”，解决不响音效</li>
+          <li class="warn">自己的评论不回显通知（按 user_id 过滤）</li>
+          <li class="warn">面板打开时只插入卡片 + “新”标记，不弹全屏提示</li>
+          <li>移动端抽屉关闭时，评论 FAB 显示未读数</li>
+        </ul>
+        <div class="fab-demo">评论 <b>2</b></div>
+      </div>
+      <div class="spec-card">
+        <h3>通知样式</h3>
+        <p>沿用分享页现有的深色 toast，右上角堆叠，最多 3 条；点击定位到对应评论。</p>
+        <div class="notif-demo">
+          <div class="notif"><span class="n-ico">王</span><div><b>王工 评论了 W1A03</b><span>刚刚 · 入口方向</span></div><span class="n-count">1</span></div>
+          <div class="notif"><span class="n-ico green">李</span><div><b>李设计 回复了你</b><span>刚刚 · W1A03</span></div><span class="n-count">2</span></div>
+          <div class="notif"><span class="n-ico green">✓</span><div><b>李设计 已解决「入口方向」</b><span>刚刚 · 仅状态更新</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="decision">
+    <div class="section-head">
+      <h2>拍板</h2>
+      <p>选 1 个音色 + 1 套触发策略；也可以指定编辑器 / 分享页使用不同音色。</p>
+    </div>
+    <div class="decision">
+      <div class="decision-card"><div class="lbl">音色</div><p><b>玻璃 / 风铃</b><br>S2 · S7 · S9 · S10 · S11 · S12<br><br><b>其他</b><br>S1 · S3 · S4 · S5 · S6 · S8</p></div>
+      <div class="decision-card"><div class="lbl">触发</div><p><b>N1</b> 安静优先<br><b>N2</b> 即时提醒<br><b>N3</b> 只看关键事件</p></div>
+      <div class="decision-card"><div class="lbl">页面差异</div><p><b>A</b> 编辑器 / 分享页同一音色<br><b>B</b> 编辑器 S1 + 分享页 S2<br><b>C</b> 编辑器 S3 + 分享页 S1</p></div>
+      <div class="decision-card"><div class="lbl">默认</div><p><b>D1</b> 首次交互后默认开启<br><b>D2</b> 默认静音，用户手动打开<br>顶栏都保留持久化开关</p></div>
+    </div>
+    <div class="recommend-box">
+      <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+      <p><b>你偏好的 S2 / S7 属于玻璃与风铃家族。</b>当前实现：编辑器用 <b>S9 纯五度玻璃</b>，直接回复、作者解决 / 取消解决用 <b>S7 三音风铃</b>，作者删除评论用 <b>S8 轻鼓双击</b>；首次交互后解锁音频。如果只想两边使用同一个音色，S2 最稳；不建议编辑器和分享页同时用 S8。</p>
+    </div>
+    <p class="audio-note" style="margin-top:14px">确认后我会：1）加入音频合成与静音开关；2）补齐分享页的新评论 / 回复 / 解决 Toast 与移动端未读；3）按 user_id 过滤自己的操作；4）补测试。</p>
+  </section>
+
+  <footer class="foot"><span>场馆白膜 · 消息通知选项</span><span>Web Audio · 无外部资源</span></footer>
+</div>
+
+<script>
+(function () {
+  var Ctx = window.AudioContext || window.webkitAudioContext
+  var ctx = null
+  var master = null
+  var volume = 55
+  var cards = document.querySelectorAll('.sound-card')
+
+  function ensure() {
+    if (!Ctx) return false
+    if (!ctx) {
+      ctx = new Ctx()
+      master = ctx.createGain()
+      master.gain.value = 0.7 * (volume / 100)
+      master.connect(ctx.destination)
+    }
+    if (ctx.state === 'suspended') ctx.resume()
+    return true
+  }
+
+  function tone(freq, start, duration, opt) {
+    opt = opt || {}
+    var t0 = ctx.currentTime + start
+    var osc = ctx.createOscillator()
+    var gain = ctx.createGain()
+    osc.type = opt.type || 'sine'
+    osc.frequency.setValueAtTime(freq, t0)
+    if (opt.endFreq) osc.frequency.exponentialRampToValueAtTime(opt.endFreq, t0 + duration)
+    var peak = opt.gain == null ? 0.06 : opt.gain
+    gain.gain.setValueAtTime(0.0001, t0)
+    gain.gain.exponentialRampToValueAtTime(peak, t0 + (opt.attack || 0.005))
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration)
+    osc.connect(gain)
+    gain.connect(master)
+    osc.start(t0)
+    osc.stop(t0 + duration + 0.03)
+  }
+
+  function noise(duration, gainValue, center, q, start) {
+    var len = Math.max(1, Math.ceil(ctx.sampleRate * duration))
+    var buffer = ctx.createBuffer(1, len, ctx.sampleRate)
+    var data = buffer.getChannelData(0)
+    for (var i = 0; i < len; i += 1) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / len)
+    }
+    var src = ctx.createBufferSource()
+    src.buffer = buffer
+    var filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.value = center || 1200
+    filter.Q.value = q || 1.1
+    var g = ctx.createGain()
+    g.gain.value = gainValue == null ? 0.03 : gainValue
+    src.connect(filter)
+    filter.connect(g)
+    g.connect(master)
+    src.start(ctx.currentTime + (start || 0))
+  }
+
+  function play(id) {
+    if (!ensure()) return
+    if (id === 's1') {
+      tone(520, 0, 0.1, { type: 'triangle', endFreq: 300, gain: 0.085 })
+      tone(1560, 0.005, 0.05, { type: 'sine', endFreq: 1100, gain: 0.018 })
+      noise(0.028, 0.01, 2200, 0.8)
+    } else if (id === 's2') {
+      tone(1046.5, 0, 0.16, { gain: 0.06 })
+      tone(1568, 0.08, 0.19, { gain: 0.052 })
+      tone(2093, 0.08, 0.14, { gain: 0.011 })
+    } else if (id === 's3') {
+      tone(1400, 0, 0.038, { type: 'triangle', endFreq: 1800, gain: 0.026 })
+      tone(1900, 0.046, 0.04, { type: 'square', gain: 0.015 })
+      noise(0.02, 0.008, 3000, 0.9)
+    } else if (id === 's4') {
+      noise(0.065, 0.045, 950, 1.2)
+      tone(240, 0, 0.065, { gain: 0.028, endFreq: 180, type: 'sine' })
+    } else if (id === 's5') {
+      tone(320, 0, 0.2, { type: 'triangle', endFreq: 180, gain: 0.085 })
+      tone(640, 0, 0.1, { type: 'sine', gain: 0.016 })
+      noise(0.025, 0.006, 650, 0.9)
+    } else if (id === 's6') {
+      tone(880, 0, 0.042, { type: 'square', gain: 0.016 })
+      tone(1320, 0.052, 0.04, { type: 'triangle', gain: 0.02 })
+      noise(0.016, 0.006, 2600, 0.9)
+    } else if (id === 's7') {
+      var chime = [1046.5, 1318.5, 1568]
+      for (var i = 0; i < chime.length; i += 1) {
+        tone(chime[i], i * 0.07, 0.22 - i * 0.02, { gain: 0.045 })
+      }
+      tone(2093, 0.1, 0.12, { gain: 0.008 })
+    } else if (id === 's8') {
+      tone(130, 0, 0.1, { type: 'sine', endFreq: 70, gain: 0.075 })
+      noise(0.04, 0.016, 420, 0.7)
+      tone(130, 0.12, 0.085, { type: 'sine', endFreq: 80, gain: 0.052 })
+      noise(0.12, 0.01, 500, 0.8)
+    } else if (id === 's9') {
+      tone(523.25, 0, 0.2, { gain: 0.055 })
+      tone(783.99, 0.08, 0.22, { gain: 0.045 })
+      tone(1046.5, 0.08, 0.14, { gain: 0.008 })
+    } else if (id === 's10') {
+      var down = [
+        { f: 1568, d: 0.22, g: 0.04 },
+        { f: 1318.5, d: 0.24, g: 0.042 },
+        { f: 1046.5, d: 0.28, g: 0.038 }
+      ]
+      for (var n = 0; n < down.length; n += 1) {
+        tone(down[n].f, n * 0.08, down[n].d, { gain: down[n].g })
+      }
+      tone(2093, 0.12, 0.12, { gain: 0.007 })
+    } else if (id === 's11') {
+      tone(659.25, 0, 0.12, { type: 'triangle', gain: 0.07 })
+      tone(880, 0.06, 0.16, { type: 'triangle', gain: 0.055 })
+      noise(0.018, 0.009, 1200, 0.9)
+    } else if (id === 's12') {
+      tone(1568, 0, 0.35, { gain: 0.04 })
+      tone(2350, 0, 0.22, { gain: 0.012 })
+      tone(3136, 0, 0.16, { gain: 0.006 })
+      tone(3920, 0, 0.1, { gain: 0.003 })
+    }
+  }
+
+  document.querySelectorAll('[data-sound]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      play(btn.dataset.sound)
+      var card = btn.closest('.sound-card')
+      if (!card) return
+      card.classList.remove('playing')
+      void card.offsetWidth
+      card.classList.add('playing')
+      window.setTimeout(function () { card.classList.remove('playing') }, 520)
+    })
+  })
+
+  var volumeInput = document.getElementById('volume')
+  var volumeValue = document.getElementById('volumeValue')
+  if (volumeInput) {
+    volumeInput.addEventListener('input', function () {
+      volume = Number(volumeInput.value)
+      volumeValue.textContent = String(volume)
+      if (master) master.gain.value = 0.7 * (volume / 100)
+    })
+  }
+
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[data-t]'))
+  var map = {}
+  links.forEach(function (l) { map[l.dataset.t] = l })
+  var targets = []
+  ;['now', 'sounds', 'behavior', 'share', 'decision'].forEach(function (id) {
+    var el = document.getElementById(id)
+    if (el) targets.push(el)
+  })
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return
+        links.forEach(function (l) { l.classList.remove('on') })
+        if (map[en.target.id]) map[en.target.id].classList.add('on')
+      })
+    }, { rootMargin: '-20% 0px -65% 0px' })
+    targets.forEach(function (t) { io.observe(t) })
+  }
+})()
+</script>
+</body>
+</html>

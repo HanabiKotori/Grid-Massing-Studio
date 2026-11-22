@@ -17,6 +17,8 @@ const props = withDefaults(
     closable?: boolean
     /** 链接是否开放新评论 / 回复 / 解决；关闭后评论只读 */
     commentEnabled?: boolean
+    /** 当前访问者是否已登录；未登录只读并展示登录门槛 */
+    authLoggedIn?: boolean
     objectLabel?: (comment: ShareComment) => string
   }>(),
   {
@@ -27,6 +29,7 @@ const props = withDefaults(
     authorLabel: '',
     closable: false,
     commentEnabled: true,
+    authLoggedIn: true,
     objectLabel: undefined,
   },
 )
@@ -41,6 +44,8 @@ const emit = defineEmits<{
   (e: 'cancel-pending'): void
   (e: 'request-anchor'): void
   (e: 'refresh'): void
+  (e: 'login'): void
+  (e: 'register'): void
   (e: 'close'): void
 }>()
 
@@ -48,6 +53,7 @@ type Filter = 'all' | 'open' | 'mine'
 const filter = ref<Filter>('all')
 const draft = ref('')
 const unreadSet = computed(() => new Set(props.unreadIds ?? []))
+const collapsedThreads = ref<Set<number>>(new Set())
 
 const sorted = computed(() =>
   props.comments
@@ -70,6 +76,53 @@ const repliesByParent = computed(() => {
   }
   return map
 })
+
+function repliesOf(rootId: number): ShareComment[] {
+  return repliesByParent.value.get(rootId) ?? []
+}
+
+function isThreadCollapsed(rootId: number): boolean {
+  return collapsedThreads.value.has(rootId)
+}
+
+function toggleThread(rootId: number) {
+  const next = new Set(collapsedThreads.value)
+  if (next.has(rootId)) next.delete(rootId)
+  else next.add(rootId)
+  collapsedThreads.value = next
+}
+
+function onThreadEnter(el: Element) {
+  const node = el as HTMLElement
+  node.style.height = '0px'
+  node.style.opacity = '0'
+  requestAnimationFrame(() => {
+    node.style.height = `${node.scrollHeight}px`
+    node.style.opacity = '1'
+  })
+}
+
+function onThreadAfterEnter(el: Element) {
+  const node = el as HTMLElement
+  node.style.height = ''
+  node.style.opacity = ''
+}
+
+function onThreadLeave(el: Element) {
+  const node = el as HTMLElement
+  node.style.height = `${node.scrollHeight}px`
+  node.style.opacity = '1'
+  requestAnimationFrame(() => {
+    node.style.height = '0px'
+    node.style.opacity = '0'
+  })
+}
+
+function onThreadAfterLeave(el: Element) {
+  const node = el as HTMLElement
+  node.style.height = ''
+  node.style.opacity = ''
+}
 
 const filteredRoots = computed(() => {
   const roots = rootComments.value
@@ -94,13 +147,19 @@ const counts = computed(() => ({
 
 const placeholder = computed(() => {
   if (props.pendingAnchor) return `评论 @ ${props.pendingLabel || '画布位置'}…`
-  if (props.mode === 'visitor') return '先在画布上点选位置，再输入评论…'
+  if (selectedComment.value?.legacy) return '历史匿名评论不可回复'
   if (selectedComment.value) return `回复 ${selectedComment.value.authorName}…`
+  if (props.mode === 'visitor') return '先在画布上点选位置，再输入评论…'
   return '选择一条评论后回复…'
 })
 
 const canSubmit = computed(
-  () => !!draft.value.trim() && (!!props.pendingAnchor || !!selectedComment.value),
+  () =>
+    props.commentEnabled &&
+    props.authLoggedIn &&
+    !!draft.value.trim() &&
+    (!!props.pendingAnchor ||
+      (!!selectedComment.value && !selectedComment.value.legacy)),
 )
 
 function rootNumber(comment: ShareComment): number {
@@ -126,24 +185,32 @@ function labelOf(comment: ShareComment): string {
 }
 
 function canDelete(comment: ShareComment): boolean {
-  if (!props.commentEnabled) return false
+  if (!props.commentEnabled || !props.authLoggedIn) return false
+  if (comment.legacy) return props.mode === 'owner'
   return props.mode === 'owner' || comment.mine
 }
 
 function canResolve(comment: ShareComment): boolean {
-  if (!props.commentEnabled) return false
+  if (!props.commentEnabled || !props.authLoggedIn) return false
+  if (comment.legacy) return false
   return props.mode === 'owner' || comment.mine
 }
 
+function canReply(comment: ShareComment): boolean {
+  if (!props.commentEnabled || !props.authLoggedIn) return false
+  return !comment.legacy
+}
+
 function onComposerFocus() {
-  if (!props.commentEnabled) return
+  if (!props.commentEnabled || !props.authLoggedIn) return
+  if (selectedComment.value?.legacy) return
   if (props.mode === 'visitor' && !props.pendingAnchor && !selectedComment.value) {
     emit('request-anchor')
   }
 }
 
 function submit() {
-  if (!props.commentEnabled) return
+  if (!props.commentEnabled || !props.authLoggedIn) return
   const text = draft.value.trim()
   if (!text) return
   if (props.pendingAnchor) {
@@ -151,7 +218,7 @@ function submit() {
     draft.value = ''
     return
   }
-  if (selectedComment.value) {
+  if (selectedComment.value && !selectedComment.value.legacy) {
     emit('reply', { comment: selectedComment.value, content: text })
     draft.value = ''
   }
@@ -179,6 +246,15 @@ watch(
         {{ connected ? '实时' : loggedIn ? '重连中' : '未登录' }}
       </span>
       <span class="rp-sp" />
+      <button
+        v-if="mode === 'visitor' && commentEnabled && authLoggedIn"
+        class="rp-new-btn"
+        type="button"
+        title="新增评论"
+        @click="emit('request-anchor')"
+      >
+        ＋ 新增
+      </button>
       <button class="rp-icon" type="button" title="刷新" @click="emit('refresh')">↻</button>
       <button
         v-if="closable"
@@ -212,6 +288,8 @@ watch(
         type="button"
         class="rp-chip"
         :class="{ on: filter === 'mine' }"
+        :disabled="mode === 'visitor' && !authLoggedIn"
+        :title="mode === 'visitor' && !authLoggedIn ? '登录后可查看我的评论' : ''"
         @click="filter = 'mine'"
       >
         我的 <b>{{ counts.mine }}</b>
@@ -224,7 +302,7 @@ watch(
       </div>
       <div v-else-if="loading && !comments.length" class="rp-empty">正在读取评论…</div>
       <div v-else-if="!filteredRoots.length" class="rp-empty">
-        {{ mode === 'owner' ? '还没有评论。分享链接后，访客的评论会实时出现在这里。' : commentEnabled ? '还没有评论，点击画布留下第一条。' : '还没有评论。' }}
+        {{ mode === 'owner' ? '还没有评论。分享链接后，访客的评论会实时出现在这里。' : !commentEnabled ? '还没有评论。' : authLoggedIn ? '还没有评论，点击画布留下第一条。' : '还没有评论。登录后可发表第一条。' }}
       </div>
       <template v-else>
         <article
@@ -241,7 +319,8 @@ watch(
           <div class="rp-card-head">
             <span class="rp-pin" :class="{ done: !!root.resolvedAt }">{{ rootNumber(root) }}</span>
             <b>{{ root.authorName }}</b>
-            <span class="rp-role" :class="{ visitor: root.authorRole !== 'owner' }">
+            <span v-if="root.legacy" class="rp-legacy">历史匿名</span>
+            <span v-else class="rp-role" :class="{ visitor: root.authorRole !== 'owner' }">
               {{ root.authorRole === 'owner' ? '作者' : '访客' }}
             </span>
             <span v-if="unreadSet.has(root.id)" class="rp-new">新</span>
@@ -252,11 +331,14 @@ watch(
             <button type="button" @click.stop="emit('locate', root)">{{ labelOf(root) }}</button>
             <span class="rp-share">{{ root.shareTitle }}</span>
           </div>
-          <div v-if="commentEnabled" class="rp-actions">
+          <div
+            v-if="commentEnabled && authLoggedIn && (canResolve(root) || canReply(root) || canDelete(root))"
+            class="rp-actions"
+          >
             <button v-if="canResolve(root)" type="button" @click.stop="emit('resolve', root)">
               {{ root.resolvedAt ? '取消解决' : '解决' }}
             </button>
-            <button v-if="commentEnabled" type="button" @click.stop="select(root)">回复</button>
+            <button v-if="canReply(root)" type="button" @click.stop="select(root)">回复</button>
             <button
               v-if="canDelete(root)"
               type="button"
@@ -267,28 +349,81 @@ watch(
             </button>
           </div>
 
-          <div
-            v-for="reply in repliesByParent.get(root.id) ?? []"
-            :key="reply.id"
-            class="rp-reply"
+          <button
+            v-if="repliesOf(root.id).length"
+            class="rp-thread-toggle"
+            :class="{ collapsed: isThreadCollapsed(root.id) }"
+            type="button"
+            :aria-expanded="!isThreadCollapsed(root.id)"
+            :aria-controls="`rp-thread-${root.id}`"
+            @click.stop="toggleThread(root.id)"
           >
-            <div class="rp-card-head">
-              <b>{{ reply.authorName }}</b>
-              <span class="rp-role" :class="{ visitor: reply.authorRole !== 'owner' }">
-                {{ reply.authorRole === 'owner' ? '作者' : '访客' }}
-              </span>
-              <span class="rp-time">{{ timeText(reply.createdAt) }}</span>
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            {{ isThreadCollapsed(root.id) ? `展开 ${repliesOf(root.id).length} 条回复` : '收起回复' }}
+          </button>
+
+          <Transition
+            name="rp-thread"
+            @enter="onThreadEnter"
+            @after-enter="onThreadAfterEnter"
+            @leave="onThreadLeave"
+            @after-leave="onThreadAfterLeave"
+          >
+            <div
+              v-if="!isThreadCollapsed(root.id) && repliesOf(root.id).length"
+              :id="`rp-thread-${root.id}`"
+              class="rp-replies"
+            >
+              <div
+                v-for="reply in repliesOf(root.id)"
+                :key="reply.id"
+                class="rp-reply"
+                :class="{ on: selectedId === reply.id }"
+                role="button"
+                tabindex="0"
+                @click.stop="select(reply)"
+                @keydown.enter.stop="select(reply)"
+              >
+                <div class="rp-card-head">
+                  <b>{{ reply.authorName }}</b>
+                  <span v-if="reply.legacy" class="rp-legacy">历史匿名</span>
+                  <span v-else class="rp-role" :class="{ visitor: reply.authorRole !== 'owner' }">
+                    {{ reply.authorRole === 'owner' ? '作者' : '访客' }}
+                  </span>
+                  <span v-if="reply.replyToName" class="rp-reply-to">
+                    回复 @{{ reply.replyToName }}
+                  </span>
+                  <span class="rp-time">{{ timeText(reply.createdAt) }}</span>
+                  <button
+                    v-if="canReply(reply)"
+                    class="rp-reply-action"
+                    type="button"
+                    @click.stop="select(reply)"
+                  >
+                    回复
+                  </button>
+                </div>
+                <p class="rp-text">{{ reply.content }}</p>
+                <div class="rp-reply-meta">
+                  <button type="button" @click.stop="emit('locate', reply)">{{ labelOf(reply) }}</button>
+                </div>
+              </div>
             </div>
-            <p class="rp-text">{{ reply.content }}</p>
-          </div>
+          </Transition>
         </article>
       </template>
     </div>
 
-    <footer v-if="commentEnabled" class="rp-compose">
+    <footer v-if="commentEnabled && authLoggedIn" class="rp-compose">
       <div v-if="pendingAnchor" class="rp-anchor">
         <span>@ {{ pendingLabel || '画布位置' }}</span>
         <button type="button" @click="emit('cancel-pending')">取消</button>
+      </div>
+      <div v-else-if="selectedComment?.legacy" class="rp-anchor">
+        <span>历史匿名评论只读</span>
+        <button type="button" @click="emit('select', selectedComment)">定位</button>
       </div>
       <div v-else-if="selectedComment" class="rp-anchor">
         <span>回复 {{ selectedComment.authorName }}</span>
@@ -302,6 +437,7 @@ watch(
         <textarea
           v-model="draft"
           :placeholder="placeholder"
+          :disabled="!!selectedComment?.legacy"
           maxlength="1000"
           @focus="onComposerFocus"
           @keydown.meta.enter.prevent="submit"
@@ -309,12 +445,30 @@ watch(
         />
       </div>
       <div class="rp-compose-foot">
-        <span>{{ mode === 'owner' ? authorLabel || '作者' : '匿名访客' }}</span>
+        <span>{{ authorLabel || (mode === 'owner' ? '作者' : '登录用户') }}</span>
         <span class="rp-sp" />
         <span>⌘↵</span>
         <button class="rp-send" type="button" :disabled="!canSubmit" @click="submit">
           发送
         </button>
+      </div>
+    </footer>
+    <footer v-else-if="commentEnabled" class="rp-compose rp-login-gate">
+      <div class="rp-login-row">
+        <span class="rp-login-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="5" y="10.5" width="14" height="9" rx="2" />
+            <path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5" />
+          </svg>
+        </span>
+        <div class="rp-login-copy">
+          <b>登录后参与评论</b>
+          <span>查看和定位无需登录；登录后可发表评论、回复和解决自己的评论。</span>
+        </div>
+      </div>
+      <div class="rp-login-actions">
+        <button class="rp-login-primary" type="button" @click="emit('login')">登录</button>
+        <button class="rp-login-link" type="button" @click="emit('register')">注册新账号</button>
       </div>
     </footer>
     <footer v-else class="rp-compose rp-readonly">

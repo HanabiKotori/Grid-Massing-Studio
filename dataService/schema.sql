@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS share_comments (
   author_token CHAR(32) NOT NULL DEFAULT '',
   author_name VARCHAR(32) NOT NULL DEFAULT '',
   author_user_id BIGINT UNSIGNED NULL,
+  reply_to_user_id BIGINT UNSIGNED NULL,
+  reply_to_name VARCHAR(32) NOT NULL DEFAULT '',
   content VARCHAR(1000) NOT NULL,
   resolved_at DATETIME NULL,
   resolved_by VARCHAR(32) NOT NULL DEFAULT '',

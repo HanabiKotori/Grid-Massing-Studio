@@ -188,14 +188,21 @@ function commentJson(row, share, mine = false) {
   } catch {
     anchor = { point: [0, 0, 0] }
   }
+  const isOwner =
+    !!row.author_user_id && Number(row.author_user_id) === Number(share.owner_user_id)
   return {
     id: Number(row.id),
     parentId: row.parent_id ? Number(row.parent_id) : null,
     shareToken: share.token,
     shareTitle: share.title,
     anchor,
-    authorName: row.author_name || (row.author_user_id ? '作者' : '访客'),
-    authorRole: row.author_user_id ? 'owner' : 'visitor',
+    authorName: row.author_name || (isOwner ? '作者' : '访客'),
+    authorUserId: row.author_user_id ? Number(row.author_user_id) : null,
+    replyToUserId: row.reply_to_user_id ? Number(row.reply_to_user_id) : null,
+    replyToName: row.reply_to_name || '',
+    authorRole: isOwner ? 'owner' : 'visitor',
+    // 没有 user_id、只有历史 author_token 的评论属于匿名评论，保留只读
+    legacy: !row.author_user_id && !!row.author_token,
     content: row.content,
     resolvedAt: row.resolved_at,
     resolvedBy: row.resolved_by || '',
@@ -281,17 +288,23 @@ function publishComment(share, comment) {
   publish(channelKeyProject(share.project_key), { type: 'comment.created', comment })
 }
 
-function publishCommentUpdate(share, comment) {
-  publish(channelKeyShare(share.token), { type: 'comment.updated', comment })
-  publish(channelKeyProject(share.project_key), { type: 'comment.updated', comment })
+function publishCommentUpdate(share, comment, meta = {}) {
+  publish(channelKeyShare(share.token), { type: 'comment.updated', comment, ...meta })
+  publish(channelKeyProject(share.project_key), { type: 'comment.updated', comment, ...meta })
 }
 
-function publishCommentDelete(share, id) {
-  publish(channelKeyShare(share.token), { type: 'comment.deleted', shareToken: share.token, id })
+function publishCommentDelete(share, id, meta = {}) {
+  publish(channelKeyShare(share.token), {
+    type: 'comment.deleted',
+    shareToken: share.token,
+    id,
+    ...meta,
+  })
   publish(channelKeyProject(share.project_key), {
     type: 'comment.deleted',
     shareToken: share.token,
     id,
+    ...meta,
   })
 }
 
@@ -650,7 +663,6 @@ export function registerShareRoutes(app) {
         res.status(410).json({ error: '分享链接已撤销', revoked: true })
         return
       }
-      const authorToken = cleanText(req.query.authorToken, 64)
       const user = readAuthUser(req)
       const pool = getPool()
       const [rows] = await pool.query(
@@ -662,7 +674,7 @@ export function registerShareRoutes(app) {
           publicComment(
             share,
             row,
-            user ? Number(row.author_user_id) === user.id : !!authorToken && row.author_token === authorToken,
+            !!user && Number(row.author_user_id) === user.id,
           ),
         ),
       })
@@ -672,6 +684,7 @@ export function registerShareRoutes(app) {
   app.post(
     '/api/shares/:token/comments',
     requireDb,
+    requireAuth,
     wrap(async (req, res) => {
       const ip = req.ip || req.socket?.remoteAddress || 'unknown'
       if (!allowRate(`c:${ip}:${req.params.token}`, 30, 60_000)) {
@@ -697,44 +710,63 @@ export function registerShareRoutes(app) {
         res.status(400).json({ error: '评论内容不能为空' })
         return
       }
-      const user = readAuthUser(req)
-      const isOwner = !!user && Number(share.owner_user_id) === user.id
-      const authorToken = cleanText(req.body?.authorToken, 64)
-      if (!isOwner && authorToken.length < 8) {
-        res.status(400).json({ error: '访客标识缺失' })
-        return
-      }
-      const authorName = isOwner
-        ? cleanText(user.username, NAME_MAX) || '作者'
-        : cleanText(req.body?.authorName, NAME_MAX) || '访客'
+      const user = req.user
       const anchor = parseAnchor(req.body?.anchor)
       if (Buffer.byteLength(JSON.stringify(anchor)) > 8 * 1024) {
         res.status(413).json({ error: '评论锚点过大' })
         return
       }
       const parentIdRaw = Number(req.body?.parentId)
-      const parentId = Number.isFinite(parentIdRaw) && parentIdRaw > 0 ? parentIdRaw : null
-      if (parentId) {
+      let parentId = Number.isFinite(parentIdRaw) && parentIdRaw > 0 ? parentIdRaw : null
+      const replyToIdRaw = Number(req.body?.replyToId)
+      const replyToId =
+        Number.isFinite(replyToIdRaw) && replyToIdRaw > 0 ? replyToIdRaw : null
+      let replyToUserId = null
+      let replyToName = ''
+      if (replyToId) {
+        const target = await loadComment(share.id, replyToId)
+        if (!target || target.deleted_at) {
+          res.status(400).json({ error: '回复的目标评论不存在' })
+          return
+        }
+        if (!target.author_user_id && target.author_token) {
+          res.status(400).json({ error: '历史匿名评论不可回复' })
+          return
+        }
+        // 始终回到根评论线程，reply_to_* 单独记录“回复给谁”
+        parentId = target.parent_id ? Number(target.parent_id) : Number(target.id)
+        replyToUserId = target.author_user_id ? Number(target.author_user_id) : null
+        replyToName = cleanText(target.author_name, NAME_MAX) || '登录用户'
+      } else if (parentId) {
         const parent = await loadComment(share.id, parentId)
         if (!parent) {
           res.status(400).json({ error: '回复的评论不存在' })
           return
         }
+        if (!parent.author_user_id && parent.author_token) {
+          res.status(400).json({ error: '历史匿名评论不可回复' })
+          return
+        }
+        replyToUserId = parent.author_user_id ? Number(parent.author_user_id) : null
+        replyToName = cleanText(parent.author_name, NAME_MAX) || '登录用户'
       }
+      const authorName = cleanText(user.username, NAME_MAX) || '登录用户'
       const clientId = cleanText(req.body?.clientId, 32)
       const pool = getPool()
       const [result] = await pool.query(
         `INSERT INTO share_comments
-          (share_id, parent_id, anchor_json, scene_version, author_token, author_name, author_user_id, content, client_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (share_id, parent_id, anchor_json, scene_version, author_token, author_name, author_user_id, reply_to_user_id, reply_to_name, content, client_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           share.id,
           parentId,
           JSON.stringify(anchor),
           Number(share.scene_version),
-          isOwner ? '' : authorToken,
+          '',
           authorName,
-          isOwner ? user.id : null,
+          user.id,
+          replyToUserId,
+          replyToName,
           content,
           clientId,
         ],
@@ -750,6 +782,7 @@ export function registerShareRoutes(app) {
   app.patch(
     '/api/shares/:token/comments/:id',
     requireDb,
+    requireAuth,
     wrap(async (req, res) => {
       const share = await loadShare(req.params.token)
       if (!share) {
@@ -762,12 +795,16 @@ export function registerShareRoutes(app) {
         res.status(404).json({ error: '评论不存在' })
         return
       }
-      const user = readAuthUser(req)
-      const isOwner = !!user && Number(share.owner_user_id) === user.id
-      const authorToken = cleanText(req.body?.authorToken, 64)
-      const isAuthor = !!authorToken && row.author_token === authorToken
+      const user = req.user
+      const isOwner = Number(share.owner_user_id) === user.id
+      const isAuthor = !!row.author_user_id && Number(row.author_user_id) === user.id
       if (!isOwner && !isAuthor) {
         res.status(403).json({ error: '没有权限修改该评论' })
+        return
+      }
+      // 关闭评论后分享页只读；作者仍可在编辑器管理已有评论
+      if (!share.allow_comment && !isOwner) {
+        res.status(403).json({ error: '该链接未开放评论' })
         return
       }
 
@@ -785,7 +822,7 @@ export function registerShareRoutes(app) {
       if (req.body?.resolved !== undefined) {
         if (req.body.resolved) {
           fields.push('resolved_at = NOW()', 'resolved_by = ?')
-          params.push(isOwner ? cleanText(user.username, NAME_MAX) || '作者' : '访客')
+          params.push(cleanText(user.username, NAME_MAX) || (isOwner ? '作者' : '登录用户'))
         } else {
           fields.push('resolved_at = NULL', 'resolved_by = ?')
           params.push('')
@@ -798,8 +835,11 @@ export function registerShareRoutes(app) {
       params.push(row.id)
       await getPool().query(`UPDATE share_comments SET ${fields.join(', ')} WHERE id = ?`, params)
       const next = await loadComment(share.id, row.id)
-      const comment = commentJson(next, share, isOwner || isAuthor)
-      publishCommentUpdate(share, { ...comment, mine: false })
+      const comment = commentJson(next, share, isAuthor)
+      publishCommentUpdate(share, { ...comment, mine: false }, {
+        actorUserId: user.id,
+        actorRole: isOwner ? 'owner' : 'visitor',
+      })
       res.json({ comment })
     }),
   )
@@ -807,6 +847,7 @@ export function registerShareRoutes(app) {
   app.delete(
     '/api/shares/:token/comments/:id',
     requireDb,
+    requireAuth,
     wrap(async (req, res) => {
       const share = await loadShare(req.params.token)
       if (!share) {
@@ -818,12 +859,15 @@ export function registerShareRoutes(app) {
         res.status(404).json({ error: '评论不存在' })
         return
       }
-      const user = readAuthUser(req)
-      const isOwner = !!user && Number(share.owner_user_id) === user.id
-      const authorToken = cleanText(req.query.authorToken, 64)
-      const isAuthor = !!authorToken && row.author_token === authorToken
+      const user = req.user
+      const isOwner = Number(share.owner_user_id) === user.id
+      const isAuthor = !!row.author_user_id && Number(row.author_user_id) === user.id
       if (!isOwner && !isAuthor) {
         res.status(403).json({ error: '没有权限删除该评论' })
+        return
+      }
+      if (!share.allow_comment && !isOwner) {
+        res.status(403).json({ error: '该链接未开放评论' })
         return
       }
       const pool = getPool()
@@ -838,8 +882,14 @@ export function registerShareRoutes(app) {
         'UPDATE share_comments SET deleted_at = NOW() WHERE share_id = ? AND (id = ? OR parent_id = ?)',
         [share.id, row.id, row.id],
       )
-      publishCommentDelete(share, Number(row.id))
-      for (const child of children) publishCommentDelete(share, Number(child.id))
+      const deleteMeta = {
+        actorUserId: user.id,
+        actorRole: isOwner ? 'owner' : 'visitor',
+      }
+      publishCommentDelete(share, Number(row.id), deleteMeta)
+      for (const child of children) {
+        publishCommentDelete(share, Number(child.id), deleteMeta)
+      }
       res.json({ ok: true })
     }),
   )
@@ -877,7 +927,7 @@ export function registerShareRoutes(app) {
       const byId = new Map(shares.map((s) => [Number(s.id), s]))
       const comments = rows.map((row) => {
         const share = byId.get(Number(row.share_id))
-        return commentJson(row, share, !!row.author_user_id)
+        return commentJson(row, share, Number(row.author_user_id) === req.user.id)
       })
       res.json({
         links: shares.map((s) => shareJson(s, 0)),

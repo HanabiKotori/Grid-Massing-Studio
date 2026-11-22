@@ -32,6 +32,7 @@ export function diffScene(prev: SceneJson, next: SceneJson): ScenePatch | null {
   if (!same(prev.underlay, next.underlay)) patch.underlay = next.underlay ?? null
   if (prev.weather !== next.weather) patch.weather = next.weather
   if (prev.weatherOn !== next.weatherOn) patch.weatherOn = next.weatherOn
+  if (prev.sunProgress !== next.sunProgress) patch.sunProgress = next.sunProgress
   if (!same(prev.rules, next.rules)) patch.rules = next.rules
 
   const booths = diffEntities<Booth>(prev.booths ?? [], next.booths ?? [])

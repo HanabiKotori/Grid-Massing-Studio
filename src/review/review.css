@@ -234,6 +234,26 @@
   color: var(--ink);
 }
 
+.rp-new-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid rgba(111, 124, 232, 0.28);
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 9.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rp-new-btn:hover {
+  border-color: rgba(111, 124, 232, 0.48);
+  background: rgba(111, 124, 232, 0.18);
+}
+
 .rp-filters {
   display: flex;
   align-items: center;
@@ -271,6 +291,11 @@
 
 .rp-chip.on b {
   color: var(--ink-2);
+}
+
+.rp-chip:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 
 .rp-scroll {
@@ -367,6 +392,17 @@
   color: var(--ink-3);
 }
 
+.rp-legacy {
+  display: inline-flex;
+  align-items: center;
+  height: 14px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 8px;
+  color: var(--ink-3);
+}
+
 .rp-new {
   display: inline-flex;
   align-items: center;
@@ -445,8 +481,19 @@
 
 .rp-reply {
   margin: 8px 0 0 22px;
-  padding-left: 9px;
+  padding: 4px 5px 4px 9px;
   border-left: 1px solid var(--line);
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+}
+
+.rp-reply:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.rp-reply.on {
+  background: rgba(111, 124, 232, 0.07);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .rp-reply .rp-card-head b {
@@ -456,6 +503,91 @@
 .rp-reply .rp-text {
   font-size: 10.8px;
   color: var(--ink-3);
+}
+
+.rp-reply-to {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--accent-ink);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rp-reply-action {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.rp-reply-action:hover {
+  color: var(--accent-ink);
+}
+
+.rp-reply-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.rp-reply-meta button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.rp-reply-meta button:hover {
+  color: var(--accent-ink);
+}
+
+.rp-thread-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 1px 22px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.rp-thread-toggle:hover {
+  color: var(--accent-ink);
+}
+
+.rp-thread-toggle svg {
+  width: 10px;
+  height: 10px;
+  transition: transform 0.2s ease;
+}
+
+.rp-thread-toggle.collapsed svg {
+  transform: rotate(-90deg);
+}
+
+.rp-replies {
+  overflow: hidden;
+}
+
+.rp-thread-enter-active,
+.rp-thread-leave-active {
+  overflow: hidden;
+  transition:
+    height 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.18s ease;
 }
 
 .rp-compose {
@@ -511,6 +643,11 @@
   color: var(--ink-3);
 }
 
+.rp-box textarea:disabled {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
 .rp-compose-foot {
   display: flex;
   align-items: center;
@@ -543,6 +680,85 @@
   min-height: 54px;
   font-size: 10px;
   color: var(--ink-3);
+}
+
+.rp-compose.rp-login-gate {
+  padding: 12px 12px 13px;
+  border-top: 1px solid rgba(111, 124, 232, 0.18);
+  background: linear-gradient(180deg, rgba(111, 124, 232, 0.06), transparent 72%);
+}
+
+.rp-login-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.rp-login-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(111, 124, 232, 0.28);
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+.rp-login-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rp-login-copy b {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rp-login-copy span {
+  display: block;
+  margin-top: 2px;
+  font-size: 9.5px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+
+.rp-login-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+  padding-left: 37px;
+}
+
+.rp-login-primary {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.rp-login-link {
+  height: 24px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.rp-login-link:hover {
+  color: var(--ink);
 }
 
 /* ---------- 画布引脚 ---------- */
@@ -752,6 +968,24 @@
   margin-top: 1px;
   font-size: 10px;
   color: var(--ink-3);
+}
+
+.sd-row-static {
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.sd-row .sd-fixed {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-top: 0;
+  padding: 0 5px;
+  border: 1px solid rgba(91, 189, 139, 0.26);
+  border-radius: 3px;
+  background: rgba(91, 189, 139, 0.07);
+  font-size: 8.5px;
+  color: #93d9b3;
+  white-space: nowrap;
 }
 
 .sd-toggle {

@@ -5,14 +5,12 @@ import {
   type ShareComment,
   type ShareMeta,
 } from '../core/shareApi'
-import { authorToken } from './author'
 import { openProjectStream, type StreamController, type StreamState } from './realtime'
 
 interface Options {
   projectKey: Ref<string>
   /** 开启实时与拉取：需要 dataService 登录态 */
   enabled: Ref<boolean>
-  authorName: () => string
   onNewComment?: (comment: ShareComment) => void
   onError?: (message: string) => void
   isPanelOpen?: () => boolean
@@ -24,7 +22,7 @@ function mergeComment(list: ShareComment[], next: ShareComment): ShareComment[] 
   const index = list.findIndex((item) => item.id === next.id)
   if (index < 0) return [...list, next].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt))
   const copy = list.slice()
-  copy[index] = next
+  copy[index] = { ...next, mine: next.mine || copy[index].mine }
   return copy
 }
 
@@ -200,7 +198,7 @@ export function useReviewComments(options: Options) {
       const { comment: next } = await shareApi.updateComment(
         comment.shareToken,
         comment.id,
-        { resolved, authorToken: authorToken() },
+        { resolved },
       )
       comments.value = mergeComment(comments.value, next)
     } catch (err) {
@@ -216,9 +214,8 @@ export function useReviewComments(options: Options) {
       const { comment: next } = await shareApi.createComment(comment.shareToken, {
         content: text,
         anchor: comment.anchor,
-        authorName: options.authorName(),
-        authorToken: authorToken(),
         parentId: comment.parentId ?? comment.id,
+        replyToId: comment.id,
         clientId: `c${Date.now().toString(36)}`,
       })
       comments.value = mergeComment(comments.value, next)
@@ -235,7 +232,7 @@ export function useReviewComments(options: Options) {
       (item) => item.id !== comment.id && item.parentId !== comment.id,
     )
     try {
-      await shareApi.deleteComment(comment.shareToken, comment.id, authorToken())
+      await shareApi.deleteComment(comment.shareToken, comment.id)
     } catch (err) {
       comments.value = before
       options.onError?.(err instanceof Error ? err.message : '删除评论失败')

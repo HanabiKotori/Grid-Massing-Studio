@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ActionDock from './components/ActionDock.vue'
 import AppTopBar from './components/AppTopBar.vue'
+import ToastHost from './components/ToastHost.vue'
 import ExportDialog from './components/ExportDialog.vue'
 import CloudStorageDialog from './components/CloudStorageDialog.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
@@ -16,6 +17,8 @@ import { useReviewComments } from './review/useReviewComments'
 import { useLiveShare } from './review/useLiveShare'
 import { resolveAnchor } from './review/anchors'
 import { shareApi, type ShareComment, type ShareMeta } from './core/shareApi'
+import { pushMessage } from './core/messageCenter'
+import { playCollabSound } from './core/notificationSound'
 import './review/review.css'
 import MobileViewer from './components/MobileViewer.vue'
 import SceneTree from './components/SceneTree.vue'
@@ -104,7 +107,6 @@ const {
   furnitureLabelsOn,
   areaOn,
   venueNoTop,
-  toastMsg,
   showHelp,
   showWeather,
   toolMenu,
@@ -420,8 +422,6 @@ const shareExisting = ref<ShareMeta | null>(null)
 const shareBusy = ref(false)
 const shareError = ref('')
 const selectedCommentId = ref<number | null>(null)
-const reviewToast = ref('')
-let reviewToastTimer = 0
 
 const reviewLoggedIn = computed(() => cloud.enabled && !!cloud.user.value)
 const reviewAuthorName = computed(() => cloud.user.value?.username || '作者')
@@ -459,12 +459,36 @@ const {
 } = useReviewComments({
   projectKey,
   enabled: computed(() => reviewLoggedIn.value && canShareScene.value),
-  authorName: () => cloud.user.value?.username || '作者',
   onNewComment: (comment) => {
     if (comment.authorRole !== 'visitor') return
-    reviewToast.value = `${comment.authorName} 新增了评论`
-    window.clearTimeout(reviewToastTimer)
-    reviewToastTimer = window.setTimeout(() => (reviewToast.value = ''), 3600)
+    const me = cloud.user.value
+    const parent = comment.parentId
+      ? reviewComments.value.find((item) => item.id === comment.parentId)
+      : null
+    // 服务端新数据带 replyToUserId；旧回复回退到根评论作者
+    const replyToMe =
+      !!me &&
+      (comment.replyToUserId != null
+        ? comment.replyToUserId === me.id
+        : !!parent && (parent.authorUserId === me.id || parent.mine))
+    playCollabSound('comment', 'editor')
+    // 作者编辑器内，访客新增评论和回复都弹 B 类 Toast（评审面板打开也弹）
+    pushMessage({
+      scope: 'editor',
+      type: 'collab',
+      title: replyToMe
+        ? `${comment.authorName} 回复了你的评论`
+        : `${comment.authorName} 新增了评论`,
+      text: replyToMe ? '点击查看并定位到你的评论' : '点击查看评审',
+      dedupeKey: `review-${comment.id}`,
+      action: {
+        label: '查看',
+        run: () =>
+          openReviewFromToast(
+            replyToMe ? comment.parentId ?? comment.id : comment.id,
+          ),
+      },
+    })
   },
   onError: (message) => toast(message),
   isPanelOpen: () => rightTab.value === 'review',
@@ -685,6 +709,10 @@ function reviewObjectLabel(comment: ShareComment): string {
 
 function selectReviewComment(comment: ShareComment) {
   selectedCommentId.value = comment.id
+}
+
+function locateReviewComment(comment: ShareComment) {
+  selectReviewComment(comment)
   const resolved = resolveAnchor(comment.anchor, booths.value, infras.value)
   if (!resolved.valid) {
     toast('该评论对应的对象已被删除')
@@ -714,9 +742,9 @@ function loginForShare() {
   openCloudDialog()
 }
 
-function openReviewFromToast() {
-  reviewToast.value = ''
+function openReviewFromToast(commentId?: number | null) {
   rightTab.value = 'review'
+  if (commentId != null) selectedCommentId.value = commentId
   markReviewSeen()
 }
 
@@ -1127,15 +1155,26 @@ watch(projectKey, () => {
   void restoreShareLink()
 })
 
-// 只有用户拖动时间轴时才落盘：播放推进不写盘，拖动结束 1.2s 后保存一次
+// 只有用户拖动时间轴时才落盘：播放推进不写盘，拖动结束 1.2s 后保存一次。
+// 实时分享单独限频：拖动/暂停立即推，播放中最多 4 秒推一次，避免每帧 PATCH。
+let lastSunPushAt = 0
 watch(sunProgress, () => {
-  if (!sunScrubbing.value) return
-  scheduleAutosave(1200)
+  if (sunScrubbing.value) {
+    scheduleAutosave(1200)
+    liveShare.schedulePush(500)
+    return
+  }
+  const now = Date.now()
+  if (now - lastSunPushAt < 4000) return
+  lastSunPushAt = now
+  liveShare.schedulePush(800)
 })
 
-// 暂停播放时补一次保存，确保最后的时刻被记住
+// 暂停播放时补一次保存和同步，确保最后的时刻被记住
 watch(sunPlaying, (on) => {
-  if (!on) scheduleAutosave()
+  if (on) return
+  scheduleAutosave()
+  liveShare.schedulePush(300)
 })
 
 // 预览 / 展示 / 漫游会一次性改变视口宽度：先用上一帧盖住，避免黑屏
@@ -1908,7 +1947,7 @@ function changeWalkAutoLoop(value: boolean) {
 }
 
 /** 时间轴推进倍率：1× 为实时，最高 100× */
-const sunSpeed = ref(50)
+const sunSpeed = ref(1)
 
 /** 用户正在拖动时间轴：用于区分手动调整与自动推进，避免每格都触发保存 */
 const sunScrubbing = ref(false)
@@ -1977,7 +2016,6 @@ onBeforeUnmount(() => {
   disposeScenePersistence()
   disposeStageSync()
   liveShare.dispose()
-  window.clearTimeout(reviewToastTimer)
   const w = window as unknown as { gridMassing?: typeof gridMassingApi }
   if (w.gridMassing === gridMassingApi) delete w.gridMassing
   stage?.dispose()
@@ -2192,15 +2230,18 @@ onBeforeUnmount(() => {
         :selected-id="selectedCommentId"
         mode="owner"
         :logged-in="reviewLoggedIn"
+        :auth-logged-in="reviewLoggedIn"
         :connected="reviewConnected"
         :loading="reviewLoading"
         :author-label="reviewAuthorName"
         :object-label="reviewObjectLabel"
         closable
         @select="selectReviewComment"
-        @locate="selectReviewComment"
+        @locate="locateReviewComment"
         @resolve="onReviewResolve"
         @reply="onReviewReply"
+        @login="loginForShare"
+        @register="loginForShare"
         @remove="removeReview"
         @refresh="refreshReview"
         @close="rightTab = 'props'"
@@ -2415,10 +2456,14 @@ onBeforeUnmount(() => {
       @login="loginForShare"
     />
 
-    <div v-if="reviewToast" class="review-toast" @click="openReviewFromToast">
-      <span>{{ reviewToast }}</span>
-      <button type="button">查看</button>
-    </div>
+    <ToastHost scope="editor" kind="collab" placement="top-right" />
+    <ToastHost scope="editor" kind="system" placement="top-center" />
+    <ToastHost
+      scope="editor"
+      kind="action"
+      placement="bottom-center"
+      offset="calc(var(--wb-time, 44px) + var(--wb-status, 26px) + 14px)"
+    />
 
     <Transition name="dialog">
       <WeatherPanel
@@ -2546,8 +2591,5 @@ onBeforeUnmount(() => {
       @toggle-walk="toggleWalk"
     />
 
-    <transition name="toast">
-      <div v-if="toastMsg" class="toast">{{ toastMsg }}</div>
-    </transition>
   </div>
 </template>

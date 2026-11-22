@@ -44,7 +44,14 @@ export interface ShareComment {
   shareTitle: string
   anchor: CommentAnchor
   authorName: string
+  /** 登录用户 id；历史匿名评论为 null */
+  authorUserId: number | null
+  /** 当前回复的目标用户；根评论为 null */
+  replyToUserId: number | null
+  replyToName: string
   authorRole: 'owner' | 'visitor'
+  /** 历史匿名评论：保留展示，但不可回复 / 解决，仅作者可删除 */
+  legacy: boolean
   content: string
   resolvedAt: string | null
   resolvedBy: string
@@ -81,8 +88,19 @@ export type ReviewEvent =
   | { type: 'scene.reset'; revision: number; sceneVersion: number }
   | { type: 'share.updated'; share: ShareMeta }
   | { type: 'comment.created'; comment: ShareComment }
-  | { type: 'comment.updated'; comment: ShareComment }
-  | { type: 'comment.deleted'; shareToken: string; id: number }
+  | {
+      type: 'comment.updated'
+      comment: ShareComment
+      actorUserId?: number
+      actorRole?: 'owner' | 'visitor'
+    }
+  | {
+      type: 'comment.deleted'
+      shareToken: string
+      id: number
+      actorUserId?: number
+      actorRole?: 'owner' | 'visitor'
+    }
   | { type: 'presence'; token: string; count: number }
   | { type: 'revoked' }
   | { type: 'share.created'; share: ShareMeta }
@@ -100,9 +118,9 @@ export interface CreateShareInput {
 export interface CommentInput {
   content: string
   anchor: CommentAnchor
-  authorName: string
-  authorToken: string
   parentId?: number | null
+  /** 被回复的具体评论 id；服务端据此设置根线程与 replyTo 用户 */
+  replyToId?: number | null
   clientId?: string
 }
 
@@ -160,11 +178,11 @@ export const shareApi = {
       `/api/shares/${encodeURIComponent(token)}/live?since=${since}`,
     ),
 
-  listComments: (token: string, authorToken = '') =>
+  listComments: (token: string) =>
     dataServiceRequest<{ comments: ShareComment[] }>(
-      `/api/shares/${encodeURIComponent(token)}/comments${
-        authorToken ? `?authorToken=${encodeURIComponent(authorToken)}` : ''
-      }`,
+      `/api/shares/${encodeURIComponent(token)}/comments`,
+      {},
+      true,
     ),
 
   createComment: (token: string, input: CommentInput) =>
@@ -177,7 +195,7 @@ export const shareApi = {
   updateComment: (
     token: string,
     id: number,
-    input: { content?: string; resolved?: boolean; authorToken: string },
+    input: { content?: string; resolved?: boolean },
   ) =>
     dataServiceRequest<{ comment: ShareComment }>(
       `/api/shares/${encodeURIComponent(token)}/comments/${id}`,
@@ -185,11 +203,9 @@ export const shareApi = {
       true,
     ),
 
-  deleteComment: (token: string, id: number, authorToken = '') =>
+  deleteComment: (token: string, id: number) =>
     dataServiceRequest<{ ok: true }>(
-      `/api/shares/${encodeURIComponent(token)}/comments/${id}?authorToken=${encodeURIComponent(
-        authorToken,
-      )}`,
+      `/api/shares/${encodeURIComponent(token)}/comments/${id}`,
       { method: 'DELETE' },
       true,
     ),

@@ -1,0 +1,1146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>场馆白膜 · 统一消息架构设计稿</title>
+<style>
+:root{
+  --bg:#08090a; --bg-1:#0b0c0e; --bg-2:#101113; --bg-3:#15161a; --bg-4:#1c1e22;
+  --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.12);
+  --tx:#ecedef; --tx-2:#9b9fa5; --tx-3:#63666c; --tx-4:#43464c;
+  --accent:#6f7ce8; --accent-2:#a7b0ff; --accent-soft:rgba(111,124,232,.14);
+  --green:#5bbd8b; --amber:#e9a06a; --red:#eb5757; --teal:#7fa7b8; --violet:#9b8cff;
+  --type-a:#5bbd8b; --type-b:#6f7ce8; --type-c:#7fa7b8; --type-d:#eb5757; --type-e:#e9a06a; --type-f:#9b8cff;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","HarmonyOS Sans SC","MiSans","Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto 0;height:560px;background:radial-gradient(72% 100% at 50% 0%,rgba(111,124,232,.075),transparent 72%);pointer-events:none;z-index:0}
+.page{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:0 48px 120px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.sp{flex:1}
+.i{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
+
+/* head */
+.head{padding:72px 0 34px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--tx-3)}
+.eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(111,124,232,.15)}
+h1{margin:18px 0 0;font-size:40px;line-height:1.15;font-weight:600;letter-spacing:-.025em}
+h1 em{font-style:normal;color:var(--tx-3)}
+.lede{margin:16px 0 0;max-width:790px;font-size:14.5px;line-height:1.75;color:var(--tx-2)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:23px}
+.chip{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 10px;border:1px solid var(--line);border-radius:5px;background:var(--bg-2);font-size:11.5px;color:var(--tx-2)}
+.chip b{font-weight:500;color:var(--tx)}
+.chip .k{width:5px;height:5px;border-radius:1px;background:var(--tx-4)}
+.chip.a .k{background:var(--type-a)} .chip.b .k{background:var(--type-b)} .chip.c .k{background:var(--type-c)}
+.chip.d .k{background:var(--type-d)} .chip.e .k{background:var(--type-e)} .chip.f .k{background:var(--type-f)}
+
+/* toc */
+.toc{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:4px;height:48px;margin:0 -48px 8px;padding:0 48px;border-bottom:1px solid var(--line);background:rgba(8,9,10,.84);backdrop-filter:blur(16px) saturate(140%);overflow-x:auto;scrollbar-width:none}
+.toc::-webkit-scrollbar{display:none}
+.toc a{flex:none;display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:5px;font-size:12px;color:var(--tx-3);text-decoration:none}
+.toc a:hover{color:var(--tx-2);background:var(--bg-2)}
+.toc a.on{color:var(--tx);background:var(--bg-3)}
+.toc a i{font-family:var(--mono);font-size:9.5px;font-style:normal;color:var(--tx-4)}
+.toc a.on i{color:var(--accent)}
+
+.section{padding-top:56px;scroll-margin-top:56px}
+.section-head{display:flex;gap:40px;align-items:flex-end;justify-content:space-between;margin-bottom:24px}
+.section-head h2{margin:0;font-size:20px;font-weight:600;letter-spacing:-.015em}
+.section-head p{margin:0;max-width:620px;font-size:12.5px;line-height:1.75;color:var(--tx-3)}
+.lbl{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx-4)}
+
+/* principles */
+.principle-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.principle{border:1px solid var(--line);border-radius:8px;padding:14px;background:rgba(255,255,255,.014)}
+.principle .num{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--accent)}
+.principle h3{margin:6px 0 5px;font-size:13px;font-weight:600;letter-spacing:-.01em}
+.principle p{margin:0;font-size:11.5px;line-height:1.7;color:var(--tx-3)}
+.note-line{margin-top:14px;display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border:1px solid var(--line);border-radius:7px;background:var(--bg-1)}
+.note-line .i{width:14px;height:14px;color:var(--accent-2);margin-top:2px}
+.note-line p{margin:0;font-size:11.5px;line-height:1.7;color:var(--tx-3)}
+.note-line b{color:var(--tx-2);font-weight:500}
+
+/* type grid */
+.type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.type-card{border:1px solid var(--line);border-radius:8px;padding:13px;background:rgba(255,255,255,.014);position:relative;overflow:hidden}
+.type-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--tc)}
+.type-card.a{--tc:var(--type-a)} .type-card.b{--tc:var(--type-b)} .type-card.c{--tc:var(--type-c)}
+.type-card.d{--tc:var(--type-d)} .type-card.e{--tc:var(--type-e)} .type-card.f{--tc:var(--type-f)}
+.type-kicker{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--tc)}
+.type-kicker .dot{width:6px;height:6px;border-radius:50%;background:var(--tc)}
+.type-card h3{margin:5px 0 3px;font-size:12.5px;font-weight:600}
+.type-card p{margin:0;font-size:10.5px;line-height:1.65;color:var(--tx-4)}
+.type-card .ch{display:inline-flex;align-items:center;height:18px;margin-top:7px;padding:0 5px;border:1px solid var(--line);border-radius:3px;font-family:var(--mono);font-size:8px;color:var(--tx-3)}
+
+/* architecture */
+.arch{margin-top:14px;display:grid;grid-template-columns:1fr 1.1fr 1.12fr;gap:22px;align-items:stretch}
+.arch-col{display:flex;flex-direction:column;gap:7px;min-width:0}
+.arch-lbl{display:flex;align-items:center;justify-content:space-between;margin-bottom:1px}
+.arch-lbl .lbl{font-size:8.5px}
+.arch-item{border:1px solid var(--line);border-radius:6px;padding:9px 10px;background:rgba(255,255,255,.014);font-size:10.5px;color:var(--tx-3);display:flex;align-items:center;gap:8px}
+.arch-item b{font-weight:500;color:var(--tx-2)}
+.arch-item .dot{width:5px;height:5px;border-radius:50%;background:var(--tx-4);flex:none}
+.arch-item.source-comment .dot{background:var(--type-b)} .arch-item.source-action .dot{background:var(--type-a)}
+.arch-item.source-system .dot{background:var(--type-c)} .arch-item.source-error .dot{background:var(--type-d)}
+.arch-item.source-form .dot{background:var(--type-e)} .arch-item.source-chat .dot{background:var(--type-f)}
+.mc{border:1px solid rgba(111,124,232,.3);border-radius:9px;padding:13px;background:linear-gradient(180deg,rgba(111,124,232,.08),rgba(255,255,255,.012));display:flex;flex-direction:column;gap:9px}
+.mc-head{display:flex;align-items:center;gap:8px}
+.mc-mark{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;background:var(--accent-soft);border:1px solid rgba(111,124,232,.3);color:var(--accent-2);font-family:var(--mono);font-size:9px}
+.mc-head b{font-size:12px;font-weight:600}
+.mc-head span{margin-left:auto;font-family:var(--mono);font-size:8px;color:var(--tx-4)}
+.mc-flow{display:flex;flex-wrap:wrap;gap:4px}
+.mc-flow span{display:inline-flex;align-items:center;height:19px;padding:0 6px;border:1px solid var(--line);border-radius:3px;background:rgba(255,255,255,.02);font-family:var(--mono);font-size:8px;color:var(--tx-3)}
+.mc-pipeline{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.mc-pipeline div{border:1px solid var(--line);border-radius:4px;padding:6px 7px;font-size:9px;color:var(--tx-3);background:rgba(0,0,0,.14)}
+.mc-pipeline b{color:var(--tx-2);font-weight:500}
+.mc-foot{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:8px;color:var(--tx-4);padding-top:2px}
+.mc-foot .k{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+.arch-out{display:flex;flex-direction:column;gap:6px}
+.out-card{border:1px solid var(--line);border-radius:6px;padding:8px 9px;background:rgba(255,255,255,.014);display:flex;align-items:flex-start;gap:7px}
+.out-card .type{flex:none;width:18px;height:18px;border-radius:4px;display:grid;place-items:center;font-family:var(--mono);font-size:8px;background:rgba(255,255,255,.04);color:var(--tx-3)}
+.out-card.a .type{background:rgba(91,189,139,.1);color:var(--type-a)} .out-card.b .type{background:rgba(111,124,232,.12);color:var(--type-b)}
+.out-card.c .type{background:rgba(127,167,184,.1);color:var(--type-c)} .out-card.d .type{background:rgba(235,87,87,.1);color:var(--type-d)}
+.out-card.e .type{background:rgba(233,160,106,.1);color:var(--type-e)} .out-card.f .type{background:rgba(155,140,255,.1);color:var(--type-f)}
+.out-card div{min-width:0}
+.out-card b{display:block;font-size:10px;font-weight:500;color:var(--tx-2)}
+.out-card span{display:block;margin-top:1px;font-size:8.5px;line-height:1.5;color:var(--tx-4)}
+.arch-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;font-size:9.5px;color:var(--tx-4)}
+.arch-legend span{display:inline-flex;align-items:center;gap:5px}
+.arch-legend .k{width:5px;height:5px;border-radius:50%;background:var(--tx-4)}
+
+/* table */
+.type-table{width:100%;border-collapse:collapse;margin-top:14px;table-layout:fixed;font-size:11px}
+.type-table th{padding:0 9px 8px;text-align:left;font-family:var(--mono);font-size:8.5px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--tx-4);border-bottom:1px solid var(--line)}
+.type-table td{padding:9px;border-bottom:1px solid rgba(255,255,255,.045);color:var(--tx-3);line-height:1.6;vertical-align:top}
+.type-table tr:last-child td{border-bottom:0}
+.type-table td:first-child{color:var(--tx-2);font-weight:500}
+.type-table .t{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9px}
+.type-table .t .dot{width:5px;height:5px;border-radius:50%;background:var(--tc)}
+.type-table .t.a{--tc:var(--type-a);color:var(--type-a)} .type-table .t.b{--tc:var(--type-b);color:var(--type-b)} .type-table .t.c{--tc:var(--type-c);color:var(--type-c)}
+.type-table .t.d{--tc:var(--type-d);color:var(--type-d)} .type-table .t.e{--tc:var(--type-e);color:var(--type-e)} .type-table .t.f{--tc:var(--type-f);color:var(--type-f)}
+.type-table .soft{color:var(--tx-3)}
+.type-table code{padding:1px 4px;border:1px solid var(--line);border-radius:3px;background:var(--bg-2);font-family:var(--mono);font-size:9px;color:var(--tx-3)}
+
+/* frame/mocks */
+.frame{position:relative;padding:22px;border:1px solid var(--line);border-radius:10px;background:radial-gradient(120% 90% at 50% -20%,rgba(111,124,232,.06),transparent 60%),var(--bg-1);overflow:hidden}
+.frame::after{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:24px 24px;mask-image:radial-gradient(90% 70% at 50% 40%,#000,transparent 78%);opacity:.45}
+.mock-scaler{position:relative;width:100%;overflow:hidden}
+.mock-scaler > .mock{transform-origin:top left}
+.mock{position:relative;width:1200px;height:680px;display:flex;flex-direction:column;border-radius:8px;overflow:hidden;background:var(--bg-1);color:var(--tx);font-size:12px;line-height:1.4;box-shadow:0 0 0 1px rgba(255,255,255,.09),0 50px 90px -40px rgba(0,0,0,.95);user-select:none}
+.notes{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:34px;padding-top:20px}
+.note h3{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.note h3 .idx{font-family:var(--mono);font-size:10px;color:var(--accent);margin-right:8px;letter-spacing:.08em}
+.note .tag{margin:6px 0 0;font-size:12.5px;color:var(--tx-3);line-height:1.65}
+.note .lbl{margin:16px 0 6px;font-size:9.5px;color:var(--tx-4)}
+.note ul{margin:0;padding:0;list-style:none}
+.note li{position:relative;padding-left:14px;margin-bottom:4px;font-size:12px;line-height:1.65;color:var(--tx-2)}
+.note li::before{content:"";position:absolute;left:2px;top:8px;width:4px;height:1px;background:var(--tx-4)}
+.note li.plus::before{background:var(--green)}
+.note li.minus::before{background:var(--amber)}
+.note dl{margin:0;display:grid;grid-template-columns:84px 1fr;row-gap:5px;font-size:12px}
+.note dt{color:var(--tx-4);font-family:var(--mono);font-size:10px;padding-top:2px}
+.note dd{margin:0;color:var(--tx-2)}
+
+/* base atoms */
+.tb{position:relative;z-index:8;flex:none;display:flex;align-items:center;gap:10px;height:46px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--bg-1)}
+.brand{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;letter-spacing:-.01em;flex:none}
+.brand .mark{width:17px;height:17px;color:var(--accent)}
+.brand .mark svg{width:17px;height:17px;stroke-width:1.3}
+.tb-venue{display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:4px;font-size:12px;color:var(--tx-2)}
+.tb-menu{display:flex;align-items:center;gap:2px;margin-left:4px}
+.tb-menu a{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:4px;font-size:12px;color:var(--tx-3);text-decoration:none}
+.tb-menu a.on{color:var(--tx);background:var(--bg-3)}
+.vsep{width:1px;height:18px;background:var(--line);margin:0 4px;flex:none}
+.btn{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:5px;border:1px solid var(--line-2);background:var(--bg-3);font-family:inherit;font-size:11.5px;color:var(--tx);white-space:nowrap}
+.btn.pri{background:var(--accent);border-color:transparent;color:#fff}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--tx-2)}
+.btn.sm{height:22px;padding:0 8px;font-size:10.5px;border-radius:4px}
+.ava{width:22px;height:22px;border-radius:50%;flex:none;background:linear-gradient(150deg,#3a3f52,#22252e);display:grid;place-items:center;font-size:9.5px;color:var(--tx-2);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.ava.sm{width:17px;height:17px;font-size:8px}
+.badge{min-width:16px;height:16px;padding:0 4px;border-radius:8px;display:inline-grid;place-items:center;background:var(--accent);color:#fff;font-family:var(--mono);font-size:8px;font-weight:400;flex:none}
+.badge.green{background:var(--green)}
+.status{display:flex;align-items:center;gap:12px;flex:none;height:26px;padding:0 12px;border-top:1px solid var(--line);background:var(--bg-1);font-family:var(--mono);font-size:9.5px;color:var(--tx-4)}
+.status .g{display:inline-flex;align-items:center;gap:5px}
+.status .on{color:var(--tx-2)}
+.status .vsep{height:10px}
+.vp{position:relative;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+.vp .scene{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hud{position:absolute;display:flex;align-items:center;gap:4px;z-index:4}
+.hud.tl{left:12px;top:10px}
+.hud.tr{right:12px;top:10px}
+.hud.bl{left:12px;bottom:10px}
+.hud.br{right:12px;bottom:10px}
+.hud-chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:5px;background:rgba(12,13,15,.78);border:1px solid var(--line);font-size:10.5px;color:var(--tx-2)}
+.hud-chip.on{color:var(--tx);border-color:var(--line-2)}
+.hud-chip .i{width:12px;height:12px}
+.live{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border:1px solid rgba(91,189,139,.3);border-radius:11px;background:rgba(91,189,139,.08);font-size:10px;color:#93d9b3;white-space:nowrap}
+.live .dot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(91,189,139,.12)}
+.scalebar{display:flex;flex-direction:column;gap:3px}
+.scalebar i{display:block;height:5px;border-left:1px solid var(--tx-4);border-right:1px solid var(--tx-4);border-bottom:1px solid var(--tx-4)}
+.gizmo{width:46px;height:46px;display:block}
+.anno{position:absolute;z-index:30;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(111,124,232,.7);background:rgba(9,10,12,.92);font-family:var(--mono);font-size:9.5px;color:var(--accent-2);box-shadow:0 0 0 3px rgba(111,124,232,.1)}
+
+/* editor */
+.ed-body{display:flex;flex:1;min-height:0}
+.ed-left{width:218px;flex:none;border-right:1px solid var(--line);background:var(--bg-1);padding:8px}
+.tree-grp{display:flex;align-items:center;gap:6px;height:26px;padding:0 7px;font-size:10.5px;color:var(--tx-3)}
+.tree-grp b{font-weight:500;color:var(--tx-2)}
+.tree-row{display:flex;align-items:center;gap:7px;height:25px;padding:0 7px 0 18px;border-radius:4px;font-size:10.5px;color:var(--tx-3)}
+.tree-row .sw{width:5px;height:5px;border-radius:1px;background:var(--bg-4)}
+.tree-row.on{background:var(--accent-soft);color:var(--tx);box-shadow:inset 2px 0 0 var(--amber)}
+.tree-row .num{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--tx-4)}
+.ed-canvas{position:relative;flex:1;min-width:0;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+.ed-canvas .scene{position:absolute;inset:0;width:100%;height:100%}
+.ed-timeline{flex:none;height:44px;border-top:1px solid var(--line);background:var(--bg-1);display:flex;align-items:center;gap:10px;padding:0 14px;position:relative}
+.tl-label{font-family:var(--mono);font-size:8px;letter-spacing:.08em;color:var(--tx-4)}
+.tl-track{flex:1;height:3px;background:rgba(255,255,255,.08);position:relative;border-radius:2px}
+.tl-track::before{content:"";position:absolute;left:0;top:0;bottom:0;width:37%;background:rgba(111,124,232,.5);border-radius:2px}
+.tl-knob{position:absolute;left:37%;top:50%;width:10px;height:10px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%);box-shadow:0 0 0 3px rgba(111,124,232,.16)}
+.tl-time{font-family:var(--mono);font-size:9px;color:var(--tx-3)}
+.ed-right{width:300px;flex:none;border-left:1px solid var(--line);background:var(--bg-1);padding:9px}
+.panel-title{display:flex;align-items:center;gap:7px;height:28px;padding:0 5px;font-size:10px;font-weight:600;letter-spacing:.04em;color:var(--tx-2)}
+.panel-title .tag{margin-left:auto;font-family:var(--mono);font-size:8px;color:var(--tx-4)}
+.prop-row{display:flex;align-items:center;justify-content:space-between;padding:8px 5px;border-bottom:1px solid rgba(255,255,255,.04);font-size:10px;color:var(--tx-4)}
+.prop-row b{font-weight:400;color:var(--tx-2)}
+.prop-input{height:23px;width:92px;border:1px solid var(--line);border-radius:3px;background:var(--bg-2);display:flex;align-items:center;padding:0 6px;font-family:var(--mono);font-size:9px;color:var(--tx-3)}
+
+/* collab stack */
+.collab-stack{position:absolute;right:12px;top:12px;z-index:18;width:314px;display:flex;flex-direction:column;gap:7px}
+.collab-card{position:relative;display:flex;align-items:flex-start;gap:8px;padding:9px 10px 9px 12px;border:1px solid var(--line-2);border-radius:8px;background:rgba(14,15,18,.97);box-shadow:0 18px 44px -22px rgba(0,0,0,.95);overflow:hidden}
+.collab-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--type-b)}
+.collab-card .ava{width:20px;height:20px;font-size:8px;margin-top:1px}
+.collab-copy{min-width:0;flex:1}
+.collab-copy b{display:block;font-size:10.5px;font-weight:500;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.collab-copy span{display:block;margin-top:2px;font-size:9.5px;color:var(--tx-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.collab-card .btn{height:21px;padding:0 7px;font-size:9.5px;flex:none}
+.collab-more{font-family:var(--mono);font-size:8px;color:var(--tx-4);text-align:right;padding-right:3px}
+
+/* action toast */
+.action-toast{position:absolute;left:50%;bottom:62px;transform:translateX(-50%);z-index:22;display:flex;align-items:flex-start;gap:9px;width:min(390px,calc(100% - 340px));min-width:286px;padding:9px 10px 10px;border:1px solid var(--line-2);border-radius:7px;background:rgba(14,15,18,.98);box-shadow:0 20px 50px -24px rgba(0,0,0,.95);overflow:hidden}
+.action-toast.warn{border-color:rgba(233,160,106,.28)}
+.action-toast.err{border-color:rgba(235,87,87,.28)}
+.toast-ic{width:20px;height:20px;flex:none;border-radius:50%;display:grid;place-items:center;margin-top:1px;background:rgba(91,189,139,.12);color:var(--green);font-size:10px}
+.action-toast.warn .toast-ic{background:rgba(233,160,106,.12);color:var(--amber)}
+.action-toast.err .toast-ic{background:rgba(235,87,87,.12);color:var(--red)}
+.toast-ic svg{width:11px;height:11px}
+.toast-copy{min-width:0;flex:1}
+.toast-copy b{display:block;font-size:10.5px;font-weight:500;color:var(--tx)}
+.toast-copy span{display:block;margin-top:1px;font-size:9px;color:var(--tx-4)}
+.toast-x{width:18px;height:18px;border:0;background:none;color:var(--tx-4);font-size:13px;line-height:1;cursor:pointer;flex:none}
+.toast-progress{position:absolute;left:0;bottom:0;height:1px;width:62%;background:rgba(91,189,139,.5)}
+.action-toast.warn .toast-progress{background:rgba(233,160,106,.5)}
+.action-toast.err .toast-progress{background:rgba(235,87,87,.5)}
+
+/* share */
+.sh-top{display:flex;align-items:center;gap:10px;flex:none;position:relative;z-index:9;height:48px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--bg-1)}
+.sh-brand{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:-.01em}
+.sh-brand .mark{width:16px;height:16px;color:var(--accent)}
+.sh-brand .mark svg{width:16px;height:16px;stroke-width:1.3}
+.sh-title{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500}
+.sh-ro{display:inline-flex;align-items:center;height:18px;padding:0 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg-2);font-size:8.5px;color:var(--tx-3)}
+.sh-body{display:flex;flex:1;min-height:0}
+.sh-canvas{position:relative;flex:1;min-width:0;overflow:hidden;background:radial-gradient(72% 62% at 50% 42%,#0d1015,#07080a 74%)}
+.sh-canvas .scene{position:absolute;inset:0;width:100%;height:100%}
+.sh-panel{width:348px;flex:none;display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--line);background:var(--bg-1);position:relative}
+.sh-panel-head{display:flex;align-items:center;gap:8px;flex:none;height:44px;padding:0 13px;border-bottom:1px solid var(--line)}
+.sh-panel-head h3{margin:0;font-size:12px;font-weight:600}
+.sh-panel-head .badge{background:var(--accent)}
+.sh-filters{display:flex;gap:4px;padding:8px 12px 7px;border-bottom:1px solid rgba(255,255,255,.04)}
+.sh-chip{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 7px;border-radius:4px;font-size:10px;color:var(--tx-3)}
+.sh-chip b{font-family:var(--mono);font-size:8.5px;font-weight:400;color:var(--tx-4)}
+.sh-chip.on{background:var(--bg-3);color:var(--tx)}
+.sh-list{flex:1;min-height:0;overflow:hidden}
+.sh-cm{padding:10px 13px;border-bottom:1px solid rgba(255,255,255,.045);position:relative}
+.sh-cm.on{background:rgba(111,124,232,.055);box-shadow:inset 2px 0 0 var(--accent)}
+.sh-cm.unread{background:rgba(111,124,232,.07)}
+.sh-cm-top{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--tx-4)}
+.sh-cm-top b{font-size:10.5px;font-weight:500;color:var(--tx-2)}
+.sh-cm-top .tm{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--tx-4)}
+.sh-cm p{margin:4px 0 0;font-size:10.5px;line-height:1.55;color:var(--tx-2)}
+.sh-cm .acts{display:flex;gap:10px;margin-top:6px;font-size:9px;color:var(--tx-4)}
+.sh-cm .acts span:first-child{color:var(--tx-3)}
+.sh-new{display:inline-flex;align-items:center;height:13px;padding:0 4px;border-radius:3px;background:rgba(91,189,139,.14);border:1px solid rgba(91,189,139,.28);font-size:7.5px;color:#93d9b3}
+.sh-dock{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:7;display:flex;align-items:center;gap:2px;padding:3px;border-radius:8px;background:rgba(12,13,15,.9);border:1px solid var(--line-2);box-shadow:0 20px 40px -22px rgba(0,0,0,.9)}
+.sh-dock button{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border:0;border-radius:4px;background:none;font-family:inherit;font-size:10.5px;color:var(--tx-3)}
+.sh-dock button.on{background:var(--accent-soft);color:var(--accent-2)}
+.sh-dock .badge{min-width:14px;height:14px;padding:0 3px;margin-left:2px}
+.sh-dock-sep{width:1px;height:14px;background:var(--line);margin:0 2px}
+.sh-toast{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);z-index:16;width:min(360px,calc(100% - 28px))}
+.sh-collab{position:absolute;right:12px;top:12px;z-index:15;width:300px}
+
+/* phone */
+.phone-wrap{display:flex;gap:28px;align-items:flex-start;margin-top:18px}
+.phone{width:360px;height:720px;flex:none;border:8px solid #202228;border-radius:38px;background:#08090a;overflow:hidden;box-shadow:0 40px 80px -30px #000;position:relative}
+.phone:before{content:"";position:absolute;left:50%;top:9px;transform:translateX(-50%);width:92px;height:22px;border-radius:12px;background:#08090a;z-index:50}
+.phone-screen{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;border-radius:29px}
+.p-top{flex:none;height:52px;padding:14px 11px 0;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--line);background:var(--bg-1);z-index:10}
+.p-top .brand{font-size:10px;gap:5px}
+.p-top .brand .mark{width:14px;height:14px}
+.p-top .title{font-size:10px;font-weight:500;color:var(--tx-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-top .sp{flex:1}
+.p-canvas{position:relative;flex:1;min-height:0;overflow:hidden;background:radial-gradient(70% 55% at 50% 42%,#0d1015,#07080a 74%)}
+.p-canvas .scene{position:absolute;inset:0;width:100%;height:100%}
+.p-collab{position:absolute;left:10px;right:10px;top:10px;z-index:12;display:flex;align-items:flex-start;gap:7px;padding:8px 9px 8px 11px;border:1px solid var(--line-2);border-radius:8px;background:rgba(14,15,18,.97);box-shadow:0 18px 30px -20px #000;overflow:hidden}
+.p-collab:before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--type-b)}
+.p-collab .ava{width:18px;height:18px;font-size:7.5px}
+.p-collab b{display:block;font-size:9.5px;font-weight:500;color:var(--tx)}
+.p-collab span{display:block;font-size:8.5px;color:var(--tx-4);margin-top:1px}
+.p-fab{position:absolute;right:10px;bottom:14px;z-index:13;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 11px;border-radius:16px;background:rgba(12,13,15,.95);border:1px solid var(--line-2);font-size:9.5px;color:var(--tx-2)}
+.p-fab .badge{height:15px;min-width:15px;font-size:7.5px}
+.p-sheet{flex:none;height:232px;border-top:1px solid var(--line-strong);border-radius:14px 14px 0 0;background:var(--bg-1);padding:10px 12px;position:relative;z-index:14}
+.p-grab{width:34px;height:3px;border-radius:2px;background:var(--tx-4);margin:0 auto 9px}
+.p-sheet-head{display:flex;align-items:center;gap:7px}
+.p-sheet-head b{font-size:10.5px;font-weight:600}
+.p-sheet-head .badge{height:14px;min-width:14px;font-size:7px}
+.p-sheet-head .sp{flex:1}
+.p-sheet-comment{display:flex;gap:6px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.045);font-size:9px;color:var(--tx-3)}
+.p-sheet-comment .ava{width:15px;height:15px;font-size:7px}
+.p-sheet-comment b{font-size:9px;color:var(--tx-2);font-weight:500}
+.p-sheet-comment p{margin:2px 0 0;font-size:9px;line-height:1.45;color:var(--tx-3)}
+.p-sheet-input{margin-top:8px;height:30px;border:1px solid var(--line);border-radius:5px;background:var(--bg-2);display:flex;align-items:center;padding:0 8px;font-size:9px;color:var(--tx-4)}
+.phone-notes{flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;padding-top:4px}
+.phone-note{border:1px solid var(--line);border-radius:8px;padding:13px;background:rgba(255,255,255,.014)}
+.phone-note h3{margin:0 0 4px;font-size:12px;font-weight:600}
+.phone-note p{margin:0;font-size:11px;line-height:1.7;color:var(--tx-3)}
+.phone-note .lbl{font-size:8.5px;margin-bottom:5px}
+
+/* component library */
+.comp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.comp-card{border:1px solid var(--line);border-radius:9px;background:var(--bg-1);overflow:hidden}
+.comp-head{display:flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-bottom:1px solid var(--line);font-size:10px;font-weight:600;color:var(--tx-2)}
+.comp-head .type{width:18px;height:18px;border-radius:4px;display:grid;place-items:center;font-family:var(--mono);font-size:8px;background:rgba(255,255,255,.04);color:var(--tx-3)}
+.comp-head .type.a{background:rgba(91,189,139,.1);color:var(--type-a)} .comp-head .type.b{background:rgba(111,124,232,.12);color:var(--type-b)}
+.comp-head .type.c{background:rgba(127,167,184,.1);color:var(--type-c)} .comp-head .type.d{background:rgba(235,87,87,.1);color:var(--type-d)}
+.comp-head .type.e{background:rgba(233,160,106,.1);color:var(--type-e)} .comp-head .type.f{background:rgba(155,140,255,.1);color:var(--type-f)}
+.comp-head span:last-child{margin-left:auto;font-family:var(--mono);font-size:8px;color:var(--tx-4)}
+.comp-body{padding:12px;display:flex;flex-direction:column;gap:7px}
+.toast-sample{display:flex;align-items:flex-start;gap:8px;padding:8px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg-2)}
+.toast-sample .ic{width:18px;height:18px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:9px;background:rgba(91,189,139,.12);color:var(--green)}
+.toast-sample.warn .ic{background:rgba(233,160,106,.12);color:var(--amber)}
+.toast-sample.err .ic{background:rgba(235,87,87,.12);color:var(--red)}
+.toast-sample.info .ic{background:rgba(111,124,232,.12);color:var(--accent-2)}
+.toast-sample div{min-width:0}
+.toast-sample b{display:block;font-size:9.5px;font-weight:500;color:var(--tx-2)}
+.toast-sample span{display:block;margin-top:1px;font-size:8.5px;color:var(--tx-4)}
+.toast-sample .act{margin-left:auto;font-size:8.5px;color:var(--accent-2);white-space:nowrap}
+.sample-collab{display:flex;align-items:flex-start;gap:8px;padding:9px;border:1px solid var(--line);border-left:2px solid var(--type-b);border-radius:6px;background:var(--bg-2)}
+.sample-collab .ava{width:18px;height:18px;font-size:8px}
+.sample-collab b{display:block;font-size:9.5px;font-weight:500;color:var(--tx-2)}
+.sample-collab span{display:block;font-size:8.5px;color:var(--tx-4);margin-top:1px}
+.sample-collab .act{margin-left:auto;color:var(--accent-2);font-size:8.5px}
+.sample-banner{padding:9px 10px;border:1px solid rgba(235,87,87,.26);border-radius:6px;background:rgba(235,87,87,.06);display:flex;align-items:center;gap:8px}
+.sample-banner .ic{width:19px;height:19px;border-radius:50%;display:grid;place-items:center;background:rgba(235,87,87,.12);color:var(--red);font-size:10px;flex:none}
+.sample-banner b{display:block;font-size:9.5px;font-weight:500;color:var(--tx-2)}
+.sample-banner span{display:block;font-size:8.5px;color:var(--tx-4);margin-top:1px}
+.sample-banner .act{margin-left:auto;color:#e98a8a;font-size:8.5px;white-space:nowrap}
+.sample-field{border:1px solid rgba(235,87,87,.32);border-radius:5px;padding:7px 8px;background:rgba(235,87,87,.04)}
+.sample-field .lbl{font-size:8px;color:#e98a8a;margin-bottom:4px;display:block}
+.sample-field .fake-input{height:24px;border:1px solid rgba(235,87,87,.25);border-radius:3px;background:var(--bg-2);display:flex;align-items:center;padding:0 7px;font-size:9px;color:var(--tx-3)}
+.sample-field p{margin:4px 0 0;font-size:8.5px;color:#e98a8a}
+.chat-sample{display:flex;align-items:baseline;gap:6px;max-width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--bg-2);font-size:9px;color:var(--tx-3);width:max-content}
+.chat-sample b{font-size:8.5px;color:var(--accent-2);font-weight:500}
+.chat-sample.mine{margin-left:auto;border-color:rgba(111,124,232,.24);background:rgba(111,124,232,.06)}
+.chat-sample.system{border-color:rgba(127,167,184,.2);background:rgba(127,167,184,.05);color:var(--tx-4)}
+.status-sample{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:5px;background:var(--bg-2);font-family:var(--mono);font-size:8.5px;color:var(--tx-4)}
+.status-sample .g{display:inline-flex;align-items:center;gap:4px}
+.status-sample .on{color:var(--tx-3)}
+.status-sample .k{width:5px;height:5px;border-radius:50%;background:var(--green)}
+.status-sample .warn{background:var(--amber)}
+
+/* rules */
+.rules-table{width:100%;border-collapse:collapse;margin-top:14px;table-layout:fixed;font-size:11px}
+.rules-table th{padding:0 10px 8px;text-align:left;font-family:var(--mono);font-size:8.5px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--tx-4);border-bottom:1px solid var(--line)}
+.rules-table td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.045);color:var(--tx-3);line-height:1.65;vertical-align:top}
+.rules-table td:first-child{color:var(--tx-2);font-weight:500}
+.rules-table .yes{color:var(--green);font-family:var(--mono);font-size:9px}
+.rules-table .no{color:var(--tx-4);font-family:var(--mono);font-size:9px}
+.rules-table .cond{color:var(--amber);font-family:var(--mono);font-size:9px}
+.rule-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.rule-card{border:1px solid var(--line);border-radius:8px;padding:13px;background:rgba(255,255,255,.014)}
+.rule-card h3{margin:0 0 7px;font-size:12px;font-weight:600}
+.rule-card ul{margin:0;padding:0;list-style:none}
+.rule-card li{position:relative;padding-left:12px;margin-bottom:4px;font-size:10.5px;line-height:1.65;color:var(--tx-3)}
+.rule-card li::before{content:"";position:absolute;left:0;top:7px;width:3px;height:1px;background:var(--tx-4)}
+.rule-card b{color:var(--tx-2);font-weight:500}
+
+/* decision */
+.decision-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+.decision-card{border:1px solid var(--line);border-radius:8px;padding:13px;background:rgba(255,255,255,.014)}
+.decision-card.recommend{border-color:rgba(111,124,232,.3);background:rgba(111,124,232,.05)}
+.decision-card .lbl{margin-bottom:6px;font-size:8.5px}
+.decision-card h3{margin:0 0 4px;font-size:12px;font-weight:600}
+.decision-card p{margin:0;font-size:10.5px;line-height:1.65;color:var(--tx-3)}
+.decision-card .choice{margin-top:8px;display:inline-flex;align-items:center;height:19px;padding:0 6px;border:1px solid var(--line);border-radius:3px;font-family:var(--mono);font-size:8px;color:var(--tx-3)}
+.final-note{margin-top:18px;display:flex;gap:11px;padding:13px 14px;border:1px solid rgba(111,124,232,.28);border-radius:8px;background:rgba(111,124,232,.06)}
+.final-note .i{width:15px;height:15px;color:var(--accent-2);flex:none;margin-top:2px}
+.final-note p{margin:0;font-size:11.5px;line-height:1.7;color:var(--tx-2)}
+.final-note b{color:var(--tx);font-weight:500}
+.foot{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);font-size:10px;color:var(--tx-4);display:flex;justify-content:space-between;gap:20px}
+
+@media (max-width:1080px){
+  .principle-grid,.type-grid,.comp-grid,.rule-grid{grid-template-columns:1fr 1fr}
+  .decision-grid{grid-template-columns:1fr}
+  .arch{grid-template-columns:1fr}
+  .phone-wrap{flex-direction:column}
+  .notes{grid-template-columns:1fr}
+  .page{padding:0 28px 90px}
+  .toc{margin:0 -28px 8px;padding:0 28px}
+  .section-head{flex-direction:column;align-items:flex-start;gap:8px}
+}
+@media (max-width:720px){
+  h1{font-size:30px}
+  .principle-grid,.type-grid,.comp-grid,.rule-grid{grid-template-columns:1fr}
+  .type-table,.rules-table{display:block;overflow-x:auto;white-space:nowrap}
+  .collab-stack{width:270px}
+  .action-toast{width:calc(100% - 24px);min-width:0}
+  .phone{width:100%;max-width:360px}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="head">
+    <div class="eyebrow"><span class="dot"></span>Message architecture · type first</div>
+    <h1>统一消息架构 <em>·</em> 按通知类型分流</h1>
+    <p class="lede">统一的是路由、数据模型、队列和声音策略，不是把所有消息塞进一个收件箱。操作反馈走 Toast，协作消息回到评审 / 评论入口，系统状态留在状态栏，阻断错误用 Banner，表单错误留在字段旁，聊天留在房间消息。</p>
+    <div class="chips">
+      <span class="chip a"><span class="k"></span><b>A</b> 操作反馈</span>
+      <span class="chip b"><span class="k"></span><b>B</b> 协作消息</span>
+      <span class="chip c"><span class="k"></span><b>C</b> 系统状态</span>
+      <span class="chip d"><span class="k"></span><b>D</b> 阻断错误</span>
+      <span class="chip e"><span class="k"></span><b>E</b> 表单校验</span>
+      <span class="chip f"><span class="k"></span><b>F</b> 房间消息</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <a href="#types" data-t="types" class="on"><i>01</i>类型划分</a>
+    <a href="#arch" data-t="arch"><i>02</i>统一路由</a>
+    <a href="#editor" data-t="editor"><i>03</i>编辑器</a>
+    <a href="#share" data-t="share"><i>04</i>分享页</a>
+    <a href="#mobile" data-t="mobile"><i>05</i>移动端</a>
+    <a href="#components" data-t="components"><i>06</i>组件</a>
+    <a href="#rules" data-t="rules"><i>07</i>规则</a>
+    <a href="#decision" data-t="decision"><i>08</i>拍板</a>
+  </nav>
+
+  <!-- 01 types -->
+  <section class="section" id="types">
+    <div class="section-head">
+      <h2>类型划分</h2>
+      <p>先按“用户需要怎么处理”分类，再决定放在哪里。类型是路由依据，不是颜色皮肤。</p>
+    </div>
+    <div class="principle-grid">
+      <div class="principle">
+        <div class="num">01 / ONE EVENT, ONE PRIMARY</div>
+        <h3>一个事件只进一个主通道</h3>
+        <p>评论进协作入口，保存进状态栏，校验留在字段。Toast 只做短反馈，不能成为第二个收件箱。</p>
+      </div>
+      <div class="principle">
+        <div class="num">02 / CONTEXT FIRST</div>
+        <h3>入口留在上下文里</h3>
+        <p>编辑器用「评审」入口，分享页用评论抽屉 / FAB，多人用「房间消息」。不新增万能铃铛。</p>
+      </div>
+      <div class="principle">
+        <div class="num">03 / PERSIST WHAT MATTERS</div>
+        <h3>需要回看的消息不靠 Toast</h3>
+        <p>评论、未读、连接中断必须能再次找到；Toast 只负责“刚刚发生了什么”。</p>
+      </div>
+    </div>
+
+    <div class="type-grid">
+      <div class="type-card a"><div class="type-kicker"><span class="dot"></span>A / ACTION</div><h3>操作反馈</h3><p>保存、复制、导出、发布成功 / 失败。短、可关闭、可选「撤销 / 重试」。</p><span class="ch">Toast · 2.4–5s · 无音效</span></div>
+      <div class="type-card b"><div class="type-kicker"><span class="dot"></span>B / COLLAB</div><h3>协作消息</h3><p>新评论、回复、作者回复、解决。进评审 / 评论入口，保留未读；必要时弹 Toast。</p><span class="ch">入口 + 未读 · 条件 Toast · 音效</span></div>
+      <div class="type-card c"><div class="type-kicker"><span class="dot"></span>C / SYSTEM</div><h3>系统状态</h3><p>自动保存、云端同步、SSE 重连、在线人数。持久、低干扰、不自动消失。</p><span class="ch">状态栏 / 细横幅 · 无音效</span></div>
+      <div class="type-card d"><div class="type-kicker"><span class="dot"></span>D / BLOCKER</div><h3>阻断错误</h3><p>链接撤销、服务不可用、空场景、权限失效。必须让用户看到并处理。</p><span class="ch">Banner / 全屏 · 可重试 · 无音效</span></div>
+      <div class="type-card e"><div class="type-kicker"><span class="dot"></span>E / FORM</div><h3>表单校验</h3><p>登录、发布、重命名、验证码。错误贴近字段，不要把用户甩到全局 Toast。</p><span class="ch">字段内联 · 无音效</span></div>
+      <div class="type-card f"><div class="type-kicker"><span class="dot"></span>F / CHAT</div><h3>房间消息</h3><p>聊天、系统提示、击退 / 拖拽通知。独立聊天流，不进入 Toast。</p><span class="ch">聊天流 · 未读 · 可选音效</span></div>
+    </div>
+
+    <div class="note-line">
+      <i data-ic="info"></i>
+      <p><b>为什么不做一个统一通知中心：</b>评论已经天然属于评审 / 评论抽屉，聊天天然属于房间消息。再加一个铃铛会让用户在两处看同一件事。统一发生在底层，界面入口保持场景化。</p>
+    </div>
+  </section>
+
+  <!-- 02 arch -->
+  <section class="section" id="arch">
+    <div class="section-head">
+      <h2>统一路由</h2>
+      <p>所有消息先进入 MessageCenter，再按类型、作用域、优先级和去重键分发；声音与 ARIA 作为消息属性，不绑在具体组件上。</p>
+    </div>
+
+    <div class="arch">
+      <div class="arch-col">
+        <div class="arch-lbl"><span class="lbl">事件源</span><span class="mono" style="font-size:8px;color:var(--tx-4)">REST / SSE / WS / UI</span></div>
+        <div class="arch-item source-comment"><span class="dot"></span><div><b>comment.created</b><br>新评论 / 回复 / 作者回复</div></div>
+        <div class="arch-item source-action"><span class="dot"></span><div><b>action.result</b><br>保存 / 复制 / 导出 / 发布</div></div>
+        <div class="arch-item source-system"><span class="dot"></span><div><b>sync.state</b><br>SSE / 自动保存 / 云端</div></div>
+        <div class="arch-item source-error"><span class="dot"></span><div><b>link.revoked / offline</b><br>阻断性错误</div></div>
+        <div class="arch-item source-form"><span class="dot"></span><div><b>form.invalid</b><br>登录 / 发布 / 校验</div></div>
+        <div class="arch-item source-chat"><span class="dot"></span><div><b>chat.message</b><br>房间聊天 / 系统提示</div></div>
+      </div>
+
+      <div class="arch-col">
+        <div class="arch-lbl"><span class="lbl">MessageCenter</span><span class="mono" style="font-size:8px;color:var(--accent)">ONE ROUTER</span></div>
+        <div class="mc">
+          <div class="mc-head"><span class="mc-mark">MC</span><b>统一消息路由</b><span>v1</span></div>
+          <div class="mc-flow">
+            <span>type</span><span>severity</span><span>scope</span><span>dedupeKey</span><span>priority</span><span>sound</span><span>aria</span>
+          </div>
+          <div class="mc-pipeline">
+            <div><b>排队</b><br>最多 3 条，超出合并</div>
+            <div><b>去重</b><br>同 key 2s 内合并</div>
+            <div><b>路由</b><br>按类型选主通道</div>
+            <div><b>过滤</b><br>自己 / 静音 / 面板状态</div>
+          </div>
+          <div class="mc-foot"><span class="k"></span>所有消息共享一套 id / 时间 / 操作 / 无障碍语义</div>
+        </div>
+        <div class="arch-legend"><span><span class="k" style="background:var(--type-b)"></span>协作优先</span><span><span class="k" style="background:var(--type-d)"></span>阻断最高</span><span><span class="k" style="background:var(--type-a)"></span>操作可覆盖</span></div>
+      </div>
+
+      <div class="arch-col">
+        <div class="arch-lbl"><span class="lbl">呈现层</span><span class="mono" style="font-size:8px;color:var(--tx-4)">BY TYPE</span></div>
+        <div class="arch-out">
+          <div class="out-card a"><span class="type">A</span><div><b>ToastHost</b><span>短暂操作反馈；队列 / 关闭 / 可选操作</span></div></div>
+          <div class="out-card b"><span class="type">B</span><div><b>评审 / 评论入口</b><span>未读、评论列表、画布引脚；条件 Toast</span></div></div>
+          <div class="out-card c"><span class="type">C</span><div><b>StatusBar / 细横幅</b><span>保存、同步、重连；持久但不打断</span></div></div>
+          <div class="out-card d"><span class="type">D</span><div><b>Banner / 全屏错误</b><span>阻断问题；重试、返回、重新登录</span></div></div>
+          <div class="out-card e"><span class="type">E</span><div><b>InlineField</b><span>错误紧贴字段；aria-describedby</span></div></div>
+          <div class="out-card f"><span class="type">F</span><div><b>ChatFeed</b><span>聊天流、未读、自己的消息标识</span></div></div>
+        </div>
+        <div class="arch-item source-action" style="margin-top:6px"><span class="dot"></span><div><b>SoundService</b><br>只由 B 类触发；静音 / 首次交互解锁</div></div>
+      </div>
+    </div>
+
+    <table class="type-table">
+      <thead><tr><th style="width:15%">类型</th><th style="width:22%">主通道</th><th style="width:24%">触发</th><th style="width:17%">时长 / 持久</th><th style="width:11%">声音</th><th style="width:11%">ARIA</th></tr></thead>
+      <tbody>
+        <tr><td><span class="t a"><span class="dot"></span>A 操作</span></td><td>ToastHost</td><td>保存、复制、导出、发布、删除成功 / 失败</td><td class="soft">2.8s · 底部进度条</td><td class="no">无</td><td class="soft">polite</td></tr>
+        <tr><td><span class="t b"><span class="dot"></span>B 协作</span></td><td>评审 / 评论入口 + 未读</td><td>新评论、回复、作者回复、解决 / 删除</td><td class="soft">4.2s · 未读另持久</td><td class="yes">S7 / S8</td><td class="soft">polite</td></tr>
+        <tr><td><span class="t c"><span class="dot"></span>C 系统</span></td><td>StatusBar / 细横幅</td><td>自动保存、同步、重连、在线</td><td class="soft">3.6s · 状态栏仍持久</td><td class="no">无</td><td class="soft">polite</td></tr>
+        <tr><td><span class="t d"><span class="dot"></span>D 阻断</span></td><td>Banner / 全屏</td><td>链接撤销、服务不可用、空场景</td><td class="soft">6.0s · 阻断页仍可常驻</td><td class="no">无</td><td class="soft">assertive</td></tr>
+        <tr><td><span class="t e"><span class="dot"></span>E 表单</span></td><td>Field inline</td><td>登录、发布、重命名、验证码</td><td class="soft">直到字段有效</td><td class="no">无</td><td class="soft">describedby</td></tr>
+        <tr><td><span class="t f"><span class="dot"></span>F 聊天</span></td><td>ChatFeed</td><td>房间聊天、系统提示</td><td class="soft">8s · 现有 5 条</td><td class="cond">可选</td><td class="soft">log</td></tr>
+      </tbody>
+    </table>
+    <p class="audio-note" style="margin-top:10px">当前实现：A–D 默认自动消失，底部进度条倒计时；进入 220ms / 离开 160ms；每个 host 最多 3 条。E 表单内联常驻，F 聊天保持独立 8 秒节奏，不套用 Toast 进度条。</p>
+  </section>
+
+  <!-- 03 editor -->
+  <section class="section" id="editor">
+    <div class="section-head">
+      <h2>编辑器</h2>
+      <p>操作 Toast 在底部；协作消息在右上角堆叠；状态留在状态栏。三者可以同时存在，但互不覆盖。</p>
+    </div>
+
+    <div class="frame">
+      <div class="mock-scaler">
+        <div class="mock" data-w="1200" data-h="680">
+          <div class="tb">
+            <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+            <div class="tb-venue">W1 展馆</div>
+            <nav class="tb-menu"><a>文件</a><a class="on">视图</a><a>显示</a><a>数据</a><a>帮助</a></nav>
+            <span class="sp"></span>
+            <button class="btn ghost"><i data-ic="comment"></i>评论<span class="badge">5</span></button>
+            <button class="btn"><i data-ic="link"></i>分享</button>
+            <button class="btn pri">导出</button>
+            <div class="ava">L</div>
+          </div>
+
+          <div class="ed-body">
+            <aside class="ed-left">
+              <div class="tree-grp"><b>场景结构</b><span style="margin-left:auto" class="mono">19</span></div>
+              <div class="tree-grp">展台 <span style="margin-left:auto" class="mono">19</span></div>
+              <div class="tree-row on"><span class="sw"></span>W1A03<span class="num">103</span></div>
+              <div class="tree-row"><span class="sw"></span>W1A02<span class="num">96</span></div>
+              <div class="tree-row"><span class="sw"></span>W1A01<span class="num">88</span></div>
+              <div class="tree-grp" style="margin-top:8px">设施 <span style="margin-left:auto" class="mono">66</span></div>
+              <div class="tree-row"><span class="sw"></span>咖啡洽谈区</div>
+              <div class="tree-row"><span class="sw"></span>主舞台</div>
+            </aside>
+
+            <div class="ed-canvas">
+              <svg class="scene" data-scene="editor"></svg>
+              <div class="hud tl"><span class="hud-chip on">编辑模式</span><span class="live"><span class="dot"></span>实时分享中 · 3 人</span></div>
+              <div class="hud bl"><div class="scalebar"><i style="width:56px"></i><span class="mono" style="font-size:9px;color:#6b6f76">10 m</span></div></div>
+              <div class="hud br"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+
+              <div class="collab-stack">
+                <div class="collab-card">
+                  <span class="ava">王</span>
+                  <div class="collab-copy"><b>王工 评论了 W1A03</b><span>入口开口方向反了 · 刚刚</span></div>
+                  <button class="btn">查看</button>
+                </div>
+                <div class="collab-card">
+                  <span class="ava">陈</span>
+                  <div class="collab-copy"><b>陈工 回复了你的评论</b><span>过道净宽已调整 · 1 分钟前</span></div>
+                  <button class="btn">查看</button>
+                </div>
+                <div class="collab-more">+ 1 条 · 打开评审</div>
+              </div>
+
+              <div class="action-toast">
+                <span class="toast-ic">✓</span>
+                <div class="toast-copy"><b>分享链接已复制</b><span>可发送给客户查看当前版本</span></div>
+                <button class="toast-x">×</button>
+                <i class="toast-progress"></i>
+              </div>
+
+              <span class="anno" style="left:336px;top:26px">1</span>
+              <span class="anno" style="left:154px;top:506px">2</span>
+            </div>
+
+            <aside class="ed-right">
+              <div class="panel-title">属性 <span class="tag">W1A03</span></div>
+              <div class="prop-row"><span>展台名称</span><span class="prop-input">W1A03</span></div>
+              <div class="prop-row"><span>展商</span><span class="prop-input">岚图汽车</span></div>
+              <div class="prop-row"><span>高度</span><span class="prop-input">4.0 m</span></div>
+              <div class="prop-row"><span>面积</span><span class="prop-input">70 m²</span></div>
+              <div class="panel-title" style="margin-top:8px">评审 <span class="badge">5</span></div>
+              <div class="prop-row"><span>未解决</span><b>3</b></div>
+              <div class="prop-row"><span>最新消息</span><b>王工 · 刚刚</b></div>
+            </aside>
+          </div>
+
+          <div class="ed-timeline">
+            <span class="tl-label">TIMELINE</span>
+            <span class="tl-time">09:00</span>
+            <div class="tl-track"><i class="tl-knob"></i></div>
+            <span class="tl-time">18:00</span>
+            <span class="tl-label">SUN</span>
+          </div>
+          <div class="status">
+            <span class="g on"><span style="width:5px;height:5px;border-radius:50%;background:var(--green)"></span>实时同步</span>
+            <span class="vsep"></span><span>已保存 14:32</span>
+            <span class="vsep"></span><span>网格 1 m</span>
+            <span class="sp"></span><span>对象 85</span>
+          </div>
+          <span class="anno" style="left:12px;bottom:2px">3</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note">
+        <h3><span class="idx">E</span>编辑器</h3>
+        <p class="tag">操作反馈、协作消息、系统状态各有位置，互不覆盖。</p>
+        <div class="lbl">标注</div>
+        <ul>
+          <li>① 协作消息右上堆叠，最多 3 条</li>
+          <li>② 操作 Toast 在时间轴上方</li>
+          <li>③ 保存 / 同步留在状态栏</li>
+          <li class="plus">评审面板打开时只更新未读，不弹协作 Toast</li>
+        </ul>
+      </div>
+      <div class="note">
+        <div class="lbl">协作规则</div>
+        <dl>
+          <dt>面板关闭</dt><dd>Toast + 未读 + 引脚</dd>
+          <dt>面板打开</dt><dd>卡片插入 + 未读，不弹 Toast</dd>
+          <dt>自己的</dt><dd>不通知、不配音</dd>
+          <dt>解决 / 删除</dt><dd>只更新卡片</dd>
+          <dt>连续 3 条</dt><dd>合并为「+ 3 条新消息」</dd>
+        </dl>
+      </div>
+      <div class="note">
+        <div class="lbl">取舍</div>
+        <ul>
+          <li class="plus">不再有两套 Toast 同时出现</li>
+          <li class="plus">重要消息一定能在评审 Tab 回看</li>
+          <li class="minus">Toast 位置比旧的右上角更靠下，需要适应</li>
+          <li class="minus">协作消息不再默认弹每一条</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 share -->
+  <section class="section" id="share">
+    <div class="section-head">
+      <h2>分享页</h2>
+      <p>评论 dock 承担未读入口；协作通知只在面板关闭或页面隐藏时弹；操作反馈在底部独立显示。</p>
+    </div>
+
+    <div class="frame">
+      <div class="mock-scaler">
+        <div class="mock" data-w="1200" data-h="680">
+          <div class="sh-top">
+            <div class="sh-brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span>场馆白膜</div>
+            <span class="vsep"></span>
+            <div class="sh-title">W1 展馆 · 秋季车展 <span class="sh-ro">只读</span></div>
+            <span class="sp"></span>
+            <span class="live"><span class="dot"></span>实时 · 3 人</span>
+            <span class="ava sm">王</span><span style="font-size:10.5px;color:var(--tx-2)">王工</span>
+            <button class="btn ghost sm">退出</button>
+            <button class="btn ghost sm"><i data-ic="link"></i>复制</button>
+          </div>
+
+          <div class="sh-body">
+            <div class="sh-canvas">
+              <svg class="scene" data-scene="share"></svg>
+              <div class="hud tl"><span class="hud-chip on">只读</span><span class="hud-chip">130 × 70 m</span></div>
+              <div class="hud bl"><div class="scalebar"><i style="width:62px"></i><span class="mono" style="font-size:9px;color:#6b6f76">10 m</span></div></div>
+              <div class="hud br"><svg class="gizmo" data-gizmo="1" viewBox="0 0 44 44"></svg></div>
+
+              <div class="sh-toast">
+                <div class="action-toast" style="position:static;transform:none;width:100%;bottom:auto">
+                  <span class="toast-ic">✓</span>
+                  <div class="toast-copy"><b>评论已发送</b><span>作者和其他访客会实时看到</span></div>
+                  <button class="toast-x">×</button>
+                  <i class="toast-progress"></i>
+                </div>
+              </div>
+
+              <div class="sh-dock">
+                <button>俯视</button><button>适配</button><button>标签</button>
+                <span class="sh-dock-sep"></span>
+                <button class="on"><i data-ic="comment"></i>评论<span class="badge">2</span></button>
+              </div>
+              <span class="anno" style="left:560px;top:580px">2</span>
+              <span class="anno" style="left:330px;top:500px">3</span>
+            </div>
+
+            <aside class="sh-panel">
+              <div class="sh-panel-head"><h3>评论</h3><span class="badge">4</span><span class="sp"></span><span class="live"><span class="dot"></span>实时</span></div>
+              <span class="anno" style="right:8px;top:96px">1</span>
+              <div class="sh-filters"><span class="sh-chip on">全部 <b>4</b></span><span class="sh-chip">未解决 <b>2</b></span><span class="sh-chip">我的 <b>1</b></span></div>
+              <div class="sh-list">
+                <div class="sh-cm on unread">
+                  <div class="sh-cm-top"><span class="ava sm">王</span><b>王工</b><span class="sh-new">新</span><span class="tm">刚刚</span></div>
+                  <p>入口开口方向反了，观众会从背面进入。</p>
+                  <div class="acts"><span>定位</span><span>回复</span><span>解决</span></div>
+                </div>
+                <div class="sh-cm">
+                  <div class="sh-cm-top"><span class="ava sm">李</span><b>李设计</b><span style="color:var(--accent-2);font-size:8px">作者</span><span class="tm">1 分钟前</span></div>
+                  <p>入口已转到南侧，模型同步更新。</p>
+                  <div class="acts"><span>定位</span><span>回复</span></div>
+                </div>
+                <div class="sh-cm">
+                  <div class="sh-cm-top"><span class="ava sm">陈</span><b>陈工</b><span class="tm">1 小时前</span></div>
+                  <p>这段过道只有 1.2 m，消防可能不通过。</p>
+                  <div class="acts"><span>定位</span></div>
+                </div>
+              </div>
+              <div style="margin-top:auto;border-top:1px solid var(--line);padding:9px 12px;color:var(--tx-4);font-size:9px">输入框 / 登录门槛在面板底部</div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note">
+        <h3><span class="idx">S</span>分享页</h3>
+        <p class="tag">同一个协作事件，面板关闭时 Toast，面板打开时只插入卡片和未读。</p>
+        <div class="lbl">标注</div>
+        <ul>
+          <li>① 面板打开时只插入卡片 + 「新」标记</li>
+          <li>② 评论 dock 显示未读数</li>
+          <li>③ 操作反馈在底部独立 Toast</li>
+          <li class="plus">面板关闭 / 页面隐藏时才弹协作 Toast</li>
+          <li class="plus">作者回复单独文案；解决只更新卡片</li>
+        </ul>
+      </div>
+      <div class="note">
+        <div class="lbl">通知条件</div>
+        <dl>
+          <dt>面板关闭</dt><dd>Toast + dock 未读</dd>
+          <dt>面板打开</dt><dd>插入卡片 + 「新」标记</dd>
+          <dt>页面隐藏</dt><dd>未读 + 声音（可选）</dd>
+          <dt>自己的</dt><dd>操作 Toast，不进未读</dd>
+          <dt>链接关闭</dt><dd>只读，无评论 Toast</dd>
+        </dl>
+      </div>
+      <div class="note">
+        <div class="lbl">文案</div>
+        <ul>
+          <li class="plus">「王工 评论了 W1A03」比「更新了评论」具体</li>
+          <li class="plus">「李设计 回复了你」区分作者回复</li>
+          <li class="minus">不在 Toast 里放大段评论正文</li>
+          <li class="minus">不把「评论已发送」放进未读</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 mobile -->
+  <section class="section" id="mobile">
+    <div class="section-head">
+      <h2>移动端</h2>
+      <p>移动端只保留两层：顶部协作通知，底部评论 FAB / 抽屉；操作 Toast 在抽屉关闭时浮在 dock 上方。</p>
+    </div>
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="p-top">
+            <span class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2.6l8.6 4.8v9.2L12 21.4l-8.6-4.8V7.4z"/><path d="M12 2.6v9.4M12 12l8.6-4.6M12 12L3.4 7.4"/></svg></span></span>
+            <span class="title">W1 展馆 · 秋季车展</span>
+            <span class="sp"></span>
+            <span class="live" style="height:19px;font-size:8px;padding:0 6px"><span class="dot"></span>3</span>
+            <span class="ava sm">王</span>
+          </div>
+          <div class="p-canvas">
+            <svg class="scene" data-scene="phone"></svg>
+            <div class="p-collab">
+              <span class="ava">王</span>
+              <div><b>王工 评论了 W1A03</b><span>入口开口方向反了 · 刚刚</span></div>
+            </div>
+            <span class="p-fab"><i data-ic="comment"></i>评论 <span class="badge">2</span></span>
+            <div style="position:absolute;left:10px;top:52px;display:flex;gap:4px">
+              <span class="hud-chip on" style="height:21px;font-size:9px">只读</span>
+              <span class="hud-chip" style="height:21px;font-size:9px">130 × 70 m</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-notes">
+        <div class="phone-note">
+          <div class="lbl">移动端结构</div>
+          <h3>协作通知在顶部，评论入口在底部</h3>
+          <p>不使用右上角浮层压住模型，也不让 Toast 挡住评论抽屉。FAB 的红点 / 数字就是未读入口。</p>
+        </div>
+        <div class="phone-note">
+          <div class="lbl">状态</div>
+          <h3>动作反馈只在抽屉关闭时</h3>
+          <p>评论已发送、复制链接等短反馈浮在 dock 上方；抽屉打开时只更新抽屉里的卡片和未读，不再叠一条 Toast。</p>
+        </div>
+        <div class="phone-note">
+          <div class="lbl">无障碍</div>
+          <h3>底部抽屉 + 顶部 Toast 都播报</h3>
+          <p>协作通知 `aria-live=polite`；阻断错误 `role=alert`；抽屉打开时焦点进入，关闭时回到评论按钮。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 components -->
+  <section class="section" id="components">
+    <div class="section-head">
+      <h2>组件库</h2>
+      <p>同一个 ToastHost / NotificationCard / Banner 组件，按 type 切换颜色和语义；不要在页面里各写一套。</p>
+    </div>
+    <div class="comp-grid">
+      <div class="comp-card">
+        <div class="comp-head"><span class="type a">A</span>操作 Toast<span>success / info / warn / error</span></div>
+        <div class="comp-body">
+          <div class="toast-sample"><span class="ic">✓</span><div><b>分享链接已复制</b><span>可发送给客户查看当前版本</span></div><span class="act">撤销</span></div>
+          <div class="toast-sample info"><span class="ic">i</span><div><b>已进入演示模式</b><span>按 Esc 退出</span></div><span class="act">×</span></div>
+          <div class="toast-sample warn"><span class="ic">!</span><div><b>评论已关闭</b><span>该链接当前只读</span></div><span class="act">查看</span></div>
+          <div class="toast-sample err"><span class="ic">!</span><div><b>评论发送失败</b><span>网络或登录状态异常</span></div><span class="act">重试</span></div>
+        </div>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-head"><span class="type b">B</span>协作通知<span>入口 + 未读</span></div>
+        <div class="comp-body">
+          <div class="sample-collab"><span class="ava">王</span><div><b>王工 评论了 W1A03</b><span>入口开口方向反了 · 刚刚</span></div><span class="act">查看</span></div>
+          <div class="sample-collab"><span class="ava">李</span><div><b>李设计 回复了你</b><span>入口已转到南侧 · 1 分钟前</span></div><span class="act">查看</span></div>
+          <div style="font-family:var(--mono);font-size:8.5px;color:var(--tx-4)">+ 3 条新消息 · 打开评审 / 评论</div>
+        </div>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-head"><span class="type c">C</span>系统状态<span>持久</span></div>
+        <div class="comp-body">
+          <div class="status-sample"><span class="g"><i class="k"></i>实时同步</span><span>·</span><span class="on">已保存 14:32</span><span style="margin-left:auto">SSE</span></div>
+          <div class="status-sample"><span class="g"><i class="k warn"></i>正在重连</span><span>·</span><span>最后同步 14:31</span><span style="margin-left:auto">3s</span></div>
+          <div class="status-sample"><span class="g"><i class="k" style="background:var(--red)"></i>保存失败</span><span>·</span><span>已回退本地</span><span style="margin-left:auto">重试</span></div>
+        </div>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-head"><span class="type d">D</span>阻断错误<span>Banner / 全屏</span></div>
+        <div class="comp-body">
+          <div class="sample-banner"><span class="ic">!</span><div><b>实时同步中断</b><span>链接仍可查看，修改暂未推送</span></div><span class="act">重试</span></div>
+          <div class="sample-banner" style="border-color:rgba(233,160,106,.26);background:rgba(233,160,106,.06)"><span class="ic" style="background:rgba(233,160,106,.12);color:var(--amber)">!</span><div><b>该链接已被撤销</b><span>评论与场景不再更新</span></div><span class="act" style="color:#d8a27b">返回</span></div>
+        </div>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-head"><span class="type e">E</span>表单校验<span>贴字段</span></div>
+        <div class="comp-body">
+          <div class="sample-field"><span class="lbl">用户名</span><div class="fake-input">wutao_</div><p>用户名已被占用，请换一个</p></div>
+          <div class="sample-field" style="border-color:rgba(233,160,106,.3);background:rgba(233,160,106,.04)"><span class="lbl" style="color:#d8a27b">验证码</span><div class="fake-input" style="border-color:rgba(233,160,106,.25)">拖动滑块完成拼图</div><p style="color:#d8a27b">请先完成验证</p></div>
+        </div>
+      </div>
+
+      <div class="comp-card">
+        <div class="comp-head"><span class="type f">F</span>房间消息<span>ChatFeed</span></div>
+        <div class="comp-body">
+          <div class="chat-sample"><b>王工</b><span>入口这边再开一点</span></div>
+          <div class="chat-sample mine"><b>我</b><span>收到，我改南侧</span></div>
+          <div class="chat-sample system"><b>系统</b><span>李设计 开始拖拽 陈工</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 rules -->
+  <section class="section" id="rules">
+    <div class="section-head">
+      <h2>路由规则</h2>
+      <p>类型决定主通道，状态决定是否弹、是否响、是否保留。不要用“页面”决定这一切。</p>
+    </div>
+
+    <table class="rules-table">
+      <thead><tr><th style="width:18%">规则</th><th style="width:26%">行为</th><th style="width:26%">原因</th><th style="width:30%">边界</th></tr></thead>
+      <tbody>
+        <tr><td>优先级</td><td>D &gt; C(错误) &gt; B &gt; A &gt; F</td><td>阻断问题必须先被看到</td><td class="soft">同一时刻最多 3 条 Toast；B 不进 Toast 队列</td></tr>
+        <tr><td>去重</td><td>相同 dedupeKey 2s 内合并</td><td>SSE 爆发 / 多次点击不刷屏</td><td class="soft">合并后显示数量，不重复播放声音</td></tr>
+        <tr><td>自己</td><td>按 authorUserId 过滤</td><td>不通知自己的评论 / 操作</td><td class="soft">操作成功仍可有 A 类 Toast</td></tr>
+        <tr><td>面板状态</td><td>B 仅在面板关闭或页面隐藏时弹 Toast</td><td>面板打开时用户已能看到新卡片</td><td class="soft">未读和「新」标记始终更新</td></tr>
+        <tr><td>声音</td><td>仅 B 类，且页面隐藏 / 面板关闭</td><td>声音只服务“有协作消息到达”</td><td class="soft">A / C / D / E 不配音；F 可选</td></tr>
+        <tr><td>持久化</td><td>B / C / D 不自动消失</td><td>需要回看或处理</td><td class="soft">A 自动消失；E 跟随字段</td></tr>
+        <tr><td>ARIA</td><td>A/B/C 使用 polite；D 使用 assertive</td><td>错误要打断，成功不打断</td><td class="soft">F 使用 log；E 使用 describedby</td></tr>
+        <tr><td>演示模式</td><td>A / B 全部静默，C 保留状态</td><td>演示时不应有界面干扰</td><td class="soft">D 阻断错误仍显示</td></tr>
+      </tbody>
+    </table>
+
+    <div class="rule-grid">
+      <div class="rule-card">
+        <h3>复制规则</h3>
+        <ul>
+          <li><b>标题写事件：</b>「分享链接已复制」「王工 评论了 W1A03」</li>
+          <li><b>正文给上下文：</b>对象、位置、时间，不放整段评论</li>
+          <li><b>动作明确：</b>「查看」「重试」「撤销」「返回」</li>
+          <li><b>避免重复：</b>Toast 已经说过的，不在状态栏再说一遍</li>
+        </ul>
+      </div>
+      <div class="rule-card">
+        <h3>不做的事</h3>
+        <ul>
+          <li>不新增万能通知收件箱；入口留在评审 / 评论 / 聊天</li>
+          <li>不把校验错误做成 Toast</li>
+          <li>不把聊天消息做成 Toast</li>
+          <li>不让 B 类消息进入 A 类队列</li>
+          <li>不对保存成功、校验失败、解决状态配音</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 decision -->
+  <section class="section" id="decision">
+    <div class="section-head">
+      <h2>拍板</h2>
+      <p>这版建议先定 3 个方向；确认后再进入代码。</p>
+    </div>
+    <div class="decision-grid">
+      <div class="decision-card recommend">
+        <div class="lbl">01 / ENTRY</div>
+        <h3>不新增万能收件箱</h3>
+        <p>编辑器用「评审」、分享页用评论抽屉 / FAB、多人用「房间消息」。统一发生在底层。</p>
+        <span class="choice">推荐 A · 上下文入口</span>
+      </div>
+      <div class="decision-card recommend">
+        <div class="lbl">02 / COLLAB TOAST</div>
+        <h3>面板关闭时才弹</h3>
+        <p>面板打开时插入卡片 + 未读 + 新标记；页面隐藏时弹 Toast / 未读。</p>
+        <span class="choice">推荐 A · 安静优先</span>
+      </div>
+      <div class="decision-card recommend">
+        <div class="lbl">03 / ACTION TOAST</div>
+        <h3>底部居中，不抢画布</h3>
+        <p>编辑器在时间轴上方，分享页在 dock 上方；错误可延长并带重试。</p>
+        <span class="choice">推荐 A · 底部锚点</span>
+      </div>
+    </div>
+    <div class="final-note">
+      <i data-ic="check"></i>
+      <p><b>推荐落地顺序：</b>先抽出 <b>MessageCenter + ToastHost</b>（A 类），再补分享页 B 类通知与未读，随后把实时同步错误升到 C/D 类，最后接声音（S7 / S8）与移动端。这样不会一次性改动 170 个调用点，也不会在迁移期间出现两套声音。</p>
+    </div>
+    <div class="note-line" style="margin-top:14px">
+      <i data-ic="info"></i>
+      <p><b>备选方案：</b>如果你希望“所有消息都能在一个地方回看”，可以在现有评审 / 评论入口上加一个「全部消息」筛选，而不是新增铃铛。这样仍保留上下文入口，同时满足统一收件箱的需求。</p>
+    </div>
+  </section>
+
+  <footer class="foot"><span>场馆白膜 · 统一消息架构</span><span>Type first · 2026-11-22</span></footer>
+</div>
+
+<script>
+(function () {
+  var ICONS = {
+    comment: '<path d="M20.4 12c0 4.2-3.8 7.4-8.4 7.4-1 0-2-.15-2.9-.42L4 20.4l1.3-3.6A7 7 0 013.6 12c0-4.2 3.8-7.4 8.4-7.4s8.4 3.2 8.4 7.4z"/>',
+    link: '<path d="M10 13.8a3.6 3.6 0 005.1 0l3.3-3.3a3.6 3.6 0 00-5.1-5.1L11.6 7"/><path d="M14 10.2a3.6 3.6 0 00-5.1 0l-3.3 3.3a3.6 3.6 0 005.1 5.1l1.7-1.7"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.1"/>',
+    check: '<path d="M5 12.5l4.2 4L19 6.8"/>'
+  }
+  document.querySelectorAll('[data-ic]').forEach(function (n) {
+    var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    s.setAttribute('class', 'i')
+    s.setAttribute('viewBox', '0 0 24 24')
+    s.innerHTML = ICONS[n.dataset.ic] || ''
+    n.parentNode.replaceChild(s, n)
+  })
+
+  var NS = 'http://www.w3.org/2000/svg'
+  var K = Math.sqrt(3) / 2
+  function P(x, y, z) { return [(x - y) * K, (x + y) * 0.5 - (z || 0)] }
+  function mk(name, attrs) {
+    var n = document.createElementNS(NS, name)
+    for (var k in attrs) n.setAttribute(k, attrs[k])
+    return n
+  }
+  function pts(arr) {
+    return arr.map(function (p) { return P(p[0], p[1], p[2] || 0) })
+      .map(function (p) { return p[0].toFixed(2) + ',' + p[1].toFixed(2) }).join(' ')
+  }
+
+  var VENUE = { x: -26, y: -16, w: 52, d: 32, h: 7 }
+  var BOOTHS = [
+    { x: -22, y: -12, w: 9, d: 7, h: 3.2, lab: 'W1A01' },
+    { x: -11, y: -12, w: 7, d: 7, h: 2.6, lab: 'W1A02' },
+    { x: -2, y: -12, w: 10, d: 7, h: 4.0, lab: 'W1A03' },
+    { x: 10, y: -12, w: 8, d: 7, h: 2.4, lab: 'W1A04' },
+    { x: -22, y: -3.5, w: 6, d: 6, h: 2.8 },
+    { x: -13, y: -3.5, w: 5, d: 6, h: 2.2 },
+    { x: 2, y: -3.5, w: 8, d: 6, h: 3.6, lab: 'W1B03' },
+    { x: 12, y: -3.5, w: 6, d: 6, h: 2.0 },
+    { x: -22, y: 5, w: 8, d: 8, h: 3.0 },
+    { x: -11, y: 5, w: 5, d: 8, h: 2.4 },
+    { x: 6, y: 5, w: 7, d: 8, h: 2.8, lab: '咖啡区' },
+    { x: 15, y: 5, w: 6, d: 8, h: 2.2 }
+  ]
+
+  var SCENES = {
+    editor: { vb: '-44 -31 88 55', grid: 2, sel: 2, pins: [[-14, -8, 5.2, 1, 'active'], [0, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved'], [16, 7, 3.8, 4, 'open']] },
+    share: { vb: '-44 -31 88 55', grid: 2, sel: 2, pins: [[-14, -8, 5.2, 1, 'active'], [0, -9, 5.6, 2, 'open'], [-16, 8, 4.6, 3, 'resolved']] },
+    phone: { vb: '-34 -22 68 42', grid: 2, sel: 2, pins: [[-14, -8, 5.2, 1, 'open'], [0, -9, 5.6, 2, 'active']] }
+  }
+
+  function drawPins(svg, cfg) {
+    (cfg.pins || []).forEach(function (p) {
+      var xy = P(p[0], p[1], p[2])
+      var n = p[3], st = p[4] || 'open'
+      var on = st !== 'resolved'
+      if (st === 'active') {
+        svg.appendChild(mk('circle', { cx: xy[0], cy: xy[1], r: 2.8, fill: 'rgba(111,124,232,.13)' }))
+        svg.appendChild(mk('circle', { cx: xy[0], cy: xy[1], r: 2.1, fill: 'none', stroke: 'rgba(111,124,232,.42)', 'stroke-width': '.2' }))
+      }
+      svg.appendChild(mk('circle', {
+        cx: xy[0], cy: xy[1], r: 1.32,
+        fill: on ? '#6f7ce8' : 'rgba(255,255,255,.10)',
+        stroke: on ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.22)',
+        'stroke-width': '.18'
+      }))
+      var t = mk('text', {
+        x: xy[0], y: xy[1] + 0.06, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        'font-size': '1.22', 'font-family': 'ui-monospace,monospace',
+        fill: on ? '#fff' : '#8b8f98'
+      })
+      t.textContent = n
+      svg.appendChild(t)
+    })
+  }
+
+  function drawScene(svg, key) {
+    var cfg = SCENES[key] || SCENES.editor
+    svg.setAttribute('viewBox', cfg.vb)
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid slice')
+    svg.innerHTML = ''
+
+    svg.appendChild(mk('polygon', {
+      points: pts([[VENUE.x, VENUE.y], [VENUE.x + VENUE.w, VENUE.y], [VENUE.x + VENUE.w, VENUE.y + VENUE.d], [VENUE.x, VENUE.y + VENUE.d]]),
+      fill: 'rgba(255,255,255,.022)'
+    }))
+
+    var g = mk('g')
+    for (var x = VENUE.x; x <= VENUE.x + VENUE.w; x += cfg.grid) {
+      var a = P(x, VENUE.y), b = P(x, VENUE.y + VENUE.d)
+      g.appendChild(mk('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], stroke: x === 0 ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.042)', 'stroke-width': '.28' }))
+    }
+    for (var y = VENUE.y; y <= VENUE.y + VENUE.d; y += cfg.grid) {
+      var c = P(VENUE.x, y), d = P(VENUE.x + VENUE.w, y)
+      g.appendChild(mk('line', { x1: c[0], y1: c[1], x2: d[0], y2: d[1], stroke: y === 0 ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.042)', 'stroke-width': '.28' }))
+    }
+    svg.appendChild(g)
+
+    var ring = [[VENUE.x, VENUE.y], [VENUE.x + VENUE.w, VENUE.y], [VENUE.x + VENUE.w, VENUE.y + VENUE.d], [VENUE.x, VENUE.y + VENUE.d]]
+    svg.appendChild(mk('polygon', { points: ring.map(function (p) { return P(p[0], p[1], VENUE.h) }).map(function (p) { return p[0].toFixed(2) + ',' + p[1].toFixed(2) }).join(' '), fill: 'none', stroke: 'rgba(255,255,255,.17)', 'stroke-width': '.45', 'stroke-dasharray': '2 1.6' }))
+    ring.forEach(function (p) {
+      var t = P(p[0], p[1], VENUE.h), bt = P(p[0], p[1], 0)
+      svg.appendChild(mk('line', { x1: bt[0], y1: bt[1], x2: t[0], y2: t[1], stroke: 'rgba(255,255,255,.13)', 'stroke-width': '.4' }))
+    })
+
+    var order = BOOTHS.map(function (b, i) { return { b: b, i: i, z: (b.x + b.w / 2) + (b.y + b.d / 2) } }).sort(function (p, q) { return p.z - q.z })
+    order.forEach(function (it) {
+      var b = it.b, x = b.x, y = b.y, w = b.w, d = b.d, h = b.h
+      var on = cfg.sel === it.i
+      var fTop = on ? 'rgba(233,160,106,.34)' : '#2a2f36'
+      var fA = on ? 'rgba(233,160,106,.18)' : '#1d2126'
+      var fB = on ? 'rgba(233,160,106,.10)' : '#171a1f'
+      var stroke = on ? '#e9a06a' : 'rgba(255,255,255,.10)'
+      var sw = on ? '0.55' : '0.3'
+      svg.appendChild(mk('polygon', { points: pts([[x, y + d, 0], [x + w, y + d, 0], [x + w, y + d, h], [x, y + d, h]]), fill: fA, stroke: stroke, 'stroke-width': sw }))
+      svg.appendChild(mk('polygon', { points: pts([[x + w, y, 0], [x + w, y + d, 0], [x + w, y + d, h], [x + w, y, h]]), fill: fB, stroke: stroke, 'stroke-width': sw }))
+      svg.appendChild(mk('polygon', { points: pts([[x, y, h], [x + w, y, h], [x + w, y + d, h], [x, y + d, h]]), fill: fTop, stroke: stroke, 'stroke-width': sw }))
+      if (b.lab) {
+        var lp = P(x + w / 2, y + d / 2, h)
+        var lt = mk('text', { x: lp[0], y: lp[1] + 0.5, 'text-anchor': 'middle', 'font-size': '1.18', 'font-family': 'ui-monospace,monospace', fill: on ? '#f4c9a6' : 'rgba(255,255,255,.34)' })
+        lt.textContent = b.lab
+        svg.appendChild(lt)
+      }
+    })
+    drawPins(svg, cfg)
+  }
+
+  document.querySelectorAll('[data-scene]').forEach(function (s) { drawScene(s, s.dataset.scene) })
+  document.querySelectorAll('[data-gizmo]').forEach(function (s) {
+    s.setAttribute('viewBox', '0 0 44 44')
+    var cx = 22, cy = 24, L = 14
+    ;[
+      { d: [cx - L * 0.87, cy + L * 0.5], k: '#c96b5e', t: 'X', tx: -6, ty: 5 },
+      { d: [cx + L * 0.87, cy + L * 0.5], k: '#5e9c6b', t: 'Z', tx: 5, ty: 5 },
+      { d: [cx, cy - L], k: '#6f7ce8', t: 'Y', tx: 0, ty: -3 }
+    ].forEach(function (a) {
+      s.appendChild(mk('line', { x1: cx, y1: cy, x2: a.d[0], y2: a.d[1], stroke: a.k, 'stroke-width': '1.8', 'stroke-linecap': 'round' }))
+      var t = mk('text', { x: a.d[0] + a.tx, y: a.d[1] + a.ty, fill: a.k, 'font-size': '8', 'font-family': 'ui-monospace,monospace', 'font-weight': '500' })
+      t.textContent = a.t
+      s.appendChild(t)
+    })
+  })
+
+  function fit() {
+    document.querySelectorAll('.mock-scaler').forEach(function (w) {
+      var inner = w.querySelector('.mock')
+      if (!inner) return
+      var bw = parseFloat(inner.dataset.w) || 1200
+      var bh = parseFloat(inner.dataset.h) || 680
+      var s = Math.min(1, w.clientWidth / bw)
+      inner.style.width = bw + 'px'
+      inner.style.height = bh + 'px'
+      inner.style.transform = 'scale(' + s + ')'
+      w.style.height = (bh * s) + 'px'
+    })
+  }
+  fit()
+  window.addEventListener('resize', fit, { passive: true })
+
+  var links = Array.prototype.slice.call(document.querySelectorAll('.toc a[data-t]'))
+  var map = {}
+  links.forEach(function (l) { map[l.dataset.t] = l })
+  var targets = []
+  ;['types', 'arch', 'editor', 'share', 'mobile', 'components', 'rules', 'decision'].forEach(function (id) {
+    var el = document.getElementById(id)
+    if (el) targets.push(el)
+  })
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return
+        links.forEach(function (l) { l.classList.remove('on') })
+        if (map[en.target.id]) map[en.target.id].classList.add('on')
+      })
+    }, { rootMargin: '-20% 0px -65% 0px' })
+    targets.forEach(function (t) { io.observe(t) })
+  }
+})()
+</script>
+</body>
+</html>
