@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>展台模型库 2.0 · 设计稿</title>
+<style>
+  :root{
+    --bg:#0b0c0f;--bg1:#101217;--bg2:#15181e;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);
+    --tx:#e9e9e5;--tx2:#a7abb5;--tx3:#707681;--tx4:#4d535e;
+    --accent:#8b9cff;--mint:#5bd6bd;--amber:#ffb86b;--rose:#f07f93;--violet:#b69cff;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:
+      radial-gradient(900px 480px at 78% -6%,rgba(139,156,255,.13),transparent 65%),
+      radial-gradient(700px 400px at 7% 16%,rgba(91,214,189,.055),transparent 65%),
+      var(--bg);color:var(--tx);font-family:var(--sans);-webkit-font-smoothing:antialiased;
+  }
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+    background-size:48px 48px;mask-image:linear-gradient(to bottom,#000,transparent 75%)}
+  .wrap{position:relative;z-index:1;max-width:1260px;margin:0 auto;padding:0 34px}
+  .mono{font-family:var(--mono)}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--tx3)}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--mint);box-shadow:0 0 12px var(--mint)}
+
+  .hero{padding:72px 0 58px;border-bottom:1px solid var(--line)}
+  .hero-top{display:flex;align-items:center;gap:10px;margin-bottom:34px}
+  .ver{font-family:var(--mono);font-size:9px;color:var(--tx3);border:1px solid var(--line2);border-radius:99px;padding:4px 9px}
+  .hero-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr);gap:54px;align-items:end}
+  h1{font-size:clamp(43px,6.2vw,80px);line-height:1.03;letter-spacing:-.055em;margin:0 0 22px;font-weight:590}
+  h1 em{font-style:normal;color:var(--accent);white-space:nowrap}
+  .hero p{max-width:620px;color:var(--tx2);font-size:14.5px;line-height:1.9;margin:0}
+  .hero-note{display:flex;flex-wrap:wrap;gap:8px;margin-top:28px}
+  .pill{font-family:var(--mono);font-size:8.5px;color:var(--tx2);border:1px solid var(--line2);background:rgba(255,255,255,.02);border-radius:99px;padding:6px 10px}
+  .pill.good{color:var(--mint);border-color:rgba(91,214,189,.25);background:rgba(91,214,189,.055)}
+  .pill.warn{color:var(--amber);border-color:rgba(255,184,107,.24);background:rgba(255,184,107,.05)}
+  .hero-panel{border-left:1px solid var(--line2);border-top:1px solid var(--line2);display:grid;grid-template-columns:1fr 1fr}
+  .stat{padding:17px 18px;border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);min-height:96px}
+  .stat b{display:block;font-family:var(--mono);font-size:29px;line-height:1;font-weight:500;letter-spacing:-.05em}
+  .stat b small{font-size:12px;color:var(--tx3);letter-spacing:0}
+  .stat span{display:block;margin-top:9px;font-size:10px;line-height:1.55;color:var(--tx3)}
+  .stat .up{color:var(--mint)}
+
+  section{padding:72px 0;border-bottom:1px solid var(--line)}
+  .sec-head{display:grid;grid-template-columns:74px minmax(0,1fr) minmax(250px,.52fr);gap:26px;margin-bottom:36px;align-items:start}
+  .sec-no{font-family:var(--mono);font-size:9.5px;color:var(--tx4);padding-top:6px}
+  .kicker{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;color:var(--accent);text-transform:uppercase;margin-bottom:11px}
+  .kicker::before{content:"";width:14px;height:1px;background:var(--accent)}
+  h2{font-size:clamp(25px,3.1vw,38px);line-height:1.12;letter-spacing:-.045em;margin:0;font-weight:560}
+  .sec-head p{margin:4px 0 0;color:var(--tx3);font-size:11.5px;line-height:1.8}
+
+  .card{border:1px solid var(--line);border-radius:9px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,.008));padding:20px}
+  .card h3{font-size:12px;margin:0 0 8px;font-weight:560}
+  .card p{margin:0;color:var(--tx3);font-size:10.5px;line-height:1.8}
+  .card .num{font-family:var(--mono);font-size:8px;color:var(--tx4);letter-spacing:.08em;margin-bottom:13px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+  /* CATALOG */
+  .catalog{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .model-card{border:1px solid var(--line);border-radius:8px;background:var(--bg1);overflow:hidden;position:relative;min-width:0}
+  .model-card:hover{border-color:rgba(139,156,255,.28)}
+  .model-art{height:148px;background:
+    radial-gradient(300px 160px at 50% 34%,rgba(139,156,255,.075),transparent 72%),
+    linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px),#0d0f13;
+    background-size:auto,24px 24px,24px 24px,auto;position:relative;overflow:hidden}
+  .model-art svg{position:absolute;inset:0;width:100%;height:100%}
+  .model-body{padding:12px 13px 13px;border-top:1px solid var(--line)}
+  .model-body .top{display:flex;align-items:flex-start;gap:8px}
+  .model-body .idx{font-family:var(--mono);font-size:7.5px;color:var(--tx4);padding-top:2px}
+  .model-body h3{font-size:11px;margin:0;font-weight:560;line-height:1.35}
+  .model-body .en{font-family:var(--mono);font-size:7px;color:var(--tx4);margin-top:2px;letter-spacing:.05em}
+  .model-body .sp{flex:1}
+  .model-body .badge{font-family:var(--mono);font-size:7px;color:var(--tx3);border:1px solid var(--line);border-radius:3px;padding:2px 4px;white-space:nowrap}
+  .model-body p{font-size:9px;line-height:1.65;color:var(--tx3);margin:9px 0 0;min-height:30px}
+  .model-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+  .model-tags span{font-family:var(--mono);font-size:6.7px;color:var(--tx4);border:1px solid var(--line);border-radius:2px;padding:2px 4px}
+  .model-card.future{opacity:.72}
+  .model-card.future .model-art{filter:saturate(.7)}
+
+  /* PRINCIPLE */
+  .principle-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}
+  .principle{border:1px solid var(--line);border-radius:7px;padding:16px;background:rgba(255,255,255,.016)}
+  .principle .p{font-family:var(--mono);font-size:8px;color:var(--tx4);margin-bottom:14px}
+  .principle h3{font-size:11px;margin:0 0 6px;font-weight:550}
+  .principle p{font-size:9.5px;line-height:1.7;color:var(--tx3);margin:0}
+  .principle.hi{border-color:rgba(139,156,255,.28);background:linear-gradient(180deg,rgba(139,156,255,.07),transparent)}
+
+  /* RECIPE */
+  .recipe{display:grid;grid-template-columns:1fr 32px 1.15fr 32px 1fr;align-items:stretch;margin-top:4px}
+  .recipe-card{border:1px solid var(--line2);border-radius:7px;padding:16px;background:var(--bg1);min-width:0}
+  .recipe-card.hi{border-color:rgba(139,156,255,.35);background:linear-gradient(180deg,rgba(139,156,255,.075),var(--bg1))}
+  .recipe-card .lab{font-family:var(--mono);font-size:7.5px;color:var(--tx4);letter-spacing:.1em;margin-bottom:12px}
+  .recipe-card h3{font-size:11px;margin:0 0 7px;font-weight:550}
+  .recipe-card p{font-size:9px;line-height:1.65;color:var(--tx3);margin:0}
+  .recipe-card .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:11px}
+  .recipe-card .chips span{font-family:var(--mono);font-size:7px;color:var(--tx3);border:1px solid var(--line);padding:2px 4px;border-radius:2px}
+  .rarrow{display:grid;place-items:center;color:var(--tx4);font-family:var(--mono)}
+  .param-line{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:7px 0;font-size:9px;color:var(--tx3)}
+  .param-line:last-child{border-bottom:0}
+  .param-line b{font-family:var(--mono);font-size:8px;color:var(--tx2);font-weight:400}
+  .matrix{width:100%;border-collapse:collapse;font-size:9.5px}
+  .matrix th{text-align:left;font-family:var(--mono);font-size:7px;color:var(--tx4);letter-spacing:.08em;font-weight:400;padding:7px 8px;border-bottom:1px solid var(--line2);text-transform:uppercase}
+  .matrix td{padding:8px;border-bottom:1px solid var(--line);color:var(--tx3);vertical-align:top;line-height:1.55}
+  .matrix td:first-child{color:var(--tx2);font-family:var(--mono);font-size:8px}
+  .matrix tr:last-child td{border-bottom:0}
+
+  /* EDITOR MOCK */
+  .mock{border:1px solid var(--line2);border-radius:11px;background:var(--bg1);overflow:hidden;box-shadow:0 40px 100px -55px #000}
+  .mock-top{height:40px;border-bottom:1px solid var(--line);background:#0e1014;display:flex;align-items:center;gap:11px;padding:0 13px}
+  .brand{font-family:var(--mono);font-size:8.5px;color:var(--tx3);letter-spacing:.1em}
+  .brand b{color:var(--accent);font-weight:500}
+  .mock-top .sep{width:1px;height:15px;background:var(--line2)}
+  .mock-top .tool{font-size:7.5px;color:var(--tx3);padding:4px 6px;border:1px solid transparent;border-radius:3px}
+  .mock-top .tool.on{color:var(--tx);border-color:var(--line2);background:rgba(255,255,255,.04)}
+  .mock-top .sp{flex:1}
+  .live{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:7px;color:var(--mint)}
+  .mock-body{display:grid;grid-template-columns:minmax(0,1fr) 322px;min-height:560px}
+  .canvas{position:relative;background:
+    radial-gradient(700px 400px at 50% 38%,#1e232c 0,#15181e 60%,#111318 100%);
+    overflow:hidden}
+  .canvas::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:28px 28px;opacity:.55}
+  .canvas::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 42%,rgba(0,0,0,.44))}
+  .canvas svg{position:absolute;inset:0;width:100%;height:100%;z-index:1}
+  .hud{position:absolute;z-index:2;top:13px;left:14px;display:flex;gap:5px;flex-wrap:wrap}
+  .hud span{font-family:var(--mono);font-size:7px;color:var(--tx3);border:1px solid var(--line2);background:rgba(13,15,19,.84);border-radius:3px;padding:4px 6px;backdrop-filter:blur(4px)}
+  .hud b{color:var(--tx2);font-weight:500}
+  .model-toast{position:absolute;z-index:3;left:18px;bottom:18px;border:1px solid rgba(139,156,255,.3);background:rgba(22,24,34,.92);border-radius:6px;padding:8px 10px;backdrop-filter:blur(6px)}
+  .model-toast b{display:block;font-family:var(--mono);font-size:7px;color:var(--accent);letter-spacing:.06em}
+  .model-toast span{display:block;margin-top:3px;font-size:8px;color:var(--tx3)}
+  .library{border-left:1px solid var(--line);background:#121419;padding:13px;overflow:hidden}
+  .lib-head{display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:10px}
+  .lib-head b{font-size:9.5px;font-weight:560}
+  .lib-head span{font-family:var(--mono);font-size:7px;color:var(--tx4)}
+  .lib-sub{font-size:8px;line-height:1.6;color:var(--tx4);margin:0 0 10px}
+  .model-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .mini{border:1px solid var(--line);border-radius:5px;background:#0e1014;padding:5px 5px 6px;position:relative;cursor:default}
+  .mini.on{border-color:rgba(139,156,255,.45);background:rgba(139,156,255,.08)}
+  .mini.on::after{content:"";position:absolute;top:4px;right:4px;width:4px;height:4px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+  .mini svg{width:100%;height:50px;display:block}
+  .mini b{display:block;text-align:center;font-size:7.5px;font-weight:500;color:var(--tx3);margin-top:3px}
+  .mini.on b{color:var(--tx2)}
+  .lib-sec{font-family:var(--mono);font-size:7px;color:var(--tx4);letter-spacing:.1em;margin:13px 0 7px;text-transform:uppercase}
+  .field{height:27px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.025);display:flex;justify-content:space-between;align-items:center;padding:0 8px;font-size:8px;color:var(--tx3);margin-bottom:5px}
+  .field small{font-family:var(--mono);font-size:7px;color:var(--tx4)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-bottom:6px}
+  .seg span{flex:1;text-align:center;font-size:7px;color:var(--tx4);padding:5px 2px}
+  .seg span.on{background:rgba(255,255,255,.07);color:var(--tx2)}
+  .lib-note{font-size:7.5px;line-height:1.6;color:var(--tx4);margin-top:9px}
+  .mock-foot{height:27px;border-top:1px solid var(--line);background:#0d0f13;display:flex;align-items:center;gap:11px;padding:0 12px;font-family:var(--mono);font-size:7px;color:var(--tx4)}
+  .mock-foot .sp{flex:1}
+
+  /* FLOW */
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--line2);margin-top:8px}
+  .flow-step{padding:17px 13px 0 0;position:relative}
+  .flow-step::before{content:"";position:absolute;top:-4px;left:0;width:7px;height:7px;border-radius:50%;background:var(--bg);border:1px solid var(--accent)}
+  .flow-step .n{font-family:var(--mono);font-size:7px;color:var(--tx4);margin-bottom:7px}
+  .flow-step b{display:block;font-size:9.5px;font-weight:540;margin-bottom:4px}
+  .flow-step span{display:block;font-size:8px;line-height:1.65;color:var(--tx4)}
+
+  .phases{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .phase{border:1px solid var(--line);border-radius:6px;padding:13px;background:rgba(255,255,255,.016)}
+  .phase .p{font-family:var(--mono);font-size:7px;color:var(--tx4);margin-bottom:9px}
+  .phase b{display:block;font-size:9.5px;font-weight:540;margin-bottom:4px}
+  .phase span{display:block;font-size:8px;line-height:1.65;color:var(--tx4)}
+  .phase .est{display:inline-block;margin-top:7px;font-family:var(--mono);font-size:7px;color:var(--accent);border:1px solid rgba(139,156,255,.22);border-radius:2px;padding:2px 4px}
+
+  .decision-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .decision{border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:0 6px 6px 0;padding:15px;background:rgba(255,255,255,.018)}
+  .decision .q{font-family:var(--mono);font-size:7px;color:var(--accent);margin-bottom:5px}
+  .decision b{display:block;font-size:10px;font-weight:550;margin-bottom:4px}
+  .decision p{font-size:9px;line-height:1.7;color:var(--tx3);margin:0}
+  .decision strong{color:var(--mint);font-weight:500}
+
+  footer{padding:30px 0 42px;color:var(--tx4);font-size:8px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  footer .mono{font-size:7px}
+
+  @media(max-width:1000px){
+    .hero-grid{grid-template-columns:1fr}.catalog{grid-template-columns:1fr 1fr}
+    .mock-body{grid-template-columns:1fr}.library{border-left:0;border-top:1px solid var(--line)}
+    .recipe{grid-template-columns:1fr}.rarrow{padding:7px 0;transform:rotate(90deg)}
+    .principle-grid{grid-template-columns:1fr 1fr}
+    .sec-head{grid-template-columns:50px 1fr}.sec-head p{grid-column:2}
+  }
+  @media(max-width:640px){
+    .wrap{padding:0 18px}.hero{padding:48px 0 42px}section{padding:52px 0}
+    .catalog,.grid-2,.grid-3,.decision-grid,.principle-grid,.phases{grid-template-columns:1fr}
+    .flow{grid-template-columns:1fr 1fr;gap:14px}
+    .sec-head{grid-template-columns:1fr;gap:10px}.sec-head p{grid-column:1}
+    .mock-body{min-height:420px}.canvas{min-height:420px}
+    .matrix{display:block;overflow-x:auto;white-space:nowrap}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="hero-top"><span class="dot"></span><span class="eyebrow">Grid Massing / Booth Library</span><span class="ver">MODEL DESIGN · 2026.11</span></div>
+    <div class="hero-grid">
+      <div>
+        <h1>更多展台模型，<br><em>一套构件语言。</em></h1>
+        <p>不是把 <span class="mono">BoothKind</span> 从 3 个堆到 12 个，而是增加模型预设、开合边、顶棚、门楣、台地和框架参数。现有白膜、脚手架、光地继续兼容，新模型也继续复用已经做好的合批与增量重建。</p>
+        <div class="hero-note"><span class="pill good">8 个模型预设</span><span class="pill">模型 = 构件配方</span><span class="pill">开合边 / 门楣 / 台地</span><span class="pill warn">设计稿 · 待确认</span></div>
+      </div>
+      <div class="hero-panel">
+        <div class="stat"><b>3<small> → 8</small></b><span>首发展示的模型卡片<br>不新增 8 套渲染器</span></div>
+        <div class="stat"><b>1<small> 套</small></b><span>统一的构件参数<br>与场景 JSON 结构</span></div>
+        <div class="stat"><b>0<small> 次</small></b><span>现有类型迁移<br>旧数据自动映射</span></div>
+        <div class="stat"><b class="up">6<small> 个</small></b><span>优先落地的基础模型<br>其余按需延后</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="catalog">
+      <div class="sec-head">
+        <div class="sec-no">01 / CATALOG</div>
+        <div><div class="kicker">模型库</div><h2>八个可认出来的展台，<br>不是八个硬编码分支。</h2></div>
+        <p>每个模型保留现有 BIM 式白膜基因：可绘制任意多边形轮廓、可设高度、Logo、展商和标记。差异来自墙板开合、框架、顶棚、门楣和台地，而不是另写一套编辑器。</p>
+      </div>
+
+      <div class="catalog">
+        <!-- 01 STANDARD -->
+        <article class="model-card">
+          <div class="model-art">
+            <svg viewBox="0 0 220 148" aria-label="标准白膜展台">
+              <g opacity=".5" stroke="#ffffff" stroke-opacity=".07"><path d="M0 118H220M0 74H220M28 0V148M92 0V148M156 0V148"/></g>
+              <g transform="translate(54 48)">
+                <polygon points="0,30 60,0 120,30 60,60" fill="#3d4554" stroke="#7b8595"/>
+                <polygon points="0,30 0,75 60,105 60,60" fill="#252a33" stroke="#687282"/>
+                <polygon points="60,60 60,105 120,75 120,30" fill="#1c2028" stroke="#596271"/>
+                <g fill="#f4f0e6" stroke="#a49b8a"><rect x="-3" y="26" width="6" height="53"/><rect x="57" y="56" width="6" height="53"/><rect x="117" y="26" width="6" height="53"/></g>
+                <path d="M30 75H72" stroke="#20242b" stroke-width="7"/>
+              </g>
+              <text x="14" y="136" font-family="SFMono-Regular,Consolas,monospace" font-size="7" fill="#5c6470">4 POSTS · TOP · 4 OPENINGS</text>
+            </svg>
+          </div>
+          <div class="model-body">
+            <div class="top"><span class="idx">01</span><h3>标准白膜</h3><span class="sp"></span><span class="badge">已有</span></div>
+            <div class="en">MASSING STANDARD</div>
+            <p>全封闭体量，四面留入口；适合快速体块、展位面积和视线控制。</p>
+            <div class="model-tags"><span>4 面围挡</span><span>顶板</span><span>可去顶</span></div>
+          </div>
+        </article>
+
+        <!-- 02 OCTANORM -->
+        <article class="model-card">
+          <div class="model-art">
+            <svg viewBox="0 0 220 148" aria-label="标摊升级模型">
+              <g opacity=".5" stroke="#ffffff" stroke-opacity=".07"><path d="M0 118H220M0 74H220M28 0V148M92 0V148M156 0V148"/></g>
+              <g transform="translate(54 48)">
+                <polygon points="0,30 60,0 120,30 60,60" fill="#f1ede3" stroke="#b7b0a1"/>
+                <polygon points="0,30 0,72 60,102 60,60" fill="#ded8ca" stroke="#aaa191"/>
+                <polygon points="60,60 60,102 120,72 120,30" fill="#d0c9ba" stroke="#9c9382"/>
+                <polygon points="0,30 60,2 120,30 120,38 60,10 0,38" fill="#e8e2d6" stroke="#b0a797" opacity=".85"/>
+                <path d="M12 46L52 26V39L12 59Z" fill="#2e97a0" stroke="#62c8c8" opacity=".75"/>
+                <g stroke="#c4b7a2"><path d="M8 38V77M112 38V76M60 61V101"/></g>
+              </g>
+              <text x="14" y="136" font-family="SFMono-Regular,Consolas,monospace" font-size="7" fill="#5c6470">PANELS · FASCIA · NO CEILING</text>
+            </svg>
+          </div>
+          <div class="model-body">
+            <div class="top"><span class="idx">02</span><h3>标摊升级</h3><span class="sp"></span><span class="badge">基础</span></div>
+            <div class="en">OCTANORM / PANEL</div>
+            <p>八棱柱或白色板材围合，顶部门楣带 Logo；有展商识别但不封顶。</p>
+            <div class="model-tags"><span>三面墙</span><span>门楣</span><span>无顶</span></div>
+          </div>
+        </article>
+
+        <!-- 03 PENINSULA -->
+        <article class="model-card">
+          <div class="model-art">
+            <svg viewBox="0 0 220 148" aria-label="半岛展台">
+              <g opacity=".5" stroke="#ffffff" stroke-opacity=".07"><path d="M0 118H220M0 74H220M28 0V148M92 0V148M156 0V148"/></g>
+              <g transform="translate(54 47)">
+                <polygon points="0,30 60,0 120,30 60,60" fill="#354c5e" stroke="#7f9fb2"/>
+                <polygon points="0,30 0,70 26,83 26,43" fill="#263844" stroke="#6a8fa4"/>
+                <polygon points="26,43 26,83 60,100 60,60" fill="#202d38" stroke="#587687"/>
+                <polygon points="60,60 60,100 120,70 120,30 60,60" fill="none" stroke="#77a6bb" stroke-dasharray="4 5"/>
+                <g fill="#eff4f5" stroke="#9bb3bd"><rect x="-3" y="26" width="6" height="49"/><rect x="23" y="39" width="6" height="47"/><rect x="57" y="56" width="6" height="45"/><rect x="117" y="26" width="6" height="49"/></g>
+                <rect x="24" y="28" width="36" height="7" fill="#6b8fa1" stroke="#a9c5d0" transform="skewY(-26.6)"/>
+              </g>
+              <text x="14" y="136" font-family="SFMono-Regular,Consolas,monospace" font-size="7" fill="#5c6470">3 CLOSED · 1 OPEN · FASCIA</text>
+            </svg>
+          </div>
+          <div class="model-body">
+            <div class="top"><span class="idx">03</span><h3>半岛展台</h3><span class="sp"></span><span class="badge">基础</span></div>
+            <div class="en">PENINSULA</div>
+            <p>三面围合、单面开口，入口更明确；适合靠墙或靠通道的标准展位。</p>
+            <div class="model-tags"><span>三面墙</span><span>单面开</span><span>门楣</span></div>
+          </div>
+        </article>
+
+        <!-- 04 ISLAND -->
+        <article class="model-card">
+          <div class="model-art">
+            <svg viewBox="0 0 220 148" aria-label="岛型展台">
+              <g opacity=".5" stroke="#ffffff" stroke-opacity=".07"><path d="M0 118H220M0 74H220M28 0V148M92 0V148M156 0V148"/></g>
+              <g transform="translate(48 45)">
+                <polygon points="0,34 66,0 132,34 66,68" fill="#3c4453" stroke="#8794a6"/>
+                <polygon points="0,34 0,72 66,106 66,68" fill="#252b35" stroke="#6e7b8c"/>
+                <polygon points="66,68 66,106 132,72 132,34" fill="#1c222a" stroke="#5d6878"/>
+                <g fill="#eef0e8" stroke="#9c9a8e"><rect x="-3" y="30" width="6" height="48"/><rect x="63" y="64" width="6" height="48"/><rect x="129" y="30" width="6" height="48"/></g>
+                <g transform="translate(47 14)">
+                  <polygon points="0,12 19,3 38,12 19,21" fill="#b6c3ff" stroke="#d7ddff"/>
+                  <polygon points="0,12 0,34 19,43 19,21" fill="#7f91d6" stroke="#b6c3ff"/>
+                  <polygon points="19,21 19,43 38,34 38,12" fill="#6475bd" stroke="#aab4ef"/>
+                </g>
+                <path d="M67 36L96 22M67 36L38 22" stroke="#b6c3ff" stroke-width=".8" stroke-dasharray="3 3" opacity=".7"/>
+              </g>
+              <text x="14" y="136" font-family="SFMono-Regular,Consolas,monospace" font-size="7" fill="#5c6470">4 OPEN · CENTRAL TOWER</text>
+            </svg>
+          </div>
+          <div class="model-body">
+            <div class="top"><span class="idx">04</span><h3>岛型展台</h3><span class="sp"></span><span class="badge">基础</span></div>
+            <div class="en">ISLAND</div>
+            <p>四面开口，中心设置接待塔或储物体；适合主通道交叉口和品牌主展位。</p>
+            <div class="model-tags"><span>四面开</span><span>中心塔</span><span>顶板</span></div>
+          </div>
+        </article>
+
+        <!-- 05 PORTAL -->
+        <article class="model-card">
+          <div class="model-art">
+            <svg viewBox="0 0 220 148" aria-label="门头展台">
+              <g opacity=".5" stroke="#ffffff" stroke-opacity=".07"><path d="M0 118H220M0 74H220M28 0V148M92 0V148M156 0V148"/></g>
+              <g transform="translate(48 48)">
+                <polygon points="0,30 60,0 120,30 60,60" fill="none" stroke="#6c7585" stroke-dasharray="4 4"/>
+                <polygon points="0,30 0,80 24,92 24,42" fill="#394757" stroke="#8a9bae"/>
+                <polygon points="24,42 24,92 38,100 38,50" fill="#293540" stroke="#73879a"/>
+                <polygon points="86,50 86,100 100,92 100,42" fill="#2d3944" stroke="#7c8a9a"/>
+                <polygon points="100,42 100,92 122,80 122,30" fill="#202b36" stroke="#66788a"/>
+                <polygon points="38,50 86,50 86,62 38,62" fill="#a9b9c9" stroke="#d7e1e9"/>
+                <polygon points="38,50 38,61 86,61 86,50" fill="#7f91a4" opacity=".8"/>
+                <g fill="#eef0e8" stroke="#9c9a8e"><rect x="-3" y="26" width="6" height="57"/><rect x="35" y="46" width="6" height="52"/><rect x="97" y="46" width="6" height="52"/><rect x="119" y="26" width="6" height="57"/></g>
+                <text x="47" y="58" font-family="SFMono-Regular,Consolas,monospace" font-size="6" fill="#1a2027">BRAND</text>
+              </g>
+              <text x="14" y="136" font-family="SFMono-Regular,Consolas,monospace" font-size="7" fill="#5c6470">2 WALLS · HEADER · OPEN FRONT</text>
+            </svg>
+          </div>
+          <div class="model-body">
+            <div class="top"><span class="idx">05</span><h3>门头展台</h3><span class="sp"></span><span class="badge">基础</span></div>
+            <div class="en">PORTAL / GATEWAY</div>
+            <p>两侧墙体支撑一条通长门头，正面完全打开；适合入口端头和品牌形象。</p>
+            <div class="model-tags"><span>两面墙</span><span>门头</span><span>通高</span></div>
+          </div>
+        </article>
+
+        <!-- 06 PLATFORM -->
+        <article class="model-card">
+          <div class="model-art">
+            <svg viewBox="0 0 220 148" aria-label="光地台地">
+              <g opacity=".5" stroke="#ffffff" stroke-opacity=".07"><path d="M0 118H220M0 74H220M28 0V148M92 0V148M156 0V148"/></g>
+              <g transform="translate(46 56)">
+                <polygon points="0,32 64,0 128,32 64,64" fill="#2d3d3b" stroke="#6b9a8e"/>
+                <polygon points="0,32 0,43 64,75 64,64" fill="#1e2c2b" stroke="#598679"/>
+                <polygon points="64,64 64,75 128,43 128,32" fill="#172322" stroke="#4f7a70"/>
+                <polygon points="9,33 64,5 119,33 64,61" fill="#2f8f83" stroke="#7ed9ca" opacity=".65"/>
+                <g stroke="#bfeee4" stroke-dasharray="3 3" opacity=".7"><path d="M0 32H128M64 0V64"/></g>
+                <g fill="#a4eee0"><circle cx="64" cy="32" r="2"/><circle cx="34" cy="48" r="1.5"/><circle cx="94" cy="48" r="1.5"/></g>
+              </g>
+              <text x="14" y="136" font-family="SFMono-Regular,Consolas,monospace" font-size="7" fill="#5c6470">PLATFORM · NO WALLS · 0.15 M</text>
+            </svg>
+          </div>
+          <div class="model-body">
+            <div class="top"><span class="idx">06</span><h3>光地台地</h3><span class="sp"></span><span class="badge">已有</span></div>
+            <div class="en">OPEN FLOOR / PLATFORM</div>
+            <p>低台地或纯光地，无围挡；适合开放陈列、车展和大型装置。</p>
+            <div class="model-tags"><span>无墙</span><span>台地</span><span>可加桁架</span></div>
+          </div>
+        </article>
+
+        <!-- 07 TRUSS -->
+        <article class="model-card">
+          <div class="model-art">
+            <svg viewBox="0 0 220 148" aria-label="桁架吊顶展台">
+              <g opacity=".5" stroke="#ffffff" stroke-opacity=".07"><path d="M0 118H220M0 74H220M28 0V148M92 0V148M156 0V148"/></g>
+              <g transform="translate(46 43)">
+                <polygon points="0,42 64,10 128,42 64,74" fill="#1c2028" stroke="#535f70"/>
+                <g stroke="#c2a16b" stroke-width="2">
+                  <path d="M0 42L64 10L128 42L64 74Z"/>
+                  <path d="M16 34L16 80M48 24L48 70M80 24L80 70M112 34L112 80"/>
+                  <path d="M16 80L48 70M48 70L80 70M80 70L112 80"/>
+                  <path d="M16 80L64 90L112 80M64 90L64 74" opacity=".7"/>
+                </g>
+                <g fill="#ffb86b">
+                  <circle cx="32" cy="49" r="2"/><circle cx="64" cy="35" r="2"/><circle cx="96" cy="49" r="2"/>
+                </g>
+                <g fill="#eef0e8" stroke="#9c9a8e"><rect x="-3" y="38" width="6" height="47"/><rect x="61" y="70" width="6" height="45"/><rect x="125" y="38" width="6" height="47"/></g>
+              </g>
+              <text x="14" y="136" font-family="SFMono-Regular,Consolas,monospace" font-size="7" fill="#5c6470">TRUSS GRID · LIGHTS · OPEN</text>
+            </svg>
+          </div>
+          <div class="model-body">
+            <div class="top"><span class="idx">07</span><h3>桁架吊顶</h3><span class="sp"></span><span class="badge">进阶</span></div>
+            <div class="en">TRUSS CANOPY</div>
+            <p>开放展位上方做铝合金桁架网格，可挂灯具、屏幕和标识；视觉轻、施工快。</p>
+            <div class="model-tags"><span>桁架</span><span>开放</span><span>灯位</span></div>
+          </div>
+        </article>
+
+        <!-- 08 DOUBLE -->
+        <article class="model-card future">
+          <div class="model-art">
+            <svg viewBox="0 0 220 148" aria-label="双层展台">
+              <g opacity=".5" stroke="#ffffff" stroke-opacity=".07"><path d="M0 118H220M0 74H220M28 0V148M92 0V148M156 0V148"/></g>
+              <g transform="translate(51 34)">
+                <polygon points="0,44 57,15 114,44 57,73" fill="#3b3e4c" stroke="#82889b"/>
+                <polygon points="0,44 0,87 57,116 57,73" fill="#252833" stroke="#6b7182"/>
+                <polygon points="57,73 57,116 114,87 114,44" fill="#1b1e25" stroke="#5b6170"/>
+                <polygon points="0,20 57,-9 114,20 57,49" fill="#4b5064" stroke="#9aa2b9" opacity=".9"/>
+                <polygon points="0,20 0,43 57,72 57,49" fill="#303444" stroke="#7e879e"/>
+                <polygon points="57,49 57,72 114,43 114,20" fill="#242835" stroke="#6d7588"/>
+                <g stroke="#d8ddff" stroke-width="1" opacity=".7"><path d="M63 98V75M70 95V72M77 92V69M84 89V66M91 86V63"/></g>
+                <g fill="#eef0e8" stroke="#9c9a8e"><rect x="-3" y="40" width="6" height="55"/><rect x="111" y="40" width="6" height="55"/></g>
+              </g>
+              <text x="14" y="136" font-family="SFMono-Regular,Consolas,monospace" font-size="7" fill="#5c6470">2 LEVELS · STAIR · RAILING</text>
+            </svg>
+          </div>
+          <div class="model-body">
+            <div class="top"><span class="idx">08</span><h3>双层展台</h3><span class="sp"></span><span class="badge">后续</span></div>
+            <div class="en">DOUBLE DECK</div>
+            <p>上下两层、楼梯与栏杆；适合大面积主展位。结构、消防和疏散参数更多，建议后续单独立项。</p>
+            <div class="model-tags"><span>双层</span><span>楼梯</span><span>栏杆</span></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="language">
+      <div class="sec-head">
+        <div class="sec-no">02 / LANGUAGE</div>
+        <div><div class="kicker">模型语言</div><h2>先拆构件，<br>再组合成模型。</h2></div>
+        <p>模型卡片只是预设。底层统一拆成六个构件参数，任意模型都可以改其中一两个，而不是复制整个 builder。</p>
+      </div>
+      <div class="principle-grid">
+        <div class="principle hi"><div class="p">01 / WALL</div><h3>墙板开合</h3><p>四面、三面、两面或单面围合；按轮廓边索引记录开口，保留任意多边形。</p></div>
+        <div class="principle"><div class="p">02 / TOP</div><h3>顶棚形式</h3><p>封闭顶板、开放、脚手架顶棚、桁架网格、半透明膜结构。</p></div>
+        <div class="principle"><div class="p">03 / FRAME</div><h3>框架系统</h3><p>白膜柱、八棱柱、金属脚手架、门头钢架；决定细柱和横梁。</p></div>
+        <div class="principle"><div class="p">04 / FASCIA</div><h3>门楣</h3><p>0 / 0.3 / 0.6 / 0.9 m 高度，正面或整圈，承载 Logo 和展商名。</p></div>
+        <div class="principle"><div class="p">05 / PLATFORM</div><h3>台地</h3><p>0 / 0.15 / 0.3 / 0.45 m，可加单侧或双侧台阶。</p></div>
+        <div class="principle"><div class="p">06 / OPEN EDGE</div><h3>开合边</h3><p>按 points 的边序号记录；默认模型给推荐开边，用户可点击某条边切换。</p></div>
+      </div>
+    </section>
+
+    <section id="recipe">
+      <div class="sec-head">
+        <div class="sec-no">03 / RECIPE</div>
+        <div><div class="kicker">数据与构建</div><h2>模型只是<br><span class="mono">BoothRecipe</span> 的别名。</h2></div>
+        <p>现有 `kind` 继续表示渲染家族；新增 `style` 表示模型预设，`params` 覆盖构件参数。旧数据没有 style 时按原 kind 映射，不需要迁移。</p>
+      </div>
+
+      <div class="recipe">
+        <div class="recipe-card">
+          <div class="lab">01 / SCENE JSON</div>
+          <h3>Booth</h3>
+          <p>保留 id、points、height、kind、logo、mark、groupId。</p>
+          <div class="chips"><span>style?</span><span>openEdges?</span><span>topStyle?</span><span>fascia?</span><span>platform?</span></div>
+        </div>
+        <div class="rarrow">→</div>
+        <div class="recipe-card hi">
+          <div class="lab">02 / RECIPE</div>
+          <h3>resolveBoothRecipe()</h3>
+          <p>模型预设 → 渲染家族 + 构件参数；用户覆盖优先。</p>
+          <div class="param-line"><span>standard</span><b>massing · top · 4 walls</b></div>
+          <div class="param-line"><span>portal</span><b>massing · header · 2 walls</b></div>
+          <div class="param-line"><span>truss</span><b>openfloor · truss · no walls</b></div>
+        </div>
+        <div class="rarrow">→</div>
+        <div class="recipe-card">
+          <div class="lab">03 / BUILD</div>
+          <h3>现有 builder + 构件</h3>
+          <p>不新增 8 个顶层 builder；在 buildBooth / 脚手架 / 光地中加入墙边、门楣、台地、桁架构件。</p>
+          <div class="chips"><span>mergeBoothParts</span><span>incremental</span><span>batched</span></div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top:13px">
+        <div class="card">
+          <div class="num">MODEL MATRIX</div>
+          <table class="matrix">
+            <thead><tr><th>模型</th><th>家族</th><th>墙</th><th>顶</th><th>门楣</th></tr></thead>
+            <tbody>
+              <tr><td>standard</td><td>massing</td><td>4 面</td><td>flat</td><td>—</td></tr>
+              <tr><td>octanorm</td><td>massing</td><td>3 面</td><td>none</td><td>0.6 m</td></tr>
+              <tr><td>peninsula</td><td>massing</td><td>3 面</td><td>flat</td><td>0.6 m</td></tr>
+              <tr><td>island</td><td>massing</td><td>open</td><td>flat</td><td>—</td></tr>
+              <tr><td>portal</td><td>massing</td><td>2 面</td><td>header</td><td>0.9 m</td></tr>
+              <tr><td>platform</td><td>openfloor</td><td>none</td><td>none</td><td>—</td></tr>
+              <tr><td>truss</td><td>openfloor</td><td>none</td><td>truss</td><td>—</td></tr>
+              <tr><td>double</td><td>massing</td><td>2 面</td><td>flat ×2</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="num">COMPATIBILITY</div>
+          <div class="param-line"><span>旧 massing</span><b>style = standard</b></div>
+          <div class="param-line"><span>旧 scaffold</span><b>style = scaffold</b></div>
+          <div class="param-line"><span>旧 openfloor</span><b>style = platform</b></div>
+          <div class="param-line"><span>无 style</span><b>按 kind 推导</b></div>
+          <p style="margin-top:12px">新增字段都是可选的，读入时归一化，导出时只写有值的字段。`sameBooths` / `sceneDiff` 需要同步新字段；已有场景无需迁移。</p>
+          <div class="model-tags" style="margin-top:12px"><span>后续：自定义颜色</span><span>后续：批量应用</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="editor">
+      <div class="sec-head">
+        <div class="sec-no">04 / EDITOR</div>
+        <div><div class="kicker">编辑器设计图</div><h2>右侧模型库，<br>点一下换“骨骼”。</h2></div>
+        <p>模型库是预设入口，不是一个新模式。选中展台后换模型只重建这一台；轮廓、颜色、Logo 和展商保留。开合边和门楣在几何区继续微调。</p>
+      </div>
+
+      <div class="mock">
+        <div class="mock-top">
+          <span class="brand"><b>GRID</b> / MASSING</span><span class="sep"></span>
+          <span class="tool">俯视</span><span class="tool">透视</span><span class="tool on">编辑</span>
+          <span class="sp"></span><span class="live"><span class="dot"></span>实时同步</span><span class="sep"></span><span class="tool">导出</span>
+        </div>
+        <div class="mock-body">
+          <div class="canvas">
+            <div class="hud"><span><b>W1</b> 场馆</span><span>24 个展台</span><span>已选 <b>W1A03</b></span><span>半岛展台</span></div>
+            <svg viewBox="0 0 900 560" preserveAspectRatio="xMidYMid slice" aria-label="展台模型库编辑器设计图">
+              <defs><pattern id="g2" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#ffffff" stroke-opacity=".045"/></pattern></defs>
+              <rect width="900" height="560" fill="url(#g2)"/>
+              <polygon points="60,75 792,75 850,494 118,494" fill="#171b21" stroke="#3c4350" stroke-width="1.4"/>
+              <polygon points="82,97 770,97 824,472 138,472" fill="#12151a" stroke="#292f39"/>
+              <g stroke="#ffffff" stroke-opacity=".055"><path d="M178 97V472M298 97V472M418 97V472M538 97V472M658 97V472"/><path d="M138 186H824M138 280H824M138 374H824"/></g>
+              <g font-family="SFMono-Regular,Consolas,monospace" font-size="7" fill="#555d6a"><text x="138" y="90">W1 · 24 BOOTHS · 4 MODELS</text><text x="720" y="458">AISLE 3.0</text></g>
+
+              <!-- island selected -->
+              <g transform="translate(315 178)">
+                <polygon points="0,44 70,10 140,44 70,78" fill="#37414f" stroke="#ffb86b" stroke-width="1.4"/>
+                <polygon points="0,44 0,65 70,99 70,78" fill="#242a34" stroke="#b88250"/>
+                <polygon points="70,78 70,99 140,65 140,44" fill="#1b2028" stroke="#9b6d43"/>
+                <polygon points="49,29 70,19 91,29 70,39" fill="#b6c3ff" stroke="#d7ddff"/>
+                <polygon points="49,29 49,48 70,58 70,39" fill="#7f91d6" stroke="#b6c3ff"/>
+                <polygon points="70,39 70,58 91,48 91,29" fill="#6475bd" stroke="#aab4ef"/>
+                <g stroke="#ffb86b" stroke-dasharray="3 3" opacity=".7"><path d="M-7 44H147M70 4V103"/></g>
+              </g>
+              <g transform="translate(486 138)">
+                <polygon points="0,34 54,7 108,34 54,61" fill="#2d3d3b" stroke="#6b9a8e"/>
+                <polygon points="0,34 0,47 54,74 54,61" fill="#1f2c2a" stroke="#598679"/>
+                <polygon points="54,61 54,74 108,47 108,34" fill="#172220" stroke="#4f7a70"/>
+              </g>
+              <g transform="translate(516 286)">
+                <polygon points="0,28 56,0 112,28 56,56" fill="#3b4453" stroke="#8b98aa"/>
+                <polygon points="0,28 0,48 56,76 56,56" fill="#252b35" stroke="#6e7b8c"/>
+                <polygon points="56,56 56,76 112,48 112,28" fill="#1d222a" stroke="#5d6878"/>
+                <g fill="#eef0e8" stroke="#9c9a8e"><rect x="-3" y="24" width="6" height="38"/><rect x="109" y="24" width="6" height="38"/></g>
+              </g>
+              <g transform="translate(176 270)">
+                <polygon points="0,36 52,10 104,36 52,62" fill="#354c5e" stroke="#7f9fb2"/>
+                <polygon points="0,36 0,55 52,81 52,62" fill="#253844" stroke="#6a8fa4"/>
+                <polygon points="52,62 52,81 104,55 104,36" fill="#202d38" stroke="#587687"/>
+                <rect x="9" y="30" width="38" height="8" fill="#6b8fa1" stroke="#a9c5d0" transform="skewY(-26.6)"/>
+              </g>
+              <g transform="translate(166 130)">
+                <polygon points="0,30 50,5 100,30 50,55" fill="#3d4554" stroke="#7b8595"/>
+                <polygon points="0,30 0,52 50,77 50,55" fill="#252a33" stroke="#687282"/>
+                <polygon points="50,55 50,77 100,52 100,30" fill="#1c2028" stroke="#596271"/>
+              </g>
+
+              <g font-family="SFMono-Regular,Consolas,monospace" font-size="8" fill="#dfe2e8" text-anchor="middle">
+                <text x="385" y="270" fill="#ffd2a8">W1A03 · ISLAND</text>
+                <text x="540" y="205">W1B01 · PLATFORM</text>
+                <text x="572" y="365">W1C01 · STANDARD</text>
+                <text x="228" y="355">W1D02 · PENINSULA</text>
+                <text x="216" y="212">W1A01 · PORTAL</text>
+              </g>
+              <g font-family="SFMono-Regular,Consolas,monospace" font-size="7" fill="#8f98a8" text-anchor="middle">
+                <text x="385" y="284">CENTRAL TOWER</text><text x="540" y="219">OPEN FLOOR</text>
+              </g>
+
+              <g transform="translate(714 118)">
+                <rect width="94" height="28" rx="4" fill="#1a1d24" stroke="#3f4653"/>
+                <text x="10" y="17" font-family="SFMono-Regular,Consolas,monospace" font-size="7" fill="#8992a2">MODEL PREVIEW</text>
+              </g>
+            </svg>
+            <div class="model-toast"><b>MODEL SWAP · W1A03</b><span>半岛 → 岛型 · 轮廓与展商保留</span></div>
+          </div>
+
+          <aside class="library">
+            <div class="lib-head"><b>展台模型</b><span>LIBRARY / 08</span></div>
+            <p class="lib-sub">点击更换当前展台模型。<br>只替换构件配方，不改变轮廓。</p>
+            <div class="model-grid">
+              <div class="mini on"><svg viewBox="0 0 90 50"><g transform="translate(15 10)"><polygon points="0,12 24,0 48,12 24,24" fill="#4b5668" stroke="#98a7bb"/><polygon points="0,12 0,26 24,38 24,24" fill="#2b323e" stroke="#758398"/><polygon points="24,24 24,38 48,26 48,12" fill="#20262f" stroke="#667487"/></g></svg><b>岛型</b></div>
+              <div class="mini"><svg viewBox="0 0 90 50"><g transform="translate(15 11)"><polygon points="0,12 24,0 48,12 24,24" fill="#354c5e" stroke="#7f9fb2"/><polygon points="0,12 0,27 16,35 16,20" fill="#253844" stroke="#6a8fa4"/><polygon points="16,20 16,35 32,43 32,28" fill="#202d38" stroke="#587687"/></g></svg><b>半岛</b></div>
+              <div class="mini"><svg viewBox="0 0 90 50"><g transform="translate(15 11)"><polygon points="0,12 24,0 48,12 24,24" fill="#3c4453" stroke="#8794a6"/><polygon points="0,12 0,29 24,41 24,24" fill="#252b35" stroke="#6e7b8c"/><polygon points="24,24 24,41 48,29 48,12" fill="#1c222a" stroke="#5d6878"/></g></svg><b>标准</b></div>
+              <div class="mini"><svg viewBox="0 0 90 50"><g transform="translate(15 11)"><polygon points="0,12 24,0 48,12 24,24" fill="#f0ece2" stroke="#b8b0a0"/><polygon points="0,12 0,27 24,39 24,24" fill="#ddd7ca" stroke="#aaa191"/><polygon points="24,24 24,39 48,27 48,12" fill="#cec7b8" stroke="#9c9382"/></g></svg><b>标摊</b></div>
+              <div class="mini"><svg viewBox="0 0 90 50"><g transform="translate(15 11)"><polygon points="0,12 24,0 48,12 24,24" fill="none" stroke="#6c7585" stroke-dasharray="3 3"/><polygon points="0,12 0,28 10,34 10,18" fill="#394757" stroke="#8a9bae"/><polygon points="38,18 38,34 48,28 48,12" fill="#202b36" stroke="#66788a"/><polygon points="10,18 38,18 38,24 10,24" fill="#a9b9c9"/></g></svg><b>门头</b></div>
+              <div class="mini"><svg viewBox="0 0 90 50"><g transform="translate(15 13)"><polygon points="0,12 24,0 48,12 24,24" fill="#2d3d3b" stroke="#6b9a8e"/><polygon points="0,12 0,18 24,30 24,24" fill="#1e2c2b" stroke="#598679"/><polygon points="24,24 24,30 48,18 48,12" fill="#172322" stroke="#4f7a70"/></g></svg><b>光地</b></div>
+              <div class="mini"><svg viewBox="0 0 90 50"><g transform="translate(15 8)"><path d="M0 16L24 4L48 16L24 28Z" fill="none" stroke="#c2a16b"/><path d="M8 12V32M24 6V26M40 12V32M8 32L24 26L40 32" stroke="#c2a16b"/></g></svg><b>桁架</b></div>
+              <div class="mini"><svg viewBox="0 0 90 50"><g transform="translate(17 10)"><polygon points="0,18 22,7 44,18 22,29" fill="#4b5064" stroke="#9aa2b9"/><polygon points="0,18 0,34 22,45 22,29" fill="#303444" stroke="#7e879e"/><polygon points="22,29 22,45 44,34 44,18" fill="#242835" stroke="#6d7588"/><path d="M6 30V25M10 28V23" stroke="#d8ddff"/></g></svg><b>双层</b></div>
+            </div>
+
+            <div class="lib-sec">当前模型参数</div>
+            <div class="field"><span>墙板</span><small>4 面开 · 中心塔</small></div>
+            <div class="field"><span>顶棚</span><small>封闭顶板</small></div>
+            <div class="field"><span>门楣</span><small>无</small></div>
+            <div class="field"><span>台地</span><small>0.15 m</small></div>
+            <div class="seg"><span class="on">保留轮廓</span><span>重置尺寸</span></div>
+            <div class="lib-note">换模型不会重置展台名称、展商、Logo、标记和合并组。</div>
+          </aside>
+        </div>
+        <div class="mock-foot"><span>W1A03 · 岛型展台</span><span>轮廓 6 边</span><span class="sp"></span><span>模型切换 · 单台重建</span><span>对象 3</span></div>
+      </div>
+    </section>
+
+    <section id="flow">
+      <div class="sec-head">
+        <div class="sec-no">05 / FLOW</div>
+        <div><div class="kicker">交互流程</div><h2>选模型 → 画轮廓 → 调构件。</h2></div>
+        <p>模型库不是一步到位的“死模型”。放置后仍然可以改开合边、门楣、台地、高度和顶棚，像现在编辑白膜一样。</p>
+      </div>
+      <div class="flow">
+        <div class="flow-step"><span class="n">01</span><b>选择模型</b><span>从右侧模型库选择标准 / 半岛 / 岛型 / 门头 / 桁架。</span></div>
+        <div class="flow-step"><span class="n">02</span><b>绘制轮廓</b><span>沿用现有矩形拖拽和顶点绘制，模型自动套用推荐参数。</span></div>
+        <div class="flow-step"><span class="n">03</span><b>微调构件</b><span>点击边切换开合，调门楣高度、台地、顶棚和框架。</span></div>
+        <div class="flow-step"><span class="n">04</span><b>复用与阵列</b><span>复制、换模型、批量应用；仍然只重建变化的展台。</span></div>
+      </div>
+    </section>
+
+    <section id="scope">
+      <div class="sec-head">
+        <div class="sec-no">06 / ROLLOUT</div>
+        <div><div class="kicker">实施建议</div><h2>先做六个，<br>双层最后。</h2></div>
+        <p>标准、标摊、半岛、岛型、门头、光地先形成可用模型库；桁架作为第七个；双层涉及结构、消防和剖面表达，单独设计。</p>
+      </div>
+      <div class="phases">
+        <div class="phase"><div class="p">PHASE 01</div><b>Recipe + 兼容层</b><span>style / openEdges / topStyle / fascia / platform；旧 kind 映射。</span><span class="est">1–2 d</span></div>
+        <div class="phase"><div class="p">PHASE 02</div><b>四个基础模型</b><span>标准、标摊、半岛、岛型；构件化 buildBooth。</span><span class="est">3–4 d</span></div>
+        <div class="phase"><div class="p">PHASE 03</div><b>门头 / 光地 / 桁架</b><span>门楣、台地、桁架网格和灯位点。</span><span class="est">2–3 d</span></div>
+        <div class="phase"><div class="p">PHASE 04</div><b>模型库 UI</b><span>缩略图、切换、开合边编辑、单台增量重建。</span><span class="est">2–3 d</span></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="num">DOUBLE DECK · LATER</div>
+        <p>双层展台需要楼板厚度、栏杆、楼梯、上下层承载、消防疏散和剖面标注，不应和单层模型塞进同一批实现。建议先用「门头 + 台地」覆盖大部分主展位需求。</p>
+      </div>
+    </section>
+
+    <section id="decisions">
+      <div class="sec-head">
+        <div class="sec-no">07 / DECISIONS</div>
+        <div><div class="kicker">需要拍板</div><h2>三个方向，<br>确认后开始落代码。</h2></div>
+        <p>设计图只做模型库与构件语言，不改当前颜色、评论、存档和分享链路。</p>
+      </div>
+      <div class="decision-grid">
+        <div class="decision"><div class="q">Q.01 / SCOPE</div><b>首批做哪些？</b><p>推荐 <strong>标准、标摊、半岛、岛型、门头、光地</strong>六种；桁架第二批，双层后续单独立项。</p></div>
+        <div class="decision"><div class="q">Q.02 / OPEN EDGE</div><b>开合边怎么记录？</b><p>推荐按轮廓 points 的<strong>边序号</strong>存 `openEdges`，矩形默认前边；旋转 / 镜像后仍跟随轮廓，不依赖东南西北。</p></div>
+        <div class="decision"><div class="q">Q.03 / DOUBLE</div><b>双层现在做吗？</b><p>推荐 <strong>先不做</strong>。双层会引入楼板、楼梯、栏杆、消防和剖面表达，先把单层六模型做稳。</p></div>
+        <div class="decision"><div class="q">Q.04 / COLOR</div><b>模型切换是否保留颜色？</b><p>保留现有标记 / 组色；自定义颜色不在本轮设计范围，后续按独立颜色系统接入，不影响模型配方。</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>展台模型库 2.0 · 设计稿 v1 · 2026-11-23</span>
+    <span class="mono">6 BASE MODELS · 1 TRUSS · DOUBLE DECK LATER</span>
+  </footer>
+</div>
+</body>
+</html>

@@ -75,6 +75,40 @@ export async function initDatabase() {
       "ALTER TABLE share_comments ADD COLUMN reply_to_name VARCHAR(32) NOT NULL DEFAULT '' AFTER reply_to_user_id",
     )
   }
+
+  // 分享链接绑定云端存档实例：每个 storage_slots.id 最多一条有效链接
+  const [shareSlotColumns] = await pool.query(
+    "SHOW COLUMNS FROM share_links LIKE 'storage_slot_id'",
+  )
+  if (!shareSlotColumns.length) {
+    await pool.query(
+      'ALTER TABLE share_links ADD COLUMN storage_slot_id BIGINT UNSIGNED NULL AFTER owner_user_id',
+    )
+  }
+  const [shareSlotIndexes] = await pool.query(
+    "SHOW INDEX FROM share_links WHERE Column_name = 'storage_slot_id' AND Non_unique = 0",
+  )
+  if (!shareSlotIndexes.length) {
+    await pool.query(
+      'ALTER TABLE share_links ADD UNIQUE KEY uk_share_storage_slot (storage_slot_id)',
+    )
+  }
+  const [shareSlotFks] = await pool.query(
+    `SELECT CONSTRAINT_NAME
+       FROM information_schema.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'share_links'
+        AND COLUMN_NAME = 'storage_slot_id'
+        AND REFERENCED_TABLE_NAME = 'storage_slots'
+      LIMIT 1`,
+  )
+  if (!shareSlotFks.length) {
+    await pool.query(
+      `ALTER TABLE share_links
+         ADD CONSTRAINT fk_share_storage_slot
+         FOREIGN KEY (storage_slot_id) REFERENCES storage_slots (id) ON DELETE CASCADE`,
+    )
+  }
   return pool
 }
 

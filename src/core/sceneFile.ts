@@ -1,4 +1,10 @@
-import { OPEN_FLOOR_HEIGHT, boothKindOf } from './booth'
+import {
+  BOOTH_STYLES,
+  OPEN_FLOOR_HEIGHT,
+  boothKindForStyle,
+  boothKindOf,
+  boothStyleOf,
+} from './booth'
 import {
   ELEVATOR_COUNT,
   ELEVATOR_DEFAULT_COUNT,
@@ -18,6 +24,7 @@ import type {
   Booth,
   BoothKind,
   BoothMark,
+  BoothStyle,
   GateOpenMode,
   Infra,
   InfraKind,
@@ -128,15 +135,24 @@ export function readBooth(raw: unknown, index: number): Booth | null {
   const points = readPoints(r.points)
   if (!points) return null
 
-  const kind: BoothKind =
+  const rawKind: BoothKind =
     r.kind === 'scaffold' || r.kind === 'openfloor' || r.kind === 'massing'
       ? r.kind
       : 'massing'
+  const style: BoothStyle =
+    typeof r.style === 'string' && BOOTH_STYLES.includes(r.style as BoothStyle)
+      ? (r.style as BoothStyle)
+      : rawKind === 'scaffold'
+        ? 'scaffold'
+        : rawKind === 'openfloor'
+          ? 'platform'
+          : 'standard'
+  const kind = boothKindForStyle(style)
   const rawHeight = Number(r.height)
   const height = kind === 'openfloor' ? OPEN_FLOOR_HEIGHT : rawHeight
   if (!Number.isFinite(height)) return null
   const canopy = kind === 'scaffold' ? r.canopy !== false : undefined
-  const noTop = kind === 'massing' && r.noTop === true ? true : undefined
+  const noTop = style === 'standard' && r.noTop === true ? true : undefined
 
   const name =
     typeof r.name === 'string' && r.name.trim() ? r.name.trim() : `展台 ${index + 1}`
@@ -168,6 +184,7 @@ export function readBooth(raw: unknown, index: number): Booth | null {
     points,
     height: kind === 'openfloor' ? OPEN_FLOOR_HEIGHT : Math.min(8, Math.max(0.4, height)),
     ...(kind === 'massing' ? {} : { kind }),
+    style,
     ...(canopy !== undefined ? { canopy } : {}),
     ...(noTop ? { noTop } : {}),
     ...(groupId ? { groupId } : {}),
@@ -271,8 +288,9 @@ export function exportBoothList(booths: Booth[]): Booth[] {
     points: b.points.map((p) => ({ x: p.x, z: p.z })),
     height: b.height,
     ...(b.kind ? { kind: b.kind } : {}),
+    style: boothStyleOf(b),
     ...(boothKindOf(b) === 'scaffold' ? { canopy: b.canopy !== false } : {}),
-    ...(boothKindOf(b) === 'massing' && b.noTop ? { noTop: true } : {}),
+    ...(boothStyleOf(b) === 'standard' && b.noTop ? { noTop: true } : {}),
     ...(b.groupId ? { groupId: b.groupId } : {}),
     ...(b.exhibitor ? { exhibitor: b.exhibitor } : {}),
     ...(b.logo ? { logo: normalizeLogo(b.logo) } : {}),

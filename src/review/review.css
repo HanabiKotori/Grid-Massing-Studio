@@ -479,6 +479,19 @@
   color: #d98c8c;
 }
 
+.rp-actions .danger.confirm {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(235, 87, 87, 0.14);
+  color: #f0a0a0;
+  font-weight: 600;
+}
+
+.rp-actions .danger.confirm:hover {
+  background: rgba(235, 87, 87, 0.22);
+  color: #ffd0d0;
+}
+
 .rp-reply {
   margin: 8px 0 0 22px;
   padding: 4px 5px 4px 9px;

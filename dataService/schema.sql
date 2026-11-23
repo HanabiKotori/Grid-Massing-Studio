@@ -27,11 +27,12 @@ CREATE TABLE IF NOT EXISTS storage_slots (
   CONSTRAINT fk_storage_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 分享链接：实时链接保存当前场景与 revision；冻结链接不再递增 revision
+-- 分享链接：每个 storage_slots.id 最多一条链接；实时链接保存当前场景与 revision
 CREATE TABLE IF NOT EXISTS share_links (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   token CHAR(16) NOT NULL,
   owner_user_id BIGINT UNSIGNED NOT NULL,
+  storage_slot_id BIGINT UNSIGNED NULL,
   project_key VARCHAR(32) NOT NULL DEFAULT '',
   title VARCHAR(64) NOT NULL DEFAULT '',
   scene_json LONGTEXT NOT NULL,
@@ -47,9 +48,11 @@ CREATE TABLE IF NOT EXISTS share_links (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_share_token (token),
+  UNIQUE KEY uk_share_storage_slot (storage_slot_id),
   KEY idx_share_owner (owner_user_id),
   KEY idx_share_project (project_key),
-  CONSTRAINT fk_share_owner FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE
+  CONSTRAINT fk_share_owner FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_share_storage_slot FOREIGN KEY (storage_slot_id) REFERENCES storage_slots (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 评审评论：anchor_json 保存世界坐标、对象引用与对象原点，用于实时场景下跟随对象

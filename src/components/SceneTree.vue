@@ -1,10 +1,21 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { boothKindOf } from '../core/booth'
+import {
+  BOOTH_STYLES,
+  BOOTH_STYLE_LABELS,
+  boothStyleOf,
+} from '../core/booth'
 import type { FurniturePreset } from '../core/furniturePreset'
 import { INFRA_LABELS, isFurnitureKind } from '../core/infra'
 import { pointInPolygon, polygonArea } from '../core/polygon'
-import type { Booth, BoothKind, Infra, InfraKind, Venue } from '../core/types'
+import type {
+  Booth,
+  BoothKind,
+  BoothStyle,
+  Infra,
+  InfraKind,
+  Venue,
+} from '../core/types'
 
 const props = defineProps<{
   venue: Venue | null
@@ -29,6 +40,7 @@ const emit = defineEmits<{
   (e: 'draw-venue'): void
   (e: 'request-redraw'): void
   (e: 'draw-booth', kind: BoothKind): void
+  (e: 'draw-booth-style', style: BoothStyle): void
   (e: 'add-infra', kind: InfraKind): void
   (e: 'delete-booth', id: string): void
   (e: 'delete-infra', id: string): void
@@ -36,12 +48,6 @@ const emit = defineEmits<{
   (e: 'place-preset', preset: FurniturePreset): void
   (e: 'delete-preset', id: string): void
 }>()
-
-const BOOTH_GROUPS: { kind: BoothKind; label: string }[] = [
-  { kind: 'massing', label: '标准' },
-  { kind: 'scaffold', label: '脚手架' },
-  { kind: 'openfloor', label: '光地' },
-]
 
 const INFRA_GROUPS: InfraKind[] = [
   'restroom',
@@ -128,7 +134,7 @@ function allKeys(): string[] {
     'furniture-occupied',
     'preset',
   ]
-  for (const g of BOOTH_GROUPS) keys.push('bk-' + g.kind)
+  for (const style of BOOTH_STYLES) keys.push('bk-' + style)
   for (const k of INFRA_GROUPS) keys.push('ik-' + k)
   for (const cat of FURNITURE_CATEGORIES) keys.push('fc-' + cat.key)
   for (const b of props.booths) {
@@ -214,7 +220,7 @@ async function locateSelected() {
     const booth = props.booths.find((item) => item.id === targetId)
     if (!booth) return
     open.value.booth = true
-    open.value['bk-' + boothKindOf(booth)] = true
+    open.value['bk-' + boothStyleOf(booth)] = true
   }
 
   await nextTick()
@@ -226,13 +232,14 @@ defineExpose({ locateSelected })
 
 /* ---------- 数据分组 ---------- */
 
-const boothsByKind = computed(() => {
-  const map = new Map<BoothKind, Booth[]>()
-  for (const g of BOOTH_GROUPS) map.set(g.kind, [])
+const boothsByStyle = computed(() => {
+  const map = new Map<BoothStyle, Booth[]>()
+  for (const style of BOOTH_STYLES) map.set(style, [])
   for (const b of props.booths) {
-    const list = map.get(boothKindOf(b))
+    const style = boothStyleOf(b)
+    const list = map.get(style)
     if (list) list.push(b)
-    else map.set(boothKindOf(b), [b])
+    else map.set(style, [b])
   }
   return map
 })
@@ -455,24 +462,29 @@ watch(
         <span class="cnt">{{ booths.length }}</span>
       </button>
       <template v-if="isOpen('booth')">
-        <template v-for="g in BOOTH_GROUPS" :key="g.kind">
-          <div class="wb-grp sub" :style="{ '--lv': 1 }" @click="toggle('bk-' + g.kind, false)">
-            <span class="tri" :class="{ open: isOpen('bk-' + g.kind, false) }" />
-            <b>{{ g.label }}</b>
-            <span class="cnt">{{ (boothsByKind.get(g.kind) || []).length }}</span>
+        <template v-for="style in BOOTH_STYLES" :key="style">
+          <div
+            class="wb-grp sub"
+            :style="{ '--lv': 1 }"
+            @click="toggle('bk-' + style, false)"
+          >
+            <span class="tri" :class="{ open: isOpen('bk-' + style, false) }" />
+            <b>{{ BOOTH_STYLE_LABELS[style] }}</b>
+            <span class="cnt">{{ (boothsByStyle.get(style) || []).length }}</span>
             <button
               v-if="!renderOnly"
               type="button"
               class="wb-add"
-              :title="`新增${g.label}展台`"
-              @click.stop="emit('draw-booth', g.kind)"
+              :disabled="!venue"
+              :title="`新增${BOOTH_STYLE_LABELS[style]}`"
+              @click.stop="emit('draw-booth-style', style)"
             >
               +
             </button>
           </div>
-          <template v-if="isOpen('bk-' + g.kind, false)">
+          <template v-if="isOpen('bk-' + style, false)">
             <button
-              v-for="b in boothsByKind.get(g.kind) || []"
+              v-for="b in boothsByStyle.get(style) || []"
               :key="b.id"
               type="button"
               class="wb-node lv3"
@@ -493,8 +505,8 @@ watch(
                 ×
               </span>
             </button>
-            <div v-if="!(boothsByKind.get(g.kind) || []).length" class="wb-empty sub">
-              暂无{{ g.label }}展台
+            <div v-if="!(boothsByStyle.get(style) || []).length" class="wb-empty sub">
+              暂无{{ BOOTH_STYLE_LABELS[style] }}
             </div>
           </template>
         </template>

@@ -53,6 +53,8 @@ export interface CaptchaChallenge {
 }
 
 export interface CloudSlotMeta {
+  /** storage_slots.id：存档实例身份，不等于槽位号 */
+  id: number
   slot: number
   name: string
   size: number

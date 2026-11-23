@@ -1,15 +1,26 @@
-import { computed, onBeforeUnmount, shallowRef, ref, watch, type Ref } from 'vue'
+import {
+  computed,
+  onBeforeUnmount,
+  ref,
+  shallowRef,
+  watch,
+  type Ref,
+} from 'vue'
 import {
   shareApi,
   type ReviewEvent,
   type ShareComment,
-  type ShareMeta,
 } from '../core/shareApi'
-import { openProjectStream, type StreamController, type StreamState } from './realtime'
+import {
+  openShareStream,
+  type StreamController,
+  type StreamState,
+} from './realtime'
 
 interface Options {
-  projectKey: Ref<string>
-  /** 开启实时与拉取：需要 dataService 登录态 */
+  /** 当前云端存档对应的分享链接；评审只看这条链接的评论 */
+  shareToken: Ref<string | null>
+  /** 需要登录、有场景且当前存档已有分享链接 */
   enabled: Ref<boolean>
   onNewComment?: (comment: ShareComment) => void
   onError?: (message: string) => void
@@ -20,7 +31,11 @@ const SEEN_PREFIX = 'gms.review.seen.'
 
 function mergeComment(list: ShareComment[], next: ShareComment): ShareComment[] {
   const index = list.findIndex((item) => item.id === next.id)
-  if (index < 0) return [...list, next].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt))
+  if (index < 0) {
+    return [...list, next].sort(
+      (a, b) => +new Date(a.createdAt) - +new Date(b.createdAt),
+    )
+  }
   const copy = list.slice()
   copy[index] = { ...next, mine: next.mine || copy[index].mine }
   return copy
@@ -39,13 +54,12 @@ function writeSeen(key: string, at: number) {
   try {
     localStorage.setItem(SEEN_PREFIX + key, String(at))
   } catch {
-    // 隐私模式忽略
+    // 忽略隐私模式下的存储异常
   }
 }
 
 export function useReviewComments(options: Options) {
   const comments = shallowRef<ShareComment[]>([])
-  const links = shallowRef<ShareMeta[]>([])
   const unread = ref(0)
   const loading = ref(false)
   const error = ref('')
@@ -57,10 +71,12 @@ export function useReviewComments(options: Options) {
   let seenAt = 0
   let lastKey = ''
 
-  const unresolved = computed(() => comments.value.filter((c) => !c.resolvedAt).length)
+  const unresolved = computed(
+    () => comments.value.filter((c) => !c.resolvedAt).length,
+  )
 
-  function keyNow(): string {
-    return options.projectKey.value || ''
+  function tokenNow(): string {
+    return options.shareToken.value || ''
   }
 
   function applyUnread(list: ShareComment[]) {
@@ -82,29 +98,27 @@ export function useReviewComments(options: Options) {
   }
 
   async function refresh() {
-    const projectKey = keyNow()
-    if (!options.enabled.value || !projectKey) {
+    const token = tokenNow()
+    if (!options.enabled.value || !token) {
       comments.value = []
-      links.value = []
       unread.value = 0
       loading.value = false
       error.value = ''
       closeStream()
       return
     }
-    if (lastKey !== projectKey) {
-      lastKey = projectKey
-      seenAt = readSeen(projectKey)
+    if (lastKey !== token) {
+      lastKey = token
+      seenAt = readSeen(token)
     }
     loading.value = true
     error.value = ''
     try {
-      const data = await shareApi.getReviewComments(projectKey)
-      links.value = data.links
+      const data = await shareApi.getComments(token)
+      if (token !== tokenNow()) return
       comments.value = data.comments
       applyUnread(data.comments)
-      if (data.links.length) connectStream()
-      else closeStream()
+      connectStream()
     } catch (err) {
       error.value = err instanceof Error ? err.message : '读取评审评论失败'
       options.onError?.(error.value)
@@ -128,7 +142,10 @@ export function useReviewComments(options: Options) {
       return
     }
     if (event.type === 'comment.updated') {
-      comments.value = mergeComment(comments.value, event.comment as ShareComment)
+      comments.value = mergeComment(
+        comments.value,
+        event.comment as ShareComment,
+      )
       return
     }
     if (event.type === 'comment.deleted') {
@@ -138,40 +155,23 @@ export function useReviewComments(options: Options) {
       )
       return
     }
-    if (event.type === 'share.updated' || event.type === 'share.created') {
-      const share = event.share as ShareMeta
-      if (!share?.token) return
-      const index = links.value.findIndex((item) => item.token === share.token)
-      if (index < 0) links.value = [...links.value, share]
-      else {
-        const copy = links.value.slice()
-        copy[index] = share
-        links.value = copy
-      }
-      return
-    }
-    if (event.type === 'share.revoked') {
-      const token = String(event.shareToken ?? '')
-      links.value = links.value.filter((item) => item.token !== token)
-      comments.value = comments.value.filter((item) => item.shareToken !== token)
+    if (event.type === 'revoked') {
+      connected.value = false
+      closeStream()
     }
   }
 
   function connectStream() {
-    const projectKey = keyNow()
-    if (!options.enabled.value || !projectKey) {
-      stream?.close()
-      stream = null
-      streamKey = ''
-      connected.value = false
+    const token = tokenNow()
+    if (!options.enabled.value || !token) {
+      closeStream()
       return
     }
-    // 同一项目已有连接（含重连中）时不重建，避免打断退避
-    if (stream && streamKey === projectKey) return
+    if (stream && streamKey === token) return
     stream?.close()
     stream = null
-    streamKey = projectKey
-    stream = openProjectStream(projectKey, {
+    streamKey = token
+    stream = openShareStream(token, {
       onEvent: handleEvent,
       onState: (state) => {
         streamState.value = state
@@ -240,7 +240,7 @@ export function useReviewComments(options: Options) {
   }
 
   watch(
-    [() => options.projectKey.value, () => options.enabled.value],
+    [() => options.shareToken.value, () => options.enabled.value],
     () => {
       closeStream()
       void refresh()
@@ -254,7 +254,6 @@ export function useReviewComments(options: Options) {
 
   return {
     comments,
-    links,
     unread,
     unresolved,
     loading,

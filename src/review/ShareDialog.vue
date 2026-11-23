@@ -134,7 +134,10 @@ function update() {
             <div class="sd-thumb">3D</div>
             <div class="sd-scene-meta">
               <b>{{ venueName || '未命名场景' }}</b>
-              <span>{{ existing ? `第 ${existing.revision} 次修订 · ${existing.commentCount} 条评论` : '只读场景 · 评论需登录' }}</span>
+              <span v-if="existing?.storageName">
+                存档：{{ existing.storageName }}<template v-if="existing.storageSlot"> · 位置 {{ existing.storageSlot }}</template>
+              </span>
+              <span>{{ existing ? `第 ${existing.revision} 次修订 · ${existing.commentCount} 条评论` : '保存到云端存档后生成该存档的独立链接' }}</span>
               <span v-if="existing && existing.liveMode">实时同步中 · {{ existing.viewerCount }} 人正在查看</span>
             </div>
           </div>

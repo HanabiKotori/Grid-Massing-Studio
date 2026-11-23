@@ -11,7 +11,10 @@ import {
   verifyPassword,
 } from './src/auth.mjs'
 import { issueCaptcha, verifyCaptcha } from './src/captcha.mjs'
-import { registerShareRoutes } from './src/shares.mjs'
+import {
+  notifyStorageSlotShareRemoved,
+  registerShareRoutes,
+} from './src/shares.mjs'
 
 const app = express()
 app.disable('x-powered-by')
@@ -57,6 +60,7 @@ function parseSlot(value) {
 
 function slotMeta(row) {
   return {
+    id: Number(row.id),
     slot: Number(row.slot),
     name: row.name,
     size: Number(row.scene_size ?? 0),
@@ -173,7 +177,7 @@ app.get('/api/storage', requireDatabase, requireAuth, async (req, res, next) => 
   try {
     const pool = getPool()
     const [rows] = await pool.query(
-      'SELECT slot, name, scene_size, updated_at FROM storage_slots WHERE user_id = ? ORDER BY slot',
+      'SELECT id, slot, name, scene_size, updated_at FROM storage_slots WHERE user_id = ? ORDER BY slot',
       [req.user.id],
     )
     res.json({
@@ -194,7 +198,7 @@ app.get('/api/storage/:slot', requireDatabase, requireAuth, async (req, res, nex
     }
     const pool = getPool()
     const [rows] = await pool.query(
-      'SELECT slot, name, scene_json, scene_size, updated_at FROM storage_slots WHERE user_id = ? AND slot = ? LIMIT 1',
+      'SELECT id, slot, name, scene_json, scene_size, updated_at FROM storage_slots WHERE user_id = ? AND slot = ? LIMIT 1',
       [req.user.id, slot],
     )
     if (!rows.length) {
@@ -253,7 +257,7 @@ app.put('/api/storage/:slot', requireDatabase, requireAuth, async (req, res, nex
     )
 
     const [rows] = await pool.query(
-      'SELECT slot, name, scene_size, updated_at FROM storage_slots WHERE user_id = ? AND slot = ?',
+      'SELECT id, slot, name, scene_size, updated_at FROM storage_slots WHERE user_id = ? AND slot = ?',
       [req.user.id, slot],
     )
     res.json(slotMeta(rows[0]))
@@ -270,6 +274,7 @@ app.delete('/api/storage/:slot', requireDatabase, requireAuth, async (req, res, 
       return
     }
     const pool = getPool()
+    await notifyStorageSlotShareRemoved(req.user.id, slot)
     const [result] = await pool.query(
       'DELETE FROM storage_slots WHERE user_id = ? AND slot = ?',
       [req.user.id, slot],

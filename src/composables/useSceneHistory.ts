@@ -44,6 +44,7 @@ function sameBooths(a: Booth[], b: Booth[]): boolean {
       x.exhibitor !== y.exhibitor ||
       x.height !== y.height ||
       x.kind !== y.kind ||
+      x.style !== y.style ||
       x.canopy !== y.canopy ||
       x.noTop !== y.noTop ||
       x.groupId !== y.groupId ||

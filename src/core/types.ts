@@ -63,6 +63,17 @@ export type BoothMark = 'red' | 'yellow' | 'gray'
 /** 展台模型类型：标准白膜 / 脚手架 / 光地 */
 export type BoothKind = 'massing' | 'scaffold' | 'openfloor'
 
+/** 展台模型预设：在渲染家族之上再区分构件形态 */
+export type BoothStyle =
+  | 'standard'
+  | 'octanorm'
+  | 'peninsula'
+  | 'island'
+  | 'portal'
+  | 'platform'
+  | 'truss'
+  | 'scaffold'
+
 /** 展台体量 */
 export interface Booth {
   id: string
@@ -73,6 +84,8 @@ export interface Booth {
   height: number
   /** 模型类型，缺省为标准白膜 */
   kind?: BoothKind
+  /** 模型预设；缺省时按 kind 推导 */
+  style?: BoothStyle
   /** 脚手架展台是否带顶棚（默认 true） */
   canopy?: boolean
   /** 标准展台去掉顶部（同时去掉立柱，仅保留下部围挡） */

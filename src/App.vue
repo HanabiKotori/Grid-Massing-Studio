@@ -66,11 +66,12 @@ import {
   QUALITY_LABELS,
   useEditorState,
 } from './composables/useEditorState'
+import { boothKindForStyle } from './core/booth'
 import { isFurnitureKind } from './core/infra'
 import { exportInventoryXlsx } from './core/xlsxExport'
 import { downloadPlanPdf as buildPlanPdf } from './core/planPdf'
 import type { FurniturePreset } from './core/furniturePreset'
-import type { Booth, Pt, VenueRules } from './core/types'
+import type { Booth, BoothStyle, Pt, VenueRules } from './core/types'
 import { DEFAULT_VENUE_RULES } from './core/types'
 import { checkCompliance } from './core/compliance'
 
@@ -93,6 +94,7 @@ const {
   draftPoints,
   draftHeight,
   boothKind,
+  boothStyle,
   selectedIds,
   gridOn,
   dimOn,
@@ -252,6 +254,7 @@ const {
   changeVenueHeight,
   changeBoothHeight,
   changeBoothKind,
+  changeBoothStyle,
   setBoothCanopy,
   setBoothNoTop,
   setBoothMark,
@@ -446,6 +449,9 @@ const liveShare = useLiveShare({
   },
 })
 
+/** 当前云端存档对应的分享链接：评审只读取这条链接 */
+const reviewShareToken = computed(() => shareExisting.value?.token ?? null)
+
 const {
   comments: reviewComments,
   unread: reviewUnread,
@@ -457,7 +463,7 @@ const {
   reply: replyReview,
   remove: removeReview,
 } = useReviewComments({
-  projectKey,
+  shareToken: reviewShareToken,
   enabled: computed(() => reviewLoggedIn.value && canShareScene.value),
   onNewComment: (comment) => {
     if (comment.authorRole !== 'visitor') return
@@ -494,36 +500,28 @@ const {
   isPanelOpen: () => rightTab.value === 'review',
 })
 
-function shareStorageKey(key: string) {
-  return `gms.share.${key}`
-}
+let shareRestoreSeq = 0
 
+/** 当前云端存档决定链接身份；清缓存和换设备都不会影响恢复 */
 async function restoreShareLink() {
-  const key = projectKey.value
+  const slot = cloud.currentSlot.value
+  const seq = ++shareRestoreSeq
   shareExisting.value = null
-  if (!key) return
-  let token = ''
+  if (!slot || !reviewLoggedIn.value) return
   try {
-    token = localStorage.getItem(shareStorageKey(key)) || ''
-  } catch {
-    return
-  }
-  if (!token) return
-  try {
-    const meta = await shareApi.getShare(token)
-    if (meta.revoked) {
-      try {
-        localStorage.removeItem(shareStorageKey(key))
-      } catch {
-        // ignore
-      }
+    const meta = await shareApi.getStorageShare(slot)
+    if (
+      seq !== shareRestoreSeq ||
+      cloud.currentSlot.value !== slot ||
+      meta.revoked
+    ) {
       return
     }
     shareExisting.value = meta
     liveShare.reset(buildSceneJson(), meta.revision)
     void refreshReview()
   } catch {
-    // 链接不存在或 dataService 暂不可达：保留本地 token，下次再试
+    // 404 表示当前存档还没有分享链接；其他错误留给打开分享弹窗时提示
   }
 }
 
@@ -532,6 +530,22 @@ async function openShareDialog() {
     toast('请先创建场馆后再分享')
     return
   }
+  if (!cloud.enabled) {
+    toast('分享需要开启云端存储')
+    return
+  }
+  if (!reviewLoggedIn.value) {
+    openCloudDialog()
+    return
+  }
+  if (cloud.currentSlot.value === null) {
+    toast('请先将场景保存到云端存档')
+    openCloudDialog()
+    return
+  }
+  if (!shareExisting.value) {
+    await restoreShareLink()
+  }
   shareError.value = ''
   showShareDialog.value = true
   if (!shareExisting.value) return
@@ -539,16 +553,12 @@ async function openShareDialog() {
     const meta = await shareApi.getShare(shareExisting.value.token)
     if (meta.revoked) {
       shareExisting.value = null
-      try {
-        localStorage.removeItem(shareStorageKey(projectKey.value))
-      } catch {
-        // ignore
-      }
       shareError.value = '该分享链接已被撤销'
       return
     }
     shareExisting.value = meta
   } catch (err) {
+    shareExisting.value = null
     shareError.value = err instanceof Error ? err.message : '读取分享链接失败'
   }
 }
@@ -595,24 +605,23 @@ async function publishShare(payload: {
     shareError.value = '请先创建场馆'
     return
   }
+  const slot = cloud.currentSlot.value
+  if (slot === null) {
+    shareError.value = '请先将场景保存到云端存档'
+    return
+  }
   shareBusy.value = true
   shareError.value = ''
   try {
     const scene = buildSceneJson()
-    const meta = await shareApi.createShare({
+    const meta = await shareApi.saveStorageShare(slot, {
       title: payload.title,
       scene,
-      projectKey: projectKey.value,
       liveMode: payload.liveMode,
       allowComment: payload.allowComment,
       allowDownload: payload.allowDownload,
     })
     shareExisting.value = meta
-    try {
-      localStorage.setItem(shareStorageKey(projectKey.value), meta.token)
-    } catch {
-      // ignore
-    }
     liveShare.reset(scene, meta.revision)
     void refreshReview()
     await copyShareLink()
@@ -633,10 +642,15 @@ async function updateShareSettings(payload: {
 }) {
   const share = shareExisting.value
   if (!share) return
+  const slot = share.storageSlot ?? cloud.currentSlot.value
+  if (slot === null) {
+    shareError.value = '该链接没有关联云端存档'
+    return
+  }
   shareBusy.value = true
   shareError.value = ''
   try {
-    const meta = await shareApi.updateShare(share.token, {
+    const meta = await shareApi.saveStorageShare(slot, {
       title: payload.title,
       liveMode: payload.liveMode,
       allowComment: payload.allowComment,
@@ -677,15 +691,10 @@ async function revokeShare() {
   shareError.value = ''
   try {
     await shareApi.revokeShare(share.token)
-    try {
-      localStorage.removeItem(shareStorageKey(projectKey.value))
-    } catch {
-      // ignore
-    }
     shareExisting.value = null
     void refreshReview()
     showShareDialog.value = false
-    toast('分享链接已撤销')
+    toast('分享链接已删除')
   } catch (err) {
     shareError.value = err instanceof Error ? err.message : '撤销链接失败'
   } finally {
@@ -1070,6 +1079,7 @@ const {
   draftPoints,
   draftHeight,
   boothKind,
+  boothStyle,
   venueNoTop,
   selectedIds,
   selectedInfraId,
@@ -1099,6 +1109,11 @@ const {
     return infraSeq
   },
 })
+
+/** 从模型库直接以某个模型开始绘制 */
+function startBoothStyle(style: BoothStyle) {
+  startBoothDraw(boothKindForStyle(style), style)
+}
 
 // ---------- 撤销 / 重做 ----------
 
@@ -1150,10 +1165,23 @@ watch(
   },
 )
 
-watch(projectKey, () => {
-  if (appBooting.value) return
-  void restoreShareLink()
-})
+// 链接跟随当前云端存档；启动完成、登录、切换存档时重新读取该存档自己的链接。
+watch(
+  [
+    () => cloud.currentSlot.value,
+    () => cloud.user.value?.id,
+    appBooting,
+  ],
+  ([slot, userId, booting]) => {
+    if (!slot || !userId) {
+      shareExisting.value = null
+      return
+    }
+    if (booting) return
+    void restoreShareLink()
+  },
+  { immediate: true },
+)
 
 // 只有用户拖动时间轴时才落盘：播放推进不写盘，拖动结束 1.2s 后保存一次。
 // 实时分享单独限频：拖动/暂停立即推，播放中最多 4 秒推一次，避免每帧 PATCH。
@@ -1714,11 +1742,6 @@ function confirmPendingAction() {
     if (action.payload) deleteBooth(action.payload)
     return
   }
-  try {
-    localStorage.removeItem(shareStorageKey(projectKey.value))
-  } catch {
-    // ignore
-  }
   shareExisting.value = null
   deleteVenue()
   underlay.value = null
@@ -2161,6 +2184,7 @@ onBeforeUnmount(() => {
       @draw-venue="startVenueDraw"
       @request-redraw="requestRedrawVenue"
       @draw-booth="startBoothDraw"
+      @draw-booth-style="startBoothStyle"
       @add-infra="beginInfraPlace"
       @delete-booth="confirmDeleteBooth"
       @delete-infra="deleteInfra"
@@ -2275,6 +2299,7 @@ onBeforeUnmount(() => {
       @array-booth="arrayBooth"
       @draw-venue="startVenueDraw"
       @draw-booth="startBoothDraw"
+      @draw-booth-style="startBoothStyle"
       @underlay-file="addUnderlay"
       @center-underlay="centerUnderlay"
       @toggle-underlay-lock="toggleUnderlayLock"
@@ -2288,6 +2313,7 @@ onBeforeUnmount(() => {
       @venue-height="changeVenueHeight"
       @booth-height="changeBoothHeight"
       @booth-kind="changeBoothKind"
+      @booth-style="changeBoothStyle"
       @booth-size="resizeBooth"
       @set-mark="setBoothMark"
       :xray="venueXray"

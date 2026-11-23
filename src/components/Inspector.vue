@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { BOOTH_KIND_LABELS, boothKindOf } from '../core/booth'
+import {
+  BOOTH_STYLES,
+  BOOTH_STYLE_LABELS,
+  boothKindOf,
+  boothStyleOf,
+} from '../core/booth'
 import type { FurniturePreset } from '../core/furniturePreset'
 import { groupCss } from '../core/groupColor'
 import {
@@ -25,6 +30,7 @@ import type {
   Booth,
   BoothKind,
   BoothMark,
+  BoothStyle,
   EditorMode,
   GateOpenMode,
   Infra,
@@ -94,6 +100,7 @@ function clampNum(e: Event, min: number, max: number) {
 const emit = defineEmits<{
   (e: 'draw-venue'): void
   (e: 'draw-booth', kind: BoothKind): void
+  (e: 'draw-booth-style', style: BoothStyle): void
   (e: 'booth-canopy', id: string, on: boolean): void
   (e: 'booth-top', id: string, noTop: boolean): void
   (e: 'delete-venue'): void
@@ -102,6 +109,7 @@ const emit = defineEmits<{
   (e: 'venue-height', value: number): void
   (e: 'booth-height', id: string, value: number): void
   (e: 'booth-kind', id: string, kind: BoothKind): void
+  (e: 'booth-style', id: string, style: BoothStyle): void
   (e: 'booth-size', id: string, patch: { width?: number; depth?: number }): void
   (e: 'set-mark', id: string, mark: BoothMark | null): void
   (e: 'update-rule', key: keyof VenueRules, value: number | boolean): void
@@ -455,7 +463,6 @@ const kindShort: Record<InfraKind, string> = {
   lectern: '讲',
 }
 
-const BOOTH_KINDS: BoothKind[] = ['massing', 'scaffold', 'openfloor']
 const BASIC_INFRA_ORDER: InfraKind[] = [
   'stairs',
   'restroom',
@@ -619,7 +626,7 @@ const infraRows = computed<InfraRow[]>(() => {
   return rows
 })
 
-const kindLabel = (b: Booth) => BOOTH_KIND_LABELS[boothKindOf(b)]
+const kindLabel = (b: Booth) => BOOTH_STYLE_LABELS[boothStyleOf(b)]
 const heightText = (b: Booth) => (b.height < 1 ? b.height.toFixed(2) : b.height.toFixed(1))
 
 interface SizeField {
@@ -1341,7 +1348,7 @@ function onLogoChange(id: string, e: Event) {
               <span v-if="b.exhibitor" class="exhibitor-line">{{ b.exhibitor }}</span>
               <span>
                 {{ fmt(areaOf(b)) }} m² · 高 {{ heightText(b) }} m
-                <em v-if="boothKindOf(b) !== 'massing'" class="kind-tag">{{ kindLabel(b) }}</em>
+                <em v-if="boothStyleOf(b) !== 'standard'" class="kind-tag">{{ kindLabel(b) }}</em>
               </span>
             </div>
             <button class="icon-btn" title="删除展台" @click.stop="emit('delete-booth', b.id)">
@@ -1350,23 +1357,23 @@ function onLogoChange(id: string, e: Event) {
           </div>
 
           <template v-if="b.id === activeId && venue && canEdit">
-            <div class="sec-title">几何</div>
-            <div class="row-kind">
-              <span>类型</span>
-              <div class="kind-switch">
-                <button
-                  v-for="k in BOOTH_KINDS"
-                  :key="k"
-                  type="button"
-                  class="mini"
-                  :class="{ on: boothKindOf(b) === k }"
-                  @click.stop="emit('booth-kind', b.id, k)"
-                >
-                  {{ BOOTH_KIND_LABELS[k] }}
-                </button>
-              </div>
-
+            <div class="sec-title">模型</div>
+            <div class="booth-style-grid">
+              <button
+                v-for="style in BOOTH_STYLES"
+                :key="style"
+                type="button"
+                class="mini booth-style-btn"
+                :class="{ on: boothStyleOf(b) === style }"
+                :title="BOOTH_STYLE_LABELS[style]"
+                @click.stop="emit('booth-style', b.id, style)"
+              >
+                <i :class="`style-glyph style-${style}`" aria-hidden="true" />
+                <span>{{ BOOTH_STYLE_LABELS[style] }}</span>
+              </button>
             </div>
+
+            <div class="sec-title">几何</div>
             <div class="row-size">
               <label class="infra-field">
                 <span>长</span>
@@ -1402,7 +1409,7 @@ function onLogoChange(id: string, e: Event) {
                 step="1"
                 :value="b.height"
                 :style="fillStyle(b.height, 1, 8)"
-                @input="onBoothHeight(b.id, 1, 8, $event)"
+                @change="onBoothHeight(b.id, 1, 8, $event)"
               />
               <span class="edit-val">{{ heightText(b) }} m</span>
             </div>
@@ -1410,7 +1417,7 @@ function onLogoChange(id: string, e: Event) {
               <span class="row-lab">高度</span>
               <span class="edit-val">光地平台 {{ heightText(b) }} m</span>
             </div>
-            <div v-if="boothKindOf(b) === 'massing'" class="switch-row">
+            <div v-if="boothStyleOf(b) === 'standard'" class="switch-row">
               <span>顶板</span>
               <button
                 type="button"

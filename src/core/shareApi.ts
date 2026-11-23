@@ -7,6 +7,10 @@ export interface ShareMeta {
   token: string
   title: string
   projectKey: string
+  /** 所属云端存档实例 id；不再是 projectKey */
+  storageSlotId: number | null
+  storageSlot: number | null
+  storageName: string
   revision: number
   sceneVersion: number
   liveMode: boolean
@@ -125,10 +129,26 @@ export interface CommentInput {
 }
 
 export const shareApi = {
-  createShare: (input: CreateShareInput) =>
-    dataServiceRequest<ShareMeta & { projectKey: string }>(
-      '/api/shares',
-      { method: 'POST', body: JSON.stringify(input) },
+  getStorageShare: (slot: number) =>
+    dataServiceRequest<ShareMeta>(
+      `/api/storage/${slot}/share`,
+      {},
+      true,
+    ),
+
+  saveStorageShare: (
+    slot: number,
+    input: {
+      title?: string
+      scene?: SceneJson
+      liveMode?: boolean
+      allowComment?: boolean
+      allowDownload?: boolean
+    },
+  ) =>
+    dataServiceRequest<ShareMeta>(
+      `/api/storage/${slot}/share`,
+      { method: 'PUT', body: JSON.stringify(input) },
       true,
     ),
 
@@ -137,6 +157,13 @@ export const shareApi = {
 
   getShare: (token: string) =>
     dataServiceRequest<ShareMeta>(`/api/shares/${encodeURIComponent(token)}`),
+
+  getComments: (token: string) =>
+    dataServiceRequest<{ comments: ShareComment[] }>(
+      `/api/shares/${encodeURIComponent(token)}/comments`,
+      {},
+      true,
+    ),
 
   getShareScene: (token: string) =>
     dataServiceRequest<ShareSceneResponse>(

@@ -141,6 +141,9 @@ function shareJson(row, commentCount = 0) {
     token: row.token,
     title: row.title,
     projectKey: row.project_key,
+    storageSlotId: row.storage_slot_id ? Number(row.storage_slot_id) : null,
+    storageSlot: row.storage_slot != null ? Number(row.storage_slot) : null,
+    storageName: row.storage_name || '',
     revision: Number(row.revision),
     sceneVersion: Number(row.scene_version),
     liveMode: !!row.live_mode,
@@ -214,8 +217,45 @@ function commentJson(row, share, mine = false) {
 
 async function loadShare(token) {
   const pool = getPool()
-  const [rows] = await pool.query('SELECT * FROM share_links WHERE token = ? LIMIT 1', [token])
+  const [rows] = await pool.query(
+    `SELECT s.*, st.slot AS storage_slot, st.name AS storage_name
+       FROM share_links s
+       LEFT JOIN storage_slots st ON st.id = s.storage_slot_id
+      WHERE s.token = ?
+      LIMIT 1`,
+    [token],
+  )
   return rows[0] ?? null
+}
+
+async function loadShareByStorageSlotId(storageSlotId) {
+  const pool = getPool()
+  const [rows] = await pool.query(
+    `SELECT s.*, st.slot AS storage_slot, st.name AS storage_name
+       FROM share_links s
+       LEFT JOIN storage_slots st ON st.id = s.storage_slot_id
+      WHERE s.storage_slot_id = ?
+      LIMIT 1`,
+    [storageSlotId],
+  )
+  return rows[0] ?? null
+}
+
+async function loadStorageSlot(userId, slot) {
+  const pool = getPool()
+  const [rows] = await pool.query(
+    `SELECT id, slot, name, scene_json
+       FROM storage_slots
+      WHERE user_id = ? AND slot = ?
+      LIMIT 1`,
+    [userId, slot],
+  )
+  return rows[0] ?? null
+}
+
+function parseStorageSlot(raw) {
+  const slot = Number(raw)
+  return Number.isInteger(slot) && slot >= 1 && slot <= config.slotLimit ? slot : null
 }
 
 async function loadComment(shareId, commentId) {
@@ -308,14 +348,248 @@ function publishCommentDelete(share, id, meta = {}) {
   })
 }
 
+/** 删除云端存档前通知访客并关闭该存档链接的 SSE */
+export async function notifyStorageSlotShareRemoved(userId, slot) {
+  const pool = getPool()
+  const [rows] = await pool.query(
+    `SELECT s.token, s.project_key
+       FROM share_links s
+       JOIN storage_slots st ON st.id = s.storage_slot_id
+      WHERE st.user_id = ? AND st.slot = ?`,
+    [userId, slot],
+  )
+  for (const row of rows) {
+    closeChannel(channelKeyShare(row.token), { type: 'revoked' })
+    publish(channelKeyProject(row.project_key), {
+      type: 'share.revoked',
+      shareToken: row.token,
+    })
+  }
+}
+
 export function registerShareRoutes(app) {
   /* ---------------- 分享链接 ---------------- */
+
+  app.put(
+    '/api/storage/:slot/share',
+    requireDb,
+    requireAuth,
+    wrap(async (req, res) => {
+      const slotNumber = parseStorageSlot(req.params.slot)
+      if (!slotNumber) {
+        res.status(400).json({ error: `存储位置需为 1-${config.slotLimit}` })
+        return
+      }
+      const storageSlot = await loadStorageSlot(req.user.id, slotNumber)
+      if (!storageSlot) {
+        res.status(404).json({ error: '该存储位置还没有云端存档' })
+        return
+      }
+
+      const existing = await loadShareByStorageSlotId(storageSlot.id)
+      const sceneProvided = req.body?.scene !== undefined
+      let scene = null
+      let text = ''
+      let size = 0
+
+      if (sceneProvided) {
+        scene = req.body.scene
+        if (!scene || typeof scene !== 'object' || Array.isArray(scene)) {
+          res.status(400).json({ error: '场景数据格式不正确' })
+          return
+        }
+        if (!hasVenueContent(scene)) {
+          res.status(400).json({ error: '场景还没有场馆内容，无法发布' })
+          return
+        }
+        text = JSON.stringify(scene)
+        size = Buffer.byteLength(text)
+        if (size > config.maxSceneMb * 1024 * 1024) {
+          res.status(413).json({ error: `场景超过 ${config.maxSceneMb}MB 上限` })
+          return
+        }
+      } else if (!existing) {
+        try {
+          scene = JSON.parse(storageSlot.scene_json)
+        } catch {
+          res.status(500).json({ error: '云端场景数据已损坏' })
+          return
+        }
+        if (!scene || !hasVenueContent(scene)) {
+          res.status(400).json({ error: '场景还没有场馆内容，无法发布' })
+          return
+        }
+        text = JSON.stringify(scene)
+        size = Buffer.byteLength(text)
+        if (size > config.maxSceneMb * 1024 * 1024) {
+          res.status(413).json({ error: `场景超过 ${config.maxSceneMb}MB 上限` })
+          return
+        }
+      }
+
+      const title =
+        cleanText(req.body?.title, TITLE_MAX) ||
+        cleanText(storageSlot.name, TITLE_MAX) ||
+        '未命名场景'
+      const liveMode = req.body?.liveMode !== false
+      const allowComment = req.body?.allowComment !== false
+      const allowDownload = req.body?.allowDownload === true
+      const pool = getPool()
+
+      if (existing) {
+        const fields = []
+        const params = []
+        let sceneUpdated = false
+        if (req.body?.title !== undefined) {
+          fields.push('title = ?')
+          params.push(cleanText(req.body.title, TITLE_MAX) || '未命名场景')
+        }
+        if (req.body?.liveMode !== undefined) {
+          fields.push('live_mode = ?')
+          params.push(req.body.liveMode ? 1 : 0)
+        }
+        if (req.body?.allowComment !== undefined) {
+          fields.push('allow_comment = ?')
+          params.push(req.body.allowComment ? 1 : 0)
+        }
+        if (req.body?.allowDownload !== undefined) {
+          fields.push('allow_download = ?')
+          params.push(req.body.allowDownload ? 1 : 0)
+        }
+        if (sceneProvided && scene) {
+          const projectKey =
+            cleanText(scene.projectKey, 32) ||
+            cleanText(existing.project_key, 32) ||
+            randomKey(12)
+          scene.projectKey = projectKey
+          const sceneText = JSON.stringify(scene)
+          fields.push(
+            'project_key = ?',
+            'scene_json = ?',
+            'scene_size = ?',
+            'scene_version = scene_version + 1',
+            'revision = revision + 1',
+          )
+          params.push(
+            projectKey,
+            sceneText,
+            Buffer.byteLength(sceneText),
+          )
+          sceneUpdated = true
+        }
+        if (!fields.length) {
+          res.json(shareJson(existing, 0))
+          return
+        }
+        params.push(existing.id)
+        await pool.query(
+          `UPDATE share_links SET ${fields.join(', ')} WHERE id = ?`,
+          params,
+        )
+        const next = await loadShareByStorageSlotId(storageSlot.id)
+        const meta = shareJson(next, await commentCount(next.id))
+        if (sceneUpdated) {
+          publish(channelKeyShare(next.token), {
+            type: 'scene.reset',
+            revision: meta.revision,
+            sceneVersion: meta.sceneVersion,
+          })
+        }
+        publish(channelKeyShare(next.token), { type: 'share.updated', share: meta })
+        publish(channelKeyProject(next.project_key), {
+          type: 'share.updated',
+          share: meta,
+        })
+        res.json(meta)
+        return
+      }
+
+      const projectKey =
+        cleanText(req.body?.projectKey || scene?.projectKey, 32) ||
+        randomKey(12)
+      if (scene) scene.projectKey = projectKey
+      const sceneText = JSON.stringify(scene)
+      let token = newShareToken()
+      for (let i = 0; i < 5; i++) {
+        const [exists] = await pool.query(
+          'SELECT id FROM share_links WHERE token = ? LIMIT 1',
+          [token],
+        )
+        if (!exists.length) break
+        token = newShareToken()
+      }
+      const [result] = await pool.query(
+        `INSERT INTO share_links
+          (token, owner_user_id, storage_slot_id, project_key, title, scene_json, scene_size, live_mode, allow_comment, allow_download)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          token,
+          req.user.id,
+          storageSlot.id,
+          projectKey,
+          title,
+          sceneText,
+          Buffer.byteLength(sceneText),
+          liveMode ? 1 : 0,
+          allowComment ? 1 : 0,
+          allowDownload ? 1 : 0,
+        ],
+      )
+      const share = await loadShareByStorageSlotId(storageSlot.id)
+      if (!share) {
+        res.status(500).json({ error: '创建分享链接失败' })
+        return
+      }
+      const meta = shareJson(share, 0)
+      publish(channelKeyProject(projectKey), { type: 'share.created', share: meta })
+      res.status(201).json(meta)
+    }),
+  )
+
+  app.get(
+    '/api/storage/:slot/share',
+    requireDb,
+    requireAuth,
+    wrap(async (req, res) => {
+      const slotNumber = parseStorageSlot(req.params.slot)
+      if (!slotNumber) {
+        res.status(400).json({ error: `存储位置需为 1-${config.slotLimit}` })
+        return
+      }
+      const storageSlot = await loadStorageSlot(req.user.id, slotNumber)
+      if (!storageSlot) {
+        res.status(404).json({ error: '该存储位置还没有云端存档' })
+        return
+      }
+      const share = await loadShareByStorageSlotId(storageSlot.id)
+      if (!share) {
+        res.status(404).json({ error: '该存档还没有分享链接' })
+        return
+      }
+      res.json(shareJson(share, await commentCount(share.id)))
+    }),
+  )
 
   app.post(
     '/api/shares',
     requireDb,
     requireAuth,
     wrap(async (req, res) => {
+      const slotNumber = parseStorageSlot(req.body?.storageSlot)
+      if (!slotNumber) {
+        res.status(400).json({ error: '请先将场景保存到云端存档后再分享' })
+        return
+      }
+      const storageSlot = await loadStorageSlot(req.user.id, slotNumber)
+      if (!storageSlot) {
+        res.status(404).json({ error: '该存储位置还没有云端存档' })
+        return
+      }
+      const existing = await loadShareByStorageSlotId(storageSlot.id)
+      if (existing) {
+        res.json(shareJson(existing, await commentCount(existing.id)))
+        return
+      }
       const scene = req.body?.scene
       if (!scene || typeof scene !== 'object' || Array.isArray(scene)) {
         res.status(400).json({ error: '场景数据格式不正确' })
@@ -337,8 +611,10 @@ export function registerShareRoutes(app) {
         32,
       ) || randomKey(12)
       if (!scene.projectKey) scene.projectKey = projectKey
-
-      const title = cleanText(req.body?.title, TITLE_MAX) || '未命名场景'
+      const title =
+        cleanText(req.body?.title, TITLE_MAX) ||
+        cleanText(storageSlot.name, TITLE_MAX) ||
+        '未命名场景'
       const liveMode = req.body?.liveMode !== false
       const allowComment = req.body?.allowComment !== false
       const allowDownload = req.body?.allowDownload === true
@@ -351,13 +627,14 @@ export function registerShareRoutes(app) {
         token = newShareToken()
       }
 
-      const [result] = await pool.query(
+      await pool.query(
         `INSERT INTO share_links
-          (token, owner_user_id, project_key, title, scene_json, scene_size, live_mode, allow_comment, allow_download)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (token, owner_user_id, storage_slot_id, project_key, title, scene_json, scene_size, live_mode, allow_comment, allow_download)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           token,
           req.user.id,
+          storageSlot.id,
           projectKey,
           title,
           JSON.stringify(scene),
@@ -367,11 +644,14 @@ export function registerShareRoutes(app) {
           allowDownload ? 1 : 0,
         ],
       )
-      const [rows] = await pool.query('SELECT * FROM share_links WHERE id = ? LIMIT 1', [result.insertId])
-      const share = rows[0]
+      const share = await loadShareByStorageSlotId(storageSlot.id)
+      if (!share) {
+        res.status(500).json({ error: '创建分享链接失败' })
+        return
+      }
       const meta = shareJson(share, 0)
       publish(channelKeyProject(projectKey), { type: 'share.created', share: meta })
-      res.status(201).json({ ...meta, projectKey })
+      res.status(201).json(meta)
     }),
   )
 
@@ -380,11 +660,38 @@ export function registerShareRoutes(app) {
     requireDb,
     requireAuth,
     wrap(async (req, res) => {
+      const rawProjectKey = req.query.projectKey
+      const projectKey =
+        rawProjectKey === undefined
+          ? ''
+          : cleanText(rawProjectKey, 32)
+      if (rawProjectKey !== undefined && !projectKey) {
+        res.status(400).json({ error: '项目标识不正确' })
+        return
+      }
+      const rawStorageSlot = req.query.storageSlot
+      const storageSlot =
+        rawStorageSlot === undefined ? null : parseStorageSlot(rawStorageSlot)
+      if (rawStorageSlot !== undefined && !storageSlot) {
+        res.status(400).json({ error: '存储位置不正确' })
+        return
+      }
       const pool = getPool()
-      const [rows] = await pool.query(
-        'SELECT * FROM share_links WHERE owner_user_id = ? ORDER BY created_at DESC LIMIT 50',
-        [req.user.id],
-      )
+      const params = [req.user.id]
+      let sql = `SELECT s.*, st.slot AS storage_slot, st.name AS storage_name
+                   FROM share_links s
+                   LEFT JOIN storage_slots st ON st.id = s.storage_slot_id
+                  WHERE s.owner_user_id = ?`
+      if (projectKey) {
+        sql += ' AND s.project_key = ?'
+        params.push(projectKey)
+      }
+      if (storageSlot) {
+        sql += ' AND st.slot = ?'
+        params.push(storageSlot)
+      }
+      sql += ' ORDER BY s.created_at DESC LIMIT 50'
+      const [rows] = await pool.query(sql, params)
       const counts = new Map()
       if (rows.length) {
         const ids = rows.map((r) => r.id)
@@ -535,7 +842,8 @@ export function registerShareRoutes(app) {
         res.status(403).json({ error: '没有权限撤销该链接' })
         return
       }
-      await getPool().query('UPDATE share_links SET revoked_at = NOW() WHERE id = ?', [share.id])
+      // 一条链接只属于一个云端存档；撤销即删除，重新分享会生成新 token。
+      await getPool().query('DELETE FROM share_links WHERE id = ?', [share.id])
       closeChannel(channelKeyShare(share.token), { type: 'revoked' })
       publish(channelKeyProject(share.project_key), {
         type: 'share.revoked',

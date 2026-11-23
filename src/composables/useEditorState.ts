@@ -7,6 +7,7 @@ import { polygonArea } from '../core/polygon'
 import type {
   Booth,
   BoothKind,
+  BoothStyle,
   EditorMode,
   Infra,
   Pt,
@@ -50,6 +51,8 @@ export function useEditorState() {
   const draftHeight = ref(6)
   /** 正在绘制的展台类型 */
   const boothKind = ref<BoothKind>('massing')
+  /** 正在绘制的展台模型预设 */
+  const boothStyle = ref<BoothStyle>('standard')
   const selectedIds = shallowRef<string[]>([])
   const gridOn = ref(true)
   const dimOn = ref(false)
@@ -231,6 +234,7 @@ export function useEditorState() {
     draftPoints,
     draftHeight,
     boothKind,
+    boothStyle,
     selectedIds,
     gridOn,
     dimOn,

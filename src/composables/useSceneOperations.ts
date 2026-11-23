@@ -3,8 +3,12 @@ import polygonClipping, { type Polygon } from 'polygon-clipping'
 import {
   BOOTH_DEFAULT_HEIGHT,
   BOOTH_KIND_LABELS,
+  BOOTH_STYLE_DEFAULT_HEIGHT,
+  BOOTH_STYLE_LABELS,
   OPEN_FLOOR_HEIGHT,
+  boothKindForStyle,
   boothKindOf,
+  boothStyleOf,
 } from '../core/booth'
 import { isFurnitureKind } from '../core/infra'
 import {
@@ -23,6 +27,7 @@ import type {
   Booth,
   BoothKind,
   BoothMark,
+  BoothStyle,
   EditorMode,
   Infra,
   Pt,
@@ -300,6 +305,37 @@ export function useSceneOperations(options: SceneOperationsOptions) {
     })
   }
 
+  /** 在模型库中切换预设：保留轮廓、名称、展商、Logo、标记和合并组 */
+  function changeBoothStyle(id: string, style: BoothStyle) {
+    const target = booths.value.find((b) => b.id === id)
+    if (!target || boothStyleOf(target) === style) return
+    const from = boothStyleOf(target)
+    const height =
+      style === 'platform'
+        ? OPEN_FLOOR_HEIGHT
+        : from === 'platform'
+          ? BOOTH_STYLE_DEFAULT_HEIGHT[style]
+          : target.height
+    const kind = boothKindForStyle(style)
+    const next: Booth = { ...target, style, height }
+    if (kind === 'massing') delete next.kind
+    else next.kind = kind
+    if (style === 'scaffold') next.canopy = target.canopy !== false
+    else delete next.canopy
+    if (style === 'standard') {
+      if (target.noTop) next.noTop = true
+    } else {
+      delete next.noTop
+    }
+
+    booths.value = booths.value.map((b) => (b.id === id ? next : b))
+    options.toast(
+      height !== target.height
+        ? `${target.name} 已切换为${BOOTH_STYLE_LABELS[style]} · 高度 ${height} m`
+        : `${target.name} 已切换为${BOOTH_STYLE_LABELS[style]}`,
+    )
+  }
+
   /** 标准 / 脚手架 / 光地互换：保留轮廓、家具、标记色、名称、展商和 Logo */
   function changeBoothKind(id: string, kind: BoothKind) {
     const target = booths.value.find((b) => b.id === id)
@@ -320,6 +356,8 @@ export function useSceneOperations(options: SceneOperationsOptions) {
     } else {
       next.kind = kind
     }
+    next.style =
+      kind === 'massing' ? 'standard' : kind === 'scaffold' ? 'scaffold' : 'platform'
     if (kind === 'scaffold') {
       next.canopy = target.canopy !== false
       delete next.noTop
@@ -327,6 +365,7 @@ export function useSceneOperations(options: SceneOperationsOptions) {
       delete next.canopy
       delete next.noTop
     } else {
+      delete next.canopy
       delete next.noTop
     }
 
@@ -729,6 +768,7 @@ export function useSceneOperations(options: SceneOperationsOptions) {
     changeVenueHeight,
     changeBoothHeight,
     changeBoothKind,
+    changeBoothStyle,
     setBoothCanopy,
     setBoothNoTop,
     setBoothMark,

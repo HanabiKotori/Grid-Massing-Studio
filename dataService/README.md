@@ -9,7 +9,7 @@
 - 随机 SVG 图片滑块验证码（缺口坐标只保存在服务端，5 分钟过期、最多 4 次尝试）；
 - 每个账号固定 10 个存储位置（slot 1-10），每个位置保存一份场景快照；
 - 登录状态下自动保存写入所选位置，支持手动保存 / 加载 / 删除；
-- 分享链接：实时 / 冻结快照、公开查看、登录评论、项目级评论聚合；
+- 分享链接：绑定云端存档实例，一个存档一条链接，实时 / 冻结快照、公开查看、登录评论；删除存档会级联删除链接；
 - 实时通道：SSE 广播场景增量补丁、评论新增 / 状态变更 / 删除；
 - MySQL 表结构在启动时自动创建（`schema.sql` 也可手动执行）。
 
@@ -77,7 +77,10 @@ SOURCE schema.sql;
 | GET | `/api/storage` | 存储位置列表（最多 10 条） |
 | GET | `/api/storage/:slot` | 读取指定位置的完整场景 |
 | PUT | `/api/storage/:slot` | 保存 / 覆盖：`{ name, scene }` |
-| DELETE | `/api/storage/:slot` | 删除指定位置 |
+| DELETE | `/api/storage/:slot` | 删除指定位置；该存档的分享链接级联删除 |
+| GET | `/api/storage/:slot/share` | 获取该存档的独立链接 |
+| PUT | `/api/storage/:slot/share` | 创建 / 更新该存档链接；已有映射时 token 不变 |
+| DELETE | `/api/shares/:token` | 删除链接；重新分享生成新 token |
 
 `slot` 取值为 1-10，每个用户独立。
 
@@ -86,7 +89,7 @@ SOURCE schema.sql;
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
 | POST | `/api/shares` | 登录 | 发布实时链接：`{ title, scene, projectKey, liveMode, allowComment, allowDownload }` |
-| GET | `/api/shares` | 登录 | 当前用户的链接列表 |
+| GET | `/api/shares?storageSlot=` | 登录 | 当前用户的链接列表；可按存档槽位筛选 |
 | GET | `/api/shares/:token` | 公开 | 链接元信息（不含场景） |
 | GET | `/api/shares/:token/scene` | 公开 | 场景快照 + 当前 revision |
 | PATCH | `/api/shares/:token` | owner | 改标题 / 权限；带 `scene` 时更新快照 |

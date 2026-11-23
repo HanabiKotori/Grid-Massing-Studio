@@ -11,14 +11,16 @@ import {
   buildMassing,
   buildOpenFloorBooth,
   buildScaffoldBooth,
+  buildStyledBooth,
   getBoothWallNormalMap,
   getScaffoldMetalNormalMap,
   getVenueWallNormalMap,
+  mergeBoothParts,
   setGateOpenAmount,
   type InfraOpening,
   type MassingOpening,
 } from './build'
-import { OPEN_FLOOR_HEIGHT, boothKindOf } from './booth'
+import { OPEN_FLOOR_HEIGHT, boothKindOf, boothStyleOf } from './booth'
 import {
   fitGroupOffset,
   presetFitRadius,
@@ -395,6 +397,30 @@ function disposeDeep(root: THREE.Object3D) {
   })
 }
 
+function sameBoothPoints(a: Pt[], b: Pt[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((p, i) => p.x === b[i].x && p.z === b[i].z)
+  )
+}
+
+/** 判断单个展台是否需要重建几何 / 标签 / Logo */
+function boothRenderChanged(a: Booth, b: Booth): boolean {
+  return (
+    a.name !== b.name ||
+    a.exhibitor !== b.exhibitor ||
+    a.height !== b.height ||
+    boothKindOf(a) !== boothKindOf(b) ||
+    boothStyleOf(a) !== boothStyleOf(b) ||
+    a.canopy !== b.canopy ||
+    a.noTop !== b.noTop ||
+    a.mark !== b.mark ||
+    a.marked !== b.marked ||
+    a.logo !== b.logo ||
+    !sameBoothPoints(a.points, b.points)
+  )
+}
+
 /** 合并组的外轮廓（仅当结果是单一多边形时有效） */
 function unionOutline(polys: Pt[][]): Pt[] | null {
   if (!polys.length) return null
@@ -759,6 +785,8 @@ export class Stage {
   private groupMeshes = new Map<string, THREE.Group>()
   private groupMembers = new Map<string, string[]>()
   private pickables: THREE.Object3D[] = []
+  /** 常态 hover 拾取限频：避免每个 pointermove 都递归 raycast */
+  private lastHoverPickAt = 0
   private previewGroup: THREE.Group | null = null
   private pasteGhost: THREE.Group | null = null
   private pasteCenter: Pt = { x: 0, z: 0 }
@@ -2200,7 +2228,71 @@ export class Stage {
     })
   }
 
+  /**
+   * 无合并组、ID 集合不变时只重建变化的展台。
+   * 未变化的 Group / 合批几何 / 材质继续复用，避免单台编辑触发整层重建。
+   */
+  private tryUpdateBoothsIncrementally(booths: Booth[]): boolean {
+    if (
+      booths.some((b) => !!b.groupId || b.points.length < 3) ||
+      this.groupMeshes.size > 0 ||
+      this.groupMembers.size > 0 ||
+      booths.length !== this.boothSpecs.size
+    ) {
+      return false
+    }
+    const changed: { old: Booth; next: Booth }[] = []
+    for (const next of booths) {
+      const old = this.boothSpecs.get(next.id)
+      if (!old) return false
+      if (boothRenderChanged(old, next)) changed.push({ old, next })
+    }
+    if (!changed.length) return true
+
+    this.clearLabels()
+    this.clearAreaLabels()
+    for (const { next } of changed) {
+      const root = this.boothGroups.get(next.id)
+      if (root) {
+        this.modelRoot.remove(root)
+        disposeDeep(root)
+        this.boothGroups.delete(next.id)
+      }
+      const box = this.selectionBoxes.get(next.id)
+      if (box) {
+        this.scene.remove(box.helper)
+        disposeDeep(box.helper)
+        this.selectionBoxes.delete(next.id)
+      }
+      this.boothSpecs.set(next.id, next)
+      this.addBoothMesh(next, undefined, undefined, false)
+    }
+
+    // 标签和面积标签统一重建；相比重建全部几何/材质成本很低
+    for (const b of booths) {
+      const root = this.boothGroups.get(b.id)
+      if (!root) continue
+      this.addLabel(root, b.name, b.points, boothVisibleHeight(b), b.exhibitor, b.id)
+      this.addAreaLabel(root, b)
+    }
+
+    const logoChanged = changed.some(
+      ({ old, next }) => !!old.logo || !!next.logo,
+    )
+    if (logoChanged) this.buildBoothLogos()
+
+    this.refreshFurnitureBaseY()
+    this.refreshPickables()
+    this.setSelected(this.selectedIds)
+    this.refreshDimensions()
+    if (this.boothTopsXray || this.selectedFurnitureBoothIds.size) {
+      this.applyBoothTopsXray()
+    }
+    return true
+  }
+
   setBooths(booths: Booth[]) {
+    if (this.tryUpdateBoothsIncrementally(booths)) return
     this.clearLabels()
     this.clearAreaLabels()
     this.clearBoothLogos()
@@ -2247,24 +2339,28 @@ export class Stage {
       const groupMark = list.map(boothMark).find((m): m is BoothMark => m !== null) ?? null
       const palette = groupMark ? MARK_PALETTE[groupMark] : null
       const sameHeight = list.every((b) => Math.abs(b.height - list[0].height) < 1e-3)
-      // 只有标准白膜支持轮廓合并；脚手架 / 光地保持各自形态
-      const allMassing = list.every((b) => boothKindOf(b) === 'massing')
+      // 只有标准白膜支持轮廓合并；其他模型保持各自构件形态
+      const allStandard = list.every((b) => boothStyleOf(b) === 'standard')
       const sameTop = list.every((b) => (b.noTop === true) === (list[0].noTop === true))
       const outline =
-        sameHeight && allMassing && sameTop ? unionOutline(list.map((b) => b.points)) : null
+        sameHeight && allStandard && sameTop
+          ? unionOutline(list.map((b) => b.points))
+          : null
       this.groupMembers.set(
         gid,
         list.map((b) => b.id),
       )
       if (outline) {
-        const mesh = buildBooth(outline, {
-          height: list[0].height,
-          thickness: 0.1,
-          wallColor: palette?.wall ?? 0xf4f0e6,
-          floorColor: palette?.floor ?? 0xdcd7c8,
-          edgeColor: color,
-          noTop: list[0].noTop === true,
-        })
+        const mesh = mergeBoothParts(
+          buildBooth(outline, {
+            height: list[0].height,
+            thickness: 0.1,
+            wallColor: palette?.wall ?? 0xf4f0e6,
+            floorColor: palette?.floor ?? 0xdcd7c8,
+            edgeColor: color,
+            noTop: list[0].noTop === true,
+          }),
+        )
         mesh.name = `group:${gid}`
         mesh.userData.groupId = gid
         this.groupMeshes.set(gid, mesh)
@@ -2356,12 +2452,19 @@ export class Stage {
     return null
   }
 
-  private addBoothMesh(b: Booth, edgeColor?: number, markOverride?: BoothMark | null) {
+  private addBoothMesh(
+    b: Booth,
+    edgeColor?: number,
+    markOverride?: BoothMark | null,
+    withLabels = true,
+  ) {
     const mark = markOverride !== undefined ? markOverride : boothMark(b)
     const palette = mark ? MARK_PALETTE[mark] : null
     const kind = boothKindOf(b)
+    const style = boothStyleOf(b)
     // 展台使用更强的拉丝金属法线；场馆仍使用更细腻的金属微法线
     const boothNormal = getBoothWallNormalMap()
+    const metal = kind === 'scaffold' || style === 'truss'
     const common = {
       height: b.height,
       thickness: 0.1,
@@ -2372,7 +2475,7 @@ export class Stage {
       wallNormalScale: 1.5,
       floorNormalMap: boothNormal,
       floorNormalScale: 1,
-      ...(kind === 'scaffold'
+      ...(metal
         ? {
             wallRoughness: 0.65,
             wallMetalness: 0.1,
@@ -2385,16 +2488,18 @@ export class Stage {
           ? { wallRoughness: 0.8, wallMetalness: 0 }
           : { wallRoughness: 0.75, wallMetalness: 0.06 }),
     }
-    const g =
-      kind === 'scaffold'
-        ? buildScaffoldBooth(b.points, { ...common, canopy: b.canopy !== false })
-        : kind === 'openfloor'
-          ? buildOpenFloorBooth(b.points, common)
-          : buildBooth(b.points, { ...common, noTop: b.noTop === true })
+    const g = mergeBoothParts(
+      buildStyledBooth(style, b.points, {
+        ...common,
+        canopy: b.canopy !== false,
+        noTop: b.noTop === true,
+      }),
+    )
     g.name = `booth:${b.id}`
     g.userData.boothId = b.id
     this.boothGroups.set(b.id, g)
     this.modelRoot.add(g)
+    if (!withLabels) return
     this.addLabel(g, b.name, b.points, boothVisibleHeight(b), b.exhibitor, b.id)
     this.addAreaLabel(g, b)
   }
@@ -2462,7 +2567,14 @@ export class Stage {
     for (const b of this.boothSpecs.values()) {
       if (b.points.length < 3) continue
       if (pointInPolygon({ x, z }, b.points)) {
-        return boothKindOf(b) === 'massing' ? 0 : Math.min(OPEN_FLOOR_HEIGHT, b.height)
+        const style = boothStyleOf(b)
+        // 岛型 / 桁架 / 光地都有实际台面；标摊 / 半岛 / 门头贴地
+        return style === 'island' ||
+          style === 'truss' ||
+          style === 'platform' ||
+          boothKindOf(b) !== 'massing'
+          ? Math.min(OPEN_FLOOR_HEIGHT, b.height)
+          : 0
       }
     }
     return 0
@@ -2982,7 +3094,13 @@ export class Stage {
     const sign = boothSignTexture(b)
     if (!sign) return
 
-    if (boothKindOf(b) === 'massing') {
+    const style = boothStyleOf(b)
+    if (
+      style === 'standard' ||
+      style === 'octanorm' ||
+      style === 'peninsula' ||
+      style === 'portal'
+    ) {
       this.addMassingLogos(b, sign)
     } else {
       this.addStandingLogo(b, sign)
@@ -4673,6 +4791,9 @@ export class Stage {
     if (this.mode === 'idle') {
       // 常态也持续回传鼠标在地面的世界坐标，供底部状态栏显示
       this.opts.onHover?.(this.groundPoint(e.clientX, e.clientY))
+      const now = performance.now()
+      if (now - this.lastHoverPickAt < 40) return
+      this.lastHoverPickAt = now
       if (this.pickInfraAt(e.clientX, e.clientY)) {
         this.host.style.cursor = 'pointer'
         return

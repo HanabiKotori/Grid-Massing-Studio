@@ -8,9 +8,15 @@ import {
   polygonArea,
   polygonInsidePolygon,
 } from '../core/polygon'
+import {
+  BOOTH_STYLE_DEFAULT_HEIGHT,
+  BOOTH_STYLE_LABELS,
+  boothKindForStyle,
+} from '../core/booth'
 import type {
   Booth,
   BoothKind,
+  BoothStyle,
   EditorMode,
   Infra,
   Pt,
@@ -33,6 +39,7 @@ interface BoothEditingOptions {
   draftPoints: ShallowRef<Pt[]>
   draftHeight: Ref<number>
   boothKind: Ref<BoothKind>
+  boothStyle: Ref<BoothStyle>
   venueNoTop: Ref<boolean>
   selectedIds: ShallowRef<string[]>
   selectedInfraId: Ref<string | null>
@@ -66,19 +73,34 @@ export function useBoothEditing(options: BoothEditingOptions) {
     options.getStage()?.viewTop()
   }
 
-  function startBoothDraw(kind: BoothKind = 'massing') {
+  function startBoothDraw(kind: BoothKind = 'massing', style?: BoothStyle) {
     if (!options.venue.value) {
       options.toast('请先绘制场馆')
       return
     }
-    options.boothKind.value = kind
+    const nextStyle =
+      style ??
+      (kind === 'scaffold'
+        ? 'scaffold'
+        : kind === 'openfloor'
+          ? 'platform'
+          : 'standard')
+    const nextKind = boothKindForStyle(nextStyle)
+    options.boothKind.value = nextKind
+    options.boothStyle.value = nextStyle
     options.mode.value = 'draw-booth'
     options.draftPoints.value = []
     options.selectedIds.value = []
     options.clearHover()
     options.getStage()?.viewTop()
-    if (kind === 'openfloor') {
-      options.toast('光地展台无需设置高度，闭合轮廓后直接生成')
+    if (nextKind === 'openfloor') {
+      options.toast(
+        nextStyle === 'platform'
+          ? '光地展台无需设置高度，闭合轮廓后直接生成'
+          : `${BOOTH_STYLE_LABELS[nextStyle]}无需设置高度，闭合轮廓后直接生成`,
+      )
+    } else {
+      options.toast(`绘制${BOOTH_STYLE_LABELS[nextStyle]}轮廓`)
     }
   }
 
@@ -179,7 +201,9 @@ export function useBoothEditing(options: BoothEditingOptions) {
         addBooth(pts, OPEN_FLOOR_HEIGHT, 'openfloor')
         return
       }
-      options.draftHeight.value = BOOTH_DEFAULT_HEIGHT[options.boothKind.value]
+      options.draftHeight.value =
+        BOOTH_STYLE_DEFAULT_HEIGHT[options.boothStyle.value] ??
+        BOOTH_DEFAULT_HEIGHT[options.boothKind.value]
       options.mode.value = 'height-booth'
     } else {
       options.draftHeight.value = options.venue.value
@@ -210,11 +234,13 @@ export function useBoothEditing(options: BoothEditingOptions) {
   /** 生成展台：标准 / 脚手架走定高流程，光地直接按平台高度落位 */
   function addBooth(points: Pt[], height: number, kind: BoothKind) {
     const seq = options.nextBoothSeq()
+    const style = options.boothStyle.value
     const booth: Booth = {
       id: `b${Date.now().toString(36)}-${seq}`,
       name: `展台 ${String(seq).padStart(2, '0')}`,
       points: points.map((p) => ({ ...p })),
       height,
+      style,
       ...(kind === 'massing' ? {} : { kind }),
       ...(kind === 'scaffold' ? { canopy: true } : {}),
     }
@@ -224,10 +250,8 @@ export function useBoothEditing(options: BoothEditingOptions) {
     options.focusAdd('booth')
     options.mode.value = 'idle'
     options.draftPoints.value = []
-    const kindLabel =
-      kind === 'scaffold' ? '脚手架' : kind === 'openfloor' ? '光地' : '标准'
     options.toast(
-      `${booth.name} 已生成 · ${kindLabel} · ${polygonArea(booth.points).toFixed(1)} m²`,
+      `${booth.name} 已生成 · ${BOOTH_STYLE_LABELS[style]} · ${polygonArea(booth.points).toFixed(1)} m²`,
     )
     // 用较高的俯角回看，保证馆内的展台不会被外墙挡住
     if (options.venue.value) {

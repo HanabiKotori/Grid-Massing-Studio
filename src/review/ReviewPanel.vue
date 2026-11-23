@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { CommentAnchor, ShareComment } from '../core/shareApi'
 
 const props = withDefaults(
@@ -54,6 +54,8 @@ const filter = ref<Filter>('all')
 const draft = ref('')
 const unreadSet = computed(() => new Set(props.unreadIds ?? []))
 const collapsedThreads = ref<Set<number>>(new Set())
+const pendingDeleteId = ref<number | null>(null)
+let deleteConfirmTimer = 0
 
 const sorted = computed(() =>
   props.comments
@@ -189,6 +191,45 @@ function canDelete(comment: ShareComment): boolean {
   if (comment.legacy) return props.mode === 'owner'
   return props.mode === 'owner' || comment.mine
 }
+
+function clearDeleteConfirm() {
+  window.clearTimeout(deleteConfirmTimer)
+  deleteConfirmTimer = 0
+  pendingDeleteId.value = null
+}
+
+function requestDelete(comment: ShareComment) {
+  clearDeleteConfirm()
+  pendingDeleteId.value = comment.id
+  // 误触后不操作则自动复原，避免长时间停在确认态
+  deleteConfirmTimer = window.setTimeout(() => {
+    pendingDeleteId.value = null
+    deleteConfirmTimer = 0
+  }, 4000)
+}
+
+function confirmDelete(comment: ShareComment) {
+  clearDeleteConfirm()
+  emit('remove', comment)
+}
+
+function cancelDelete() {
+  clearDeleteConfirm()
+}
+
+watch(
+  () => props.comments,
+  (list) => {
+    if (
+      pendingDeleteId.value !== null &&
+      !list.some((comment) => comment.id === pendingDeleteId.value)
+    ) {
+      clearDeleteConfirm()
+    }
+  },
+)
+
+onBeforeUnmount(clearDeleteConfirm)
 
 function canResolve(comment: ShareComment): boolean {
   if (!props.commentEnabled || !props.authLoggedIn) return false
@@ -339,11 +380,22 @@ watch(
               {{ root.resolvedAt ? '取消解决' : '解决' }}
             </button>
             <button v-if="canReply(root)" type="button" @click.stop="select(root)">回复</button>
+            <template v-if="pendingDeleteId === root.id">
+              <button
+                type="button"
+                class="danger confirm"
+                @click.stop="confirmDelete(root)"
+              >
+                确认删除
+              </button>
+              <button type="button" @click.stop="cancelDelete">取消</button>
+            </template>
             <button
-              v-if="canDelete(root)"
+              v-else-if="canDelete(root)"
               type="button"
               class="danger"
-              @click.stop="emit('remove', root)"
+              title="删除后不可恢复"
+              @click.stop="requestDelete(root)"
             >
               删除
             </button>

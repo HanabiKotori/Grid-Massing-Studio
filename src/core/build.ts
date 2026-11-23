@@ -1,9 +1,10 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { OPEN_FLOOR_HEIGHT } from './booth'
 import { ELEVATOR_DEFAULT_COUNT, WINDOW_DEPTH, WINDOW_SILL, isFurnitureKind } from './infra'
 import { materialPresetById, materialTextureUrl } from './materials'
 import { insetPolygon, pointInPolygon, signedArea } from './polygon'
-import type { GateOpenMode, Infra, Pt } from './types'
+import type { BoothStyle, GateOpenMode, Infra, Pt } from './types'
 
 /** 墙面开洞：世界坐标、沿墙宽度、洞口高度与离地高度 */
 export interface MassingOpening {
@@ -418,6 +419,85 @@ export function buildMassing(points: Pt[], opts: MassingOptions): THREE.Group {
 }
 
 /**
+ * 展台内部合批：把同材质的墙板 / 立柱 / 构架合并成一个 Geometry，
+ * 所有轮廓线合并成一条 LineSegments。
+ * 顶板保持独立，家具 X-Ray 仍可按 top / scaffold-top 单独切换。
+ * 合并后每个展台通常只剩 2–4 个 mesh，颜色与材质不变。
+ */
+export function mergeBoothParts(group: THREE.Group): THREE.Group {
+
+  const meshBuckets = new Map<THREE.Material, THREE.Mesh[]>()
+  const lineBuckets = new Map<THREE.Material, THREE.LineSegments[]>()
+  const keepAlone = new Set(['top', 'scaffold-top'])
+
+  for (const child of [...group.children]) {
+    if (child instanceof THREE.LineSegments) {
+      const material = child.material as THREE.Material
+      if (!material || Array.isArray(material)) continue
+      const bucket = lineBuckets.get(material) ?? []
+      bucket.push(child)
+      lineBuckets.set(material, bucket)
+      continue
+    }
+    if (!(child instanceof THREE.Mesh)) continue
+    if (keepAlone.has(child.name)) continue
+    const material = child.material as THREE.Material
+    if (!material || Array.isArray(material)) continue
+    const bucket = meshBuckets.get(material) ?? []
+    bucket.push(child)
+    meshBuckets.set(material, bucket)
+  }
+
+  const removeSource = (obj: THREE.Object3D) => {
+    group.remove(obj)
+    const mesh = obj as THREE.Mesh
+    mesh.geometry?.dispose()
+  }
+
+  for (const [material, meshes] of meshBuckets) {
+    if (meshes.length < 2) continue
+    const geometries: THREE.BufferGeometry[] = []
+    for (const mesh of meshes) {
+      mesh.updateMatrix()
+      const geometry = mesh.geometry.clone()
+      geometry.applyMatrix4(mesh.matrix)
+      geometries.push(geometry)
+    }
+    const merged = mergeGeometries(geometries, false)
+    for (const geometry of geometries) geometry.dispose()
+    if (!merged) continue
+
+    const batch = new THREE.Mesh(merged, material)
+    batch.name = 'booth-batch'
+    batch.castShadow = meshes.some((mesh) => mesh.castShadow)
+    batch.receiveShadow = meshes.some((mesh) => mesh.receiveShadow)
+    group.add(batch)
+    for (const mesh of meshes) removeSource(mesh)
+  }
+
+  for (const [material, lines] of lineBuckets) {
+    if (lines.length < 2) continue
+    const geometries: THREE.BufferGeometry[] = []
+    for (const line of lines) {
+      line.updateMatrix()
+      const geometry = line.geometry.clone()
+      geometry.applyMatrix4(line.matrix)
+      geometries.push(geometry)
+    }
+    const merged = mergeGeometries(geometries, false)
+    for (const geometry of geometries) geometry.dispose()
+    if (!merged) continue
+
+    const batch = new THREE.LineSegments(merged, material)
+    batch.name = 'booth-edge-batch'
+    group.add(batch)
+    for (const line of lines) removeSource(line)
+  }
+
+  return group
+}
+
+/**
  * 展台白膜：顶面可闭合或去除；下部为四周空心围挡，每面居中留 2m 漫游入口。
  * 去除顶部时立柱一并隐藏，仅保留围挡。
  */
@@ -773,6 +853,415 @@ export function buildOpenFloorBooth(points: Pt[], opts: MassingOptions): THREE.G
 
   group.userData = { height, area: Math.abs(signedArea(pts)) }
   return group
+}
+
+// ---------- 展台模型库 ----------
+
+interface PanelBoothConfig {
+  openEdges: number[]
+  headerEdges?: number[]
+  fascia?: number
+  top?: 'flat' | 'none'
+  columns?: boolean
+  floor?: boolean
+}
+
+function addStyledBox(
+  group: THREE.Group,
+  w: number,
+  h: number,
+  d: number,
+  x: number,
+  y: number,
+  z: number,
+  rotY: number,
+  material: THREE.Material,
+  edgeMaterial: THREE.Material | null,
+  name: string,
+  castShadow: boolean,
+) {
+  if (w < 0.02 || h < 0.02 || d < 0.02) return
+  const geometry = new THREE.BoxGeometry(w, h, d)
+  scaleBoxUv(geometry, w, h)
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.name = name
+  mesh.position.set(x, y, z)
+  mesh.rotation.y = rotY
+  mesh.castShadow = castShadow
+  mesh.receiveShadow = true
+  group.add(mesh)
+
+  if (edgeMaterial) {
+    const line = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geometry, 20),
+      edgeMaterial,
+    )
+    line.position.copy(mesh.position)
+    line.rotation.y = rotY
+    group.add(line)
+  }
+}
+
+function styledFrameMaterial(
+  opts: MassingOptions,
+  transparent: boolean,
+): THREE.Material {
+  if (!opts.metalNormalMap || transparent) {
+    return new THREE.MeshStandardMaterial({
+      color: opts.wallColor ?? 0xc7cbd0,
+      roughness: opts.wallRoughness ?? 0.7,
+      metalness: opts.wallMetalness ?? 0.08,
+      transparent,
+      opacity: opts.opacity ?? 1,
+    })
+  }
+  const material = new THREE.MeshStandardMaterial({
+    color: opts.wallColor ?? 0xc7cbd0,
+    roughness: opts.metalRoughness ?? 0.5,
+    metalness: opts.metalMetalness ?? 0.25,
+  })
+  material.normalMap = opts.metalNormalMap
+  const scale = opts.metalNormalScale ?? 1
+  material.normalScale = new THREE.Vector2(scale, scale)
+  return material
+}
+
+/** 标摊 / 半岛 / 门头共用：沿闭合边生成墙板、门楣、可选的顶板或开放顶。 */
+function buildPanelBooth(
+  points: Pt[],
+  opts: MassingOptions,
+  config: PanelBoothConfig,
+): THREE.Group {
+  const group = new THREE.Group()
+  if (points.length < 3) return group
+
+  const pts = ccw(points)
+  const height = Math.max(0.6, opts.height)
+  const transparent = opts.transparent ?? false
+  const castShadow = !transparent
+  const { wall, floor, edge } = mats(opts, transparent, opts.opacity ?? 1)
+  const fascia = Math.min(
+    Math.max(0, config.fascia ?? 0),
+    Math.max(0, height - 0.35),
+  )
+  const bodyH = Math.max(0.25, height - fascia)
+  const openEdges = new Set(config.openEdges)
+  const headerEdges = new Set(config.headerEdges ?? [])
+  const addEdge = opts.edges !== false ? edge : null
+
+  if (config.floor !== false) {
+    const floorGeo = new THREE.ShapeGeometry(
+      new THREE.Shape(toShapePoints(pts)),
+    )
+    floorGeo.rotateX(-Math.PI / 2)
+    const floorMesh = new THREE.Mesh(floorGeo, floor)
+    floorMesh.name = 'floor'
+    floorMesh.position.y = 0.025
+    floorMesh.receiveShadow = true
+    group.add(floorMesh)
+  }
+
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]
+    const b = pts[(i + 1) % pts.length]
+    const dx = b.x - a.x
+    const dz = b.z - a.z
+    const len = Math.hypot(dx, dz)
+    if (len < 0.1) continue
+    const rotY = -Math.atan2(dz, dx)
+    const isOpen = openEdges.has(i)
+    const x = (a.x + b.x) / 2
+    const z = (a.z + b.z) / 2
+
+    if (!isOpen) {
+      addStyledBox(
+        group,
+        len,
+        bodyH,
+        BOOTH_WALL,
+        x,
+        bodyH / 2,
+        z,
+        rotY,
+        wall,
+        addEdge,
+        'panel-wall',
+        castShadow,
+      )
+    }
+    if (fascia > 0 && (!isOpen || headerEdges.has(i))) {
+      addStyledBox(
+        group,
+        len + 0.02,
+        fascia,
+        BOOTH_WALL * 1.08,
+        x,
+        bodyH + fascia / 2,
+        z,
+        rotY,
+        wall,
+        addEdge,
+        isOpen ? 'panel-header' : 'panel-fascia',
+        castShadow,
+      )
+    }
+
+  }
+
+  if (config.columns !== false) {
+    const postH = Math.max(0.1, height - BOOTH_TOP)
+    for (const c of corners(pts)) {
+      addStyledBox(
+        group,
+        POST,
+        postH,
+        POST,
+        c.x,
+        postH / 2,
+        c.z,
+        0,
+        wall,
+        addEdge,
+        'panel-post',
+        castShadow,
+      )
+    }
+  }
+
+  if (config.top === 'flat') {
+    const topGeo = extrudeBetween(
+      new THREE.Shape(toShapePoints(pts)),
+      height - BOOTH_TOP,
+      height,
+    )
+    const topMat = wall.clone()
+    const top = new THREE.Mesh(topGeo, topMat)
+    top.name = 'top'
+    top.castShadow = castShadow
+    top.receiveShadow = true
+    group.add(top)
+    if (opts.edges !== false) {
+      group.add(new THREE.LineSegments(new THREE.EdgesGeometry(topGeo, 24), edge))
+    }
+  }
+
+  group.userData = { height, area: Math.abs(signedArea(pts)) }
+  return group
+}
+
+/** 岛型：开放台地 + 中心接待塔 */
+function buildIslandBooth(points: Pt[], opts: MassingOptions): THREE.Group {
+  const group = buildOpenFloorBooth(points, {
+    ...opts,
+    height: OPEN_FLOOR_HEIGHT,
+  })
+  const pts = ccw(points)
+  const { wall, edge } = mats(opts, opts.transparent ?? false, opts.opacity ?? 1)
+  const addEdge = opts.edges !== false ? edge : null
+  const xs = pts.map((p) => p.x)
+  const zs = pts.map((p) => p.z)
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2
+  const cz = (Math.min(...zs) + Math.max(...zs)) / 2
+  const width = Math.max(0.6, Math.min(1.6, (Math.max(...xs) - Math.min(...xs)) * 0.24))
+  const depth = Math.max(0.6, Math.min(1.6, (Math.max(...zs) - Math.min(...zs)) * 0.24))
+  const towerH = Math.max(1.2, Math.min(3.2, opts.height * 0.72))
+  addStyledBox(
+    group,
+    width,
+    towerH,
+    depth,
+    cx,
+    towerH / 2,
+    cz,
+    0,
+    wall,
+    addEdge,
+    'island-tower',
+    !(opts.transparent ?? false),
+  )
+  const cap = new THREE.Mesh(
+    new THREE.BoxGeometry(width + 0.12, 0.08, depth + 0.12),
+    wall,
+  )
+  cap.position.set(cx, towerH + 0.04, cz)
+  cap.name = 'island-tower-cap'
+  group.add(cap)
+  group.userData = { height: opts.height, area: Math.abs(signedArea(pts)) }
+  return group
+}
+
+/** 桁架吊顶：开放台地 + 四角立柱 + 顶部桁架网格 + 灯位 */
+function buildTrussBooth(points: Pt[], opts: MassingOptions): THREE.Group {
+  const group = buildOpenFloorBooth(points, {
+    ...opts,
+    height: OPEN_FLOOR_HEIGHT,
+  })
+  const pts = ccw(points)
+  const transparent = opts.transparent ?? false
+  const { edge } = mats(opts, transparent, opts.opacity ?? 1)
+  const frame = styledFrameMaterial(opts, transparent)
+  const addEdge = opts.edges !== false ? edge : null
+  const castShadow = !transparent
+  const height = Math.max(1.2, opts.height)
+  const postH = Math.max(0.4, height - 0.12)
+  const postW = 0.12
+
+  for (const c of corners(pts)) {
+    addStyledBox(
+      group,
+      postW,
+      postH,
+      postW,
+      c.x,
+      postH / 2,
+      c.z,
+      0,
+      frame,
+      addEdge,
+      'truss-post',
+      castShadow,
+    )
+  }
+
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]
+    const b = pts[(i + 1) % pts.length]
+    const dx = b.x - a.x
+    const dz = b.z - a.z
+    const len = Math.hypot(dx, dz)
+    if (len < 0.1) continue
+    addStyledBox(
+      group,
+      len,
+      0.12,
+      0.12,
+      (a.x + b.x) / 2,
+      height,
+      (a.z + b.z) / 2,
+      -Math.atan2(dz, dx),
+      frame,
+      addEdge,
+      'truss-perimeter',
+      castShadow,
+    )
+  }
+
+  const xs = pts.map((p) => p.x)
+  const zs = pts.map((p) => p.z)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minZ = Math.min(...zs)
+  const maxZ = Math.max(...zs)
+  const cx = (minX + maxX) / 2
+  const cz = (minZ + maxZ) / 2
+  for (const t of [-0.28, 0, 0.28]) {
+    const z = cz + (maxZ - minZ) * t
+    const w = maxX - minX
+    if (w > 0.8) {
+      addStyledBox(
+        group,
+        w,
+        0.08,
+        0.08,
+        cx,
+        height - 0.08,
+        z,
+        0,
+        frame,
+        addEdge,
+        'truss-cross',
+        castShadow,
+      )
+    }
+    const x = cx + (maxX - minX) * t
+    const d = maxZ - minZ
+    if (d > 0.8) {
+      addStyledBox(
+        group,
+        0.08,
+        0.08,
+        d,
+        x,
+        height - 0.08,
+        cz,
+        0,
+        frame,
+        addEdge,
+        'truss-cross',
+        castShadow,
+      )
+    }
+  }
+
+  const lightMat = new THREE.MeshBasicMaterial({
+    color: 0xffd28a,
+    transparent: true,
+    opacity: 0.9,
+  })
+  for (let i = 0; i < 3; i++) {
+    const x = minX + (maxX - minX) * (0.25 + i * 0.25)
+    const light = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 8, 6),
+      lightMat,
+    )
+    light.name = 'truss-light'
+    light.position.set(x, height - 0.2, cz)
+    group.add(light)
+  }
+
+  group.userData = { height, area: Math.abs(signedArea(pts)) }
+  return group
+}
+
+/** 统一按模型预设生成展台几何；调用方之后仍可走 mergeBoothParts 合批。 */
+export function buildStyledBooth(
+  style: BoothStyle,
+  points: Pt[],
+  opts: MassingOptions,
+): THREE.Group {
+  if (style === 'scaffold') {
+    return buildScaffoldBooth(points, opts)
+  }
+  if (style === 'platform') {
+    return buildOpenFloorBooth(points, opts)
+  }
+  if (style === 'octanorm') {
+    return buildPanelBooth(points, opts, {
+      openEdges: [0],
+      headerEdges: [0],
+      fascia: 0.6,
+      top: 'none',
+      columns: false,
+      floor: true,
+    })
+  }
+  if (style === 'peninsula') {
+    return buildPanelBooth(points, opts, {
+      openEdges: [0],
+      headerEdges: [0],
+      fascia: 0.5,
+      top: 'flat',
+      columns: true,
+      floor: true,
+    })
+  }
+  if (style === 'portal') {
+    return buildPanelBooth(points, opts, {
+      openEdges: [0, 2],
+      headerEdges: [0],
+      fascia: 0.9,
+      top: 'none',
+      columns: true,
+      floor: true,
+    })
+  }
+  if (style === 'island') {
+    return buildIslandBooth(points, opts)
+  }
+  if (style === 'truss') {
+    return buildTrussBooth(points, opts)
+  }
+  return buildBooth(points, { ...opts, noTop: opts.noTop === true })
 }
 
 // ---------- 基础设施 ----------
