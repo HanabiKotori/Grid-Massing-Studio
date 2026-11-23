@@ -184,7 +184,35 @@ function parseAnchor(raw) {
   return anchor
 }
 
-function commentJson(row, share, mine = false) {
+function eventReplyJson(row, viewerUserId = null) {
+  return {
+    id: Number(row.id),
+    content: row.content,
+    actorUserId: row.actor_user_id ? Number(row.actor_user_id) : null,
+    actorName: row.actor_name || '登录用户',
+    actorRole: row.actor_role === 'owner' ? 'owner' : 'visitor',
+    createdAt: row.created_at,
+    mine:
+      !!viewerUserId &&
+      !!row.actor_user_id &&
+      Number(row.actor_user_id) === Number(viewerUserId),
+  }
+}
+
+function eventJson(row, replies = [], viewerUserId = null) {
+  return {
+    id: Number(row.id),
+    action: row.action === 'resolved' ? 'resolved' : 'unresolved',
+    actorUserId: row.actor_user_id ? Number(row.actor_user_id) : null,
+    actorName: row.actor_name || '登录用户',
+    actorRole: row.actor_role === 'owner' ? 'owner' : 'visitor',
+    createdAt: row.created_at,
+    replyCount: replies.length,
+    replies: replies.map((reply) => eventReplyJson(reply, viewerUserId)),
+  }
+}
+
+function commentJson(row, share, mine = false, events = []) {
   let anchor = { point: [0, 0, 0] }
   try {
     anchor = parseAnchor(JSON.parse(row.anchor_json))
@@ -211,6 +239,7 @@ function commentJson(row, share, mine = false) {
     resolvedBy: row.resolved_by || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    events,
     mine: !!mine,
   }
 }
@@ -265,6 +294,73 @@ async function loadComment(shareId, commentId) {
     [commentId, shareId],
   )
   return rows[0] ?? null
+}
+
+async function loadCommentEvent(shareId, commentId, eventId) {
+  const pool = getPool()
+  const [rows] = await pool.query(
+    `SELECT * FROM share_comment_events
+      WHERE id = ? AND share_id = ? AND comment_id = ?
+      LIMIT 1`,
+    [eventId, shareId, commentId],
+  )
+  return rows[0] ?? null
+}
+
+async function loadEventReply(eventId, replyId) {
+  const pool = getPool()
+  const [rows] = await pool.query(
+    'SELECT * FROM share_comment_event_replies WHERE id = ? AND event_id = ? LIMIT 1',
+    [replyId, eventId],
+  )
+  return rows[0] ?? null
+}
+
+/**
+ * 一次性加载一组评论的事件与事件回复，避免评论列表 N+1。
+ * 返回 commentId -> Event[]。
+ */
+async function loadCommentEvents(shareId, commentIds, viewerUserId = null) {
+  const ids = [...new Set(commentIds.map(Number).filter((id) => id > 0))]
+  const grouped = new Map()
+  if (!ids.length) return grouped
+
+  const pool = getPool()
+  const [events] = await pool.query(
+    `SELECT * FROM share_comment_events
+      WHERE share_id = ? AND comment_id IN (?)
+      ORDER BY created_at ASC, id ASC`,
+    [shareId, ids],
+  )
+  if (!events.length) return grouped
+
+  const eventIds = events.map((event) => Number(event.id))
+  const [replies] = await pool.query(
+    `SELECT * FROM share_comment_event_replies
+      WHERE event_id IN (?)
+      ORDER BY created_at ASC, id ASC`,
+    [eventIds],
+  )
+  const repliesByEvent = new Map()
+  for (const reply of replies) {
+    const eventId = Number(reply.event_id)
+    const list = repliesByEvent.get(eventId) ?? []
+    list.push(reply)
+    repliesByEvent.set(eventId, list)
+  }
+
+  for (const event of events) {
+    const commentId = Number(event.comment_id)
+    const list = grouped.get(commentId) ?? []
+    list.push(eventJson(event, repliesByEvent.get(Number(event.id)) ?? [], viewerUserId))
+    grouped.set(commentId, list)
+  }
+  return grouped
+}
+
+async function eventsForComment(shareId, commentId, viewerUserId = null) {
+  const grouped = await loadCommentEvents(shareId, [commentId], viewerUserId)
+  return grouped.get(Number(commentId)) ?? []
 }
 
 async function commentCount(shareId) {
@@ -346,6 +442,34 @@ function publishCommentDelete(share, id, meta = {}) {
     id,
     ...meta,
   })
+}
+
+function publishEventReply(share, commentId, event, reply, meta = {}) {
+  const payload = {
+    type: 'comment.event.replied',
+    shareToken: share.token,
+    commentId,
+    eventId: Number(event.id),
+    eventAction: event.action,
+    eventActorUserId: event.actor_user_id ? Number(event.actor_user_id) : null,
+    reply,
+    ...meta,
+  }
+  publish(channelKeyShare(share.token), payload)
+  publish(channelKeyProject(share.project_key), payload)
+}
+
+function publishEventReplyDelete(share, commentId, eventId, reply, meta = {}) {
+  const payload = {
+    type: 'comment.event.reply.deleted',
+    shareToken: share.token,
+    commentId,
+    eventId: Number(eventId),
+    reply,
+    ...meta,
+  }
+  publish(channelKeyShare(share.token), payload)
+  publish(channelKeyProject(share.project_key), payload)
 }
 
 /** 删除云端存档前通知访客并关闭该存档链接的 SSE */
@@ -977,12 +1101,18 @@ export function registerShareRoutes(app) {
         'SELECT * FROM share_comments WHERE share_id = ? AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 500',
         [share.id],
       )
+      const eventsByComment = await loadCommentEvents(
+        share.id,
+        rows.map((row) => row.id),
+        user?.id ?? null,
+      )
       res.json({
         comments: rows.map((row) =>
-          publicComment(
-            share,
+          commentJson(
             row,
+            share,
             !!user && Number(row.author_user_id) === user.id,
+            eventsByComment.get(Number(row.id)) ?? [],
           ),
         ),
       })
@@ -1116,6 +1246,9 @@ export function registerShareRoutes(app) {
         return
       }
 
+      const actorName =
+        cleanText(user.username, NAME_MAX) || (isOwner ? '作者' : '登录用户')
+      const actorRole = isOwner ? 'owner' : 'visitor'
       const fields = []
       const params = []
       if (req.body?.content !== undefined) {
@@ -1127,28 +1260,234 @@ export function registerShareRoutes(app) {
         fields.push('content = ?')
         params.push(content)
       }
+
+      let stateChanged = false
+      let nextResolved = !!row.resolved_at
       if (req.body?.resolved !== undefined) {
-        if (req.body.resolved) {
-          fields.push('resolved_at = NOW()', 'resolved_by = ?')
-          params.push(cleanText(user.username, NAME_MAX) || (isOwner ? '作者' : '登录用户'))
-        } else {
-          fields.push('resolved_at = NULL', 'resolved_by = ?')
-          params.push('')
+        nextResolved = req.body.resolved === true
+        stateChanged = nextResolved !== !!row.resolved_at
+        if (stateChanged) {
+          if (nextResolved) {
+            fields.push('resolved_at = NOW()', 'resolved_by = ?')
+            params.push(actorName)
+          } else {
+            fields.push('resolved_at = NULL', 'resolved_by = ?')
+            params.push('')
+          }
         }
       }
+
       if (!fields.length) {
-        res.status(400).json({ error: '没有需要更新的字段' })
+        const events = await eventsForComment(share.id, row.id, user.id)
+        res.json({
+          comment: commentJson(row, share, isAuthor, events),
+        })
         return
       }
-      params.push(row.id)
-      await getPool().query(`UPDATE share_comments SET ${fields.join(', ')} WHERE id = ?`, params)
+
+      const pool = getPool()
+      const conn = await pool.getConnection()
+      let activity = null
+      try {
+        await conn.beginTransaction()
+        params.push(row.id)
+        await conn.query(
+          `UPDATE share_comments SET ${fields.join(', ')} WHERE id = ?`,
+          params,
+        )
+        if (stateChanged) {
+          const [inserted] = await conn.query(
+            `INSERT INTO share_comment_events
+              (share_id, comment_id, action, actor_user_id, actor_name, actor_role)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              share.id,
+              row.id,
+              nextResolved ? 'resolved' : 'unresolved',
+              user.id,
+              actorName,
+              actorRole,
+            ],
+          )
+          const [eventRows] = await conn.query(
+            'SELECT * FROM share_comment_events WHERE id = ? LIMIT 1',
+            [inserted.insertId],
+          )
+          activity = eventJson(eventRows[0], [], user.id)
+        }
+        await conn.commit()
+      } catch (error) {
+        await conn.rollback()
+        throw error
+      } finally {
+        conn.release()
+      }
+
       const next = await loadComment(share.id, row.id)
-      const comment = commentJson(next, share, isAuthor)
-      publishCommentUpdate(share, { ...comment, mine: false }, {
-        actorUserId: user.id,
-        actorRole: isOwner ? 'owner' : 'visitor',
-      })
-      res.json({ comment })
+      const events = await eventsForComment(share.id, row.id, user.id)
+      const comment = commentJson(next, share, isAuthor, events)
+      publishCommentUpdate(
+        share,
+        { ...comment, mine: false },
+        {
+          actorUserId: user.id,
+          actorRole,
+          ...(activity ? { activity: { ...activity, mine: false } } : {}),
+        },
+      )
+      res.json({ comment, ...(activity ? { activity } : {}) })
+    }),
+  )
+
+  app.post(
+    '/api/shares/:token/comments/:id/events/:eventId/replies',
+    requireDb,
+    requireAuth,
+    wrap(async (req, res) => {
+      const ip = req.ip || req.socket?.remoteAddress || 'unknown'
+      if (!allowRate(`er:${ip}:${req.params.token}`, 30, 60_000)) {
+        res.status(429).json({ error: '回复太频繁，请稍后再试' })
+        return
+      }
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      if (share.revoked_at) {
+        res.status(410).json({ error: '分享链接已撤销', revoked: true })
+        return
+      }
+      const isOwner = Number(share.owner_user_id) === req.user.id
+      if (!share.allow_comment && !isOwner) {
+        res.status(403).json({ error: '该链接未开放评论' })
+        return
+      }
+      const comment = await loadComment(share.id, Number(req.params.id))
+      if (!comment || comment.deleted_at) {
+        res.status(404).json({ error: '评论不存在' })
+        return
+      }
+      const event = await loadCommentEvent(
+        share.id,
+        comment.id,
+        Number(req.params.eventId),
+      )
+      if (!event) {
+        res.status(404).json({ error: '解决记录不存在' })
+        return
+      }
+      const content = cleanText(req.body?.content, COMMENT_MAX)
+      if (!content) {
+        res.status(400).json({ error: '回复内容不能为空' })
+        return
+      }
+      const clientId = cleanText(req.body?.clientId, 32)
+      const actorName =
+        cleanText(req.user.username, NAME_MAX) || (isOwner ? '作者' : '登录用户')
+      const actorRole = isOwner ? 'owner' : 'visitor'
+      const pool = getPool()
+      if (clientId) {
+        const [existing] = await pool.query(
+          `SELECT * FROM share_comment_event_replies
+            WHERE event_id = ? AND actor_user_id = ? AND client_id = ?
+            LIMIT 1`,
+          [event.id, req.user.id, clientId],
+        )
+        if (existing.length) {
+          res.status(200).json({
+            reply: eventReplyJson(existing[0], req.user.id),
+          })
+          return
+        }
+      }
+      const [inserted] = await pool.query(
+        `INSERT INTO share_comment_event_replies
+          (event_id, actor_user_id, actor_name, actor_role, content, client_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [event.id, req.user.id, actorName, actorRole, content, clientId],
+      )
+      const replyRow = await loadEventReply(event.id, inserted.insertId)
+      const reply = eventReplyJson(replyRow, req.user.id)
+      publishEventReply(
+        share,
+        Number(comment.id),
+        event,
+        { ...reply, mine: false },
+        { actorUserId: req.user.id, actorRole },
+      )
+      res.status(201).json({ reply })
+    }),
+  )
+
+  app.delete(
+    '/api/shares/:token/comments/:id/events/:eventId/replies/:replyId',
+    requireDb,
+    requireAuth,
+    wrap(async (req, res) => {
+      const share = await loadShare(req.params.token)
+      if (!share) {
+        res.status(404).json({ error: '分享链接不存在' })
+        return
+      }
+      if (share.revoked_at) {
+        res.status(410).json({ error: '分享链接已撤销', revoked: true })
+        return
+      }
+      const isOwner = Number(share.owner_user_id) === req.user.id
+      if (!share.allow_comment && !isOwner) {
+        res.status(403).json({ error: '该链接未开放评论' })
+        return
+      }
+      const comment = await loadComment(share.id, Number(req.params.id))
+      if (!comment || comment.deleted_at) {
+        res.status(404).json({ error: '评论不存在' })
+        return
+      }
+      const event = await loadCommentEvent(
+        share.id,
+        comment.id,
+        Number(req.params.eventId),
+      )
+      if (!event) {
+        res.status(404).json({ error: '解决记录不存在' })
+        return
+      }
+      const replyRow = await loadEventReply(
+        event.id,
+        Number(req.params.replyId),
+      )
+      if (!replyRow) {
+        res.status(404).json({ error: '回复不存在' })
+        return
+      }
+      const isReplyAuthor =
+        !!replyRow.actor_user_id &&
+        Number(replyRow.actor_user_id) === req.user.id
+      if (!isOwner && !isReplyAuthor) {
+        res.status(403).json({ error: '没有权限删除该回复' })
+        return
+      }
+      const reply = eventReplyJson(replyRow, req.user.id)
+      await getPool().query(
+        'DELETE FROM share_comment_event_replies WHERE id = ?',
+        [replyRow.id],
+      )
+      publishEventReplyDelete(
+        share,
+        Number(comment.id),
+        event.id,
+        { ...reply, mine: false },
+        {
+          actorUserId: req.user.id,
+          actorRole: isOwner ? 'owner' : 'visitor',
+          replyAuthorUserId: replyRow.actor_user_id
+            ? Number(replyRow.actor_user_id)
+            : null,
+          replyAuthorName: reply.actorName,
+        },
+      )
+      res.json({ ok: true })
     }),
   )
 

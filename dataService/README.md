@@ -10,7 +10,7 @@
 - 每个账号固定 10 个存储位置（slot 1-10），每个位置保存一份场景快照；
 - 登录状态下自动保存写入所选位置，支持手动保存 / 加载 / 删除；
 - 分享链接：绑定云端存档实例，一个存档一条链接，实时 / 冻结快照、公开查看、登录评论；删除存档会级联删除链接；
-- 实时通道：SSE 广播场景增量补丁、评论新增 / 状态变更 / 删除；
+- 实时通道：SSE 广播场景增量补丁、评论新增 / 状态变更 / 解决日志 / 状态讨论 / 删除；
 - MySQL 表结构在启动时自动创建（`schema.sql` 也可手动执行）。
 
 ## 快速开始
@@ -98,7 +98,9 @@ SOURCE schema.sql;
 | GET | `/api/shares/:token/live?since=` | 公开 | 断线追平：同 revision 返回空，否则返回完整场景 |
 | GET | `/api/shares/:token/comments` | 公开 | 评论列表；带 JWT 时返回当前账号的 `mine` |
 | POST | `/api/shares/:token/comments` | 登录 | 新建 / 回复；作者从 JWT 取，匿名评论已移除 |
-| PATCH / DELETE | `/api/shares/:token/comments/:id` | 登录（owner 或作者） | 编辑、解决、删除；历史匿名评论仅 owner 可删除 |
+| PATCH / DELETE | `/api/shares/:token/comments/:id` | 登录（owner 或作者） | 编辑、解决 / 取消解决、删除；历史匿名评论仅 owner 可删除 |
+| POST | `/api/shares/:token/comments/:id/events/:eventId/replies` | 登录 | 回复某条解决 / 取消解决日志 |
+| DELETE | `/api/shares/:token/comments/:id/events/:eventId/replies/:replyId` | 登录（owner 或回复作者） | 删除状态讨论回复 |
 | GET | `/api/review/comments?projectKey=` | 登录 | 编辑器按项目聚合评论 |
 | POST | `/api/shares/:token/stream-ticket` | 公开 | 分享页 SSE 短时 ticket（60 秒） |
 | GET | `/api/shares/:token/stream` | ticket | 分享页 SSE：场景补丁、评论、在线人数 |
@@ -106,6 +108,10 @@ SOURCE schema.sql;
 | GET | `/api/review/stream` | ticket | 编辑器 SSE：项目内评论新增 / 更新 / 删除 |
 
 评论写入统一要求 `Authorization: Bearer <token>`；历史匿名评论（`author_user_id` 为空、仅有 `author_token`）保留只读，不能回复或解决，仅链接 owner 可删除。查看分享页与评论列表仍然公开。
+
+解决 / 取消解决会写入 `share_comment_events`，状态日志下的讨论写入
+`share_comment_event_replies`；两张表随评论级联删除。事件回复作者或链接 owner
+可删除回复，删除前由前端二次确认。
 
 SSE 连接保存在进程内存中，建议单实例运行；多实例需要 Redis pub/sub。Nginx 需要关闭响应缓冲：
 
@@ -127,11 +133,12 @@ location /api/ {
 ```bash
 # 开启云端存储；关闭时沿用浏览器 IndexedDB
 VITE_CLOUD_STORAGE_ENABLED=true
-VITE_DATA_SERVICE_URL=http://127.0.0.1:3020
 ```
 
-生产环境建议通过 Nginx 将 `/api` 反向代理到 dataService，并把
-`VITE_DATA_SERVICE_URL` 配置为同域地址，同时在 `ALLOWED_ORIGINS` 中填写站点域名。
+前端统一请求同源 `/api`：本地由 `vite.config.ts` 的 `server.proxy` 转发到
+`http://127.0.0.1:3020`；生产由 Nginx 将 `/api/` 反向代理到 dataService。
+不需要设置 `VITE_DATA_SERVICE_URL`。生产环境如需允许跨域直连，再在
+`ALLOWED_ORIGINS` 中填写站点域名。
 
 ## 部署示例（Nginx）
 

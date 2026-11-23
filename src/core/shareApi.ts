@@ -41,6 +41,27 @@ export interface CommentAnchor {
   }
 }
 
+export interface ShareCommentEventReply {
+  id: number
+  content: string
+  actorUserId: number | null
+  actorName: string
+  actorRole: 'owner' | 'visitor'
+  createdAt: string
+  mine: boolean
+}
+
+export interface ShareCommentEvent {
+  id: number
+  action: 'resolved' | 'unresolved'
+  actorUserId: number | null
+  actorName: string
+  actorRole: 'owner' | 'visitor'
+  createdAt: string
+  replyCount: number
+  replies: ShareCommentEventReply[]
+}
+
 export interface ShareComment {
   id: number
   parentId: number | null
@@ -62,6 +83,8 @@ export interface ShareComment {
   createdAt: string
   updatedAt: string
   mine: boolean
+  /** 解决 / 取消解决日志；不参与评论计数 */
+  events: ShareCommentEvent[]
 }
 
 export interface BoothDelta {
@@ -97,6 +120,8 @@ export type ReviewEvent =
       comment: ShareComment
       actorUserId?: number
       actorRole?: 'owner' | 'visitor'
+      /** 解决 / 取消解决时附带的新增日志 */
+      activity?: ShareCommentEvent
     }
   | {
       type: 'comment.deleted'
@@ -104,6 +129,28 @@ export type ReviewEvent =
       id: number
       actorUserId?: number
       actorRole?: 'owner' | 'visitor'
+    }
+  | {
+      type: 'comment.event.replied'
+      shareToken: string
+      commentId: number
+      eventId: number
+      eventAction: 'resolved' | 'unresolved'
+      eventActorUserId: number | null
+      reply: ShareCommentEventReply
+      actorUserId: number
+      actorRole: 'owner' | 'visitor'
+    }
+  | {
+      type: 'comment.event.reply.deleted'
+      shareToken: string
+      commentId: number
+      eventId: number
+      reply: ShareCommentEventReply
+      actorUserId: number
+      actorRole: 'owner' | 'visitor'
+      replyAuthorUserId: number | null
+      replyAuthorName: string
     }
   | { type: 'presence'; token: string; count: number }
   | { type: 'revoked' }
@@ -233,6 +280,30 @@ export const shareApi = {
   deleteComment: (token: string, id: number) =>
     dataServiceRequest<{ ok: true }>(
       `/api/shares/${encodeURIComponent(token)}/comments/${id}`,
+      { method: 'DELETE' },
+      true,
+    ),
+
+  createEventReply: (
+    token: string,
+    commentId: number,
+    eventId: number,
+    input: { content: string; clientId?: string },
+  ) =>
+    dataServiceRequest<{ reply: ShareCommentEventReply }>(
+      `/api/shares/${encodeURIComponent(token)}/comments/${commentId}/events/${eventId}/replies`,
+      { method: 'POST', body: JSON.stringify(input) },
+      true,
+    ),
+
+  deleteEventReply: (
+    token: string,
+    commentId: number,
+    eventId: number,
+    replyId: number,
+  ) =>
+    dataServiceRequest<{ ok: true }>(
+      `/api/shares/${encodeURIComponent(token)}/comments/${commentId}/events/${eventId}/replies/${replyId}`,
       { method: 'DELETE' },
       true,
     ),

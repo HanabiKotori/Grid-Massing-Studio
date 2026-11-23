@@ -2,17 +2,15 @@
 export const CLOUD_STORAGE_ENABLED =
   String(import.meta.env.VITE_CLOUD_STORAGE_ENABLED ?? 'false').toLowerCase() === 'true'
 
-/** 未显式配置时跟随页面主机：局域网 IP 访问也能连到同一台机器的 dataService */
+/**
+ * 默认使用同源 /api：
+ * - 生产环境由 nginx 将 /api/ 转发到 127.0.0.1:3020
+ * - 本地开发由 vite.config.ts 的 server.proxy 转发
+ * 仍保留 VITE_DATA_SERVICE_URL 作为显式覆盖。
+ */
 function resolveBaseUrl(): string {
   const configured = String(import.meta.env.VITE_DATA_SERVICE_URL ?? '').trim()
-  if (configured) return configured
-  if (typeof window !== 'undefined') {
-    const { hostname, protocol } = window.location
-    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return `${protocol === 'https:' ? 'https:' : 'http:'}//${hostname}:3020`
-    }
-  }
-  return 'http://127.0.0.1:3020'
+  return configured
 }
 
 const BASE_URL = resolveBaseUrl().replace(/\/+$/, '')

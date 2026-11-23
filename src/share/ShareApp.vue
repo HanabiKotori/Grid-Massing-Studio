@@ -20,6 +20,8 @@ import {
   type CommentAnchor,
   type ReviewEvent,
   type ShareComment,
+  type ShareCommentEvent,
+  type ShareCommentEventReply,
   type ShareMeta,
 } from '../core/shareApi'
 import type { Booth, Infra, Venue } from '../core/types'
@@ -330,6 +332,50 @@ function mergeComment(list: ShareComment[], next: ShareComment): ShareComment[] 
   return copy
 }
 
+function withEventReply(
+  list: ShareComment[],
+  commentId: number,
+  eventId: number,
+  reply: ShareCommentEventReply,
+): ShareComment[] {
+  return list.map((comment) => {
+    if (comment.id !== commentId) return comment
+    return {
+      ...comment,
+      events: (comment.events ?? []).map((event) => {
+        if (event.id !== eventId) return event
+        const index = event.replies.findIndex((item) => item.id === reply.id)
+        const replies =
+          index < 0
+            ? [...event.replies, reply]
+            : event.replies.map((item) =>
+                item.id === reply.id ? { ...item, ...reply } : item,
+              )
+        return { ...event, replies, replyCount: replies.length }
+      }),
+    }
+  })
+}
+
+function withoutEventReply(
+  list: ShareComment[],
+  commentId: number,
+  eventId: number,
+  replyId: number,
+): ShareComment[] {
+  return list.map((comment) => {
+    if (comment.id !== commentId) return comment
+    return {
+      ...comment,
+      events: (comment.events ?? []).map((event) => {
+        if (event.id !== eventId) return event
+        const replies = event.replies.filter((item) => item.id !== replyId)
+        return { ...event, replies, replyCount: replies.length }
+      }),
+    }
+  })
+}
+
 function objectLabelOf(comment: ShareComment): string {
   const resolved = resolveAnchor(comment.anchor, booths.value, infras.value)
   return resolved.valid ? `定位 ${resolved.label}` : '锚点失效'
@@ -530,6 +576,75 @@ function handleStreamEvent(event: ReviewEvent) {
         event.comment.id,
       )
       playCollabSound('reply', 'share', true)
+    }
+    return
+  }
+  if (event.type === 'comment.event.replied') {
+    const commentId = Number(event.commentId)
+    const eventId = Number(event.eventId)
+    const comment = comments.value.find((item) => item.id === commentId)
+    comments.value = withEventReply(
+      comments.value,
+      commentId,
+      eventId,
+      event.reply,
+    )
+    const me = currentUser.value
+    if (!me || event.reply.actorUserId === me.id) return
+    const targetMe =
+      event.eventActorUserId === me.id ||
+      (!!comment && comment.authorUserId === me.id)
+    if (!targetMe) return
+    const visible = !document.hidden && (!isMobile.value || panelOpen.value)
+    if (!visible) {
+      unreadCount.value += 1
+      if (!unreadIds.value.includes(commentId)) {
+        unreadIds.value = [...unreadIds.value, commentId]
+      }
+    }
+    playCollabSound('reply', 'share')
+    pushMessage({
+      scope: 'share',
+      type: 'collab',
+      title:
+        event.eventActorUserId === me.id
+          ? `${event.reply.actorName} 回复了你的解决记录`
+          : `${event.reply.actorName} 回复了你评论的解决记录`,
+      text: event.reply.content.slice(0, 48),
+      dedupeKey: `share-event-${eventId}-${event.reply.id}`,
+      action: {
+        label: '查看',
+        run: () => {
+          panelOpen.value = true
+          activeCommentId.value = commentId
+        },
+      },
+    })
+    return
+  }
+  if (event.type === 'comment.event.reply.deleted') {
+    const commentId = Number(event.commentId)
+    const eventId = Number(event.eventId)
+    comments.value = withoutEventReply(
+      comments.value,
+      commentId,
+      eventId,
+      Number(event.reply.id),
+    )
+    const me = currentUser.value
+    if (
+      me &&
+      event.actorUserId !== me.id &&
+      event.replyAuthorUserId === me.id
+    ) {
+      pushMessage({
+        scope: 'share',
+        type: 'collab',
+        severity: 'error',
+        title: '作者删除了你的状态回复',
+        dedupeKey: `share-event-del-${eventId}-${event.reply.id}`,
+      })
+      playCollabSound('danger', 'share', true)
     }
     return
   }
@@ -771,6 +886,71 @@ async function replyTo(payload: { comment: ShareComment; content: string }) {
   } catch (err) {
     if (handleAuthExpired(err)) return
     showToast(err instanceof Error ? err.message : '回复失败')
+  }
+}
+
+async function replyEvent(payload: {
+  comment: ShareComment
+  event: ShareCommentEvent
+  content: string
+}) {
+  const { comment, event, content } = payload
+  if (!commentAllowed.value) return
+  if (!currentUser.value) {
+    openLogin('login', true)
+    return
+  }
+  if (!(await ensureCommentAllowed())) return
+  const text = content.trim()
+  if (!text) return
+  try {
+    const { reply } = await shareApi.createEventReply(
+      comment.shareToken,
+      comment.id,
+      event.id,
+      {
+        content: text,
+        clientId: `e${Date.now().toString(36)}`,
+      },
+    )
+    comments.value = withEventReply(
+      comments.value,
+      comment.id,
+      event.id,
+      reply,
+    )
+    showToast('状态回复已发送')
+  } catch (err) {
+    if (handleAuthExpired(err)) return
+    showToast(err instanceof Error ? err.message : '状态回复失败')
+  }
+}
+
+async function removeEventReply(payload: {
+  comment: ShareComment
+  event: ShareCommentEvent
+  reply: ShareCommentEventReply
+}) {
+  if (!commentAllowed.value) return
+  if (!currentUser.value) return
+  const before = comments.value
+  comments.value = withoutEventReply(
+    comments.value,
+    payload.comment.id,
+    payload.event.id,
+    payload.reply.id,
+  )
+  try {
+    await shareApi.deleteEventReply(
+      payload.comment.shareToken,
+      payload.comment.id,
+      payload.event.id,
+      payload.reply.id,
+    )
+  } catch (err) {
+    comments.value = before
+    if (handleAuthExpired(err)) return
+    showToast(err instanceof Error ? err.message : '删除状态回复失败')
   }
 }
 
@@ -1065,6 +1245,7 @@ onBeforeUnmount(() => {
         :pending-anchor="pendingAnchor ? { point: pendingAnchor.point, object: pendingAnchor.object } : null"
         :pending-label="pendingAnchor?.label || ''"
         :author-label="currentUser?.username || ''"
+        :current-user-id="currentUser?.id ?? null"
         :closable="isMobile"
         :comment-enabled="commentAllowed"
         :object-label="objectLabelOf"
@@ -1072,6 +1253,8 @@ onBeforeUnmount(() => {
         @locate="locateComment"
         @send="sendComment"
         @reply="replyTo"
+        @event-reply="replyEvent"
+        @remove-event-reply="removeEventReply"
         @resolve="resolveComment"
         @remove="removeComment"
         @cancel-pending="cancelPending"

@@ -79,3 +79,36 @@ CREATE TABLE IF NOT EXISTS share_comments (
   KEY idx_comment_created (share_id, created_at),
   CONSTRAINT fk_comment_share FOREIGN KEY (share_id) REFERENCES share_links (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 评论解决 / 取消解决日志：不可变事件，随评论级联删除
+CREATE TABLE IF NOT EXISTS share_comment_events (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  share_id BIGINT UNSIGNED NOT NULL,
+  comment_id BIGINT UNSIGNED NOT NULL,
+  action ENUM('resolved', 'unresolved') NOT NULL,
+  actor_user_id BIGINT UNSIGNED NULL,
+  actor_name VARCHAR(32) NOT NULL DEFAULT '',
+  actor_role ENUM('owner', 'visitor') NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_event_comment (comment_id, created_at),
+  KEY idx_event_share (share_id, created_at),
+  CONSTRAINT fk_event_comment
+    FOREIGN KEY (comment_id) REFERENCES share_comments (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 针对某条解决日志的平铺讨论
+CREATE TABLE IF NOT EXISTS share_comment_event_replies (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  event_id BIGINT UNSIGNED NOT NULL,
+  actor_user_id BIGINT UNSIGNED NULL,
+  actor_name VARCHAR(32) NOT NULL DEFAULT '',
+  actor_role ENUM('owner', 'visitor') NOT NULL,
+  content VARCHAR(1000) NOT NULL,
+  client_id VARCHAR(32) NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_event_reply (event_id, created_at),
+  CONSTRAINT fk_event_reply
+    FOREIGN KEY (event_id) REFERENCES share_comment_events (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

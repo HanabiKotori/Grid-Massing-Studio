@@ -65,6 +65,36 @@ body {
   display: block;
 }
 
+/* 编辑器通知跟随画布：B 类不再压住右侧属性栏，和分享页一样在画布右上角 */
+.app.wb .viewport .canvas-toasts {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+}
+
+.app.wb .viewport .canvas-toasts .toast-host {
+  position: absolute;
+}
+
+.app.wb .viewport .canvas-toasts .toast-host.placement-top-right {
+  top: 12px;
+  right: 12px;
+}
+
+.app.wb .viewport .canvas-toasts .toast-host.placement-top-center {
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.app.wb .viewport .canvas-toasts .toast-host.placement-bottom-center {
+  right: auto;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 /* 移动端：面板打开时 3D 区占 64vh，面板关闭时铺满，避免下方留空 */
 .app.wb.mobile .viewport {
   height: 100%;

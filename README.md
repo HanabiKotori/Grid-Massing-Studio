@@ -89,6 +89,7 @@ http://47.95.122.233:5173/
 - 评论登录：发表评论、回复、解决 / 删除自己的评论需要登录云端账号；分享页内置账号登录 / 注册与滑块验证码，登录后保持当前视角与草稿
 - 匿名评论已移除：新评论使用账号用户名，服务端记录 user_id；历史匿名评论保留为只读，作者可在编辑器删除
 - 编辑器回显：右侧「属性 / 评审」Tab 只显示当前云端存档链接的评论，画布显示编号引脚；新评论实时到达并提示未读，作者可直接回复、解决、删除
+- 解决日志：作者和访客每次解决 / 取消解决都会在线程中留下记录；每条记录可继续评论 / 回复，状态讨论不会改变评论状态。状态回复使用 B 类通知和 S7 音效，作者删除他人状态回复使用危险通知和 S8
 - 需要登录 dataService 且有 MySQL；链接绑定 `storage_slots.id`，发布时必须先保存到云端存档；删除存档会同时删除其分享链接
 - 不兼容旧的项目级链接：旧链接不再出现在编辑器，重新分享会生成新 token
 - 不提供链接口令、有效期与访客漫游；实时通道部署注意事项见 `dataService/README.md`
@@ -168,8 +169,9 @@ VITE_MULTIPLAYER_WS_URL=ws://localhost:3010
 
 ```bash
 VITE_CLOUD_STORAGE_ENABLED=true
-VITE_DATA_SERVICE_URL=http://127.0.0.1:3020
 ```
+
+前端统一请求同源 `/api`：本地由 `vite.config.ts` 的 `server.proxy` 转发到 `127.0.0.1:3020`，生产由 nginx 的 `/api/` 转发到 `127.0.0.1:3020`。
 
 3. 打开「数据 → 云端存储」注册 / 登录，保存到任一位置并设为自动保存。
 
@@ -461,6 +463,18 @@ pnpm build
 ```
 
 `dist/` 为纯静态产物，`vite.config.ts` 中 `base: './'` 使资源使用相对路径，可直接放到任意静态服务器或子目录下。构建时已开启 `vue-tsc` 类型检查，类型错误会导致构建失败。
+
+也可以使用仓库内的部署脚本：
+
+```bash
+cp build/deploy.config.example.json build/deploy.config.json
+# 填写 ssh / web.nginx / data / multiplayer 配置后
+node build/deploy-web.mjs
+node build/deploy-data.mjs
+node build/deploy-multiplayer.mjs
+```
+
+`deploy-web` 会上传 `dist`，并按 `web.nginx` 自动写入 `/api/`、`/ws` 反向代理配置；`nginx -t` 或 reload 失败会恢复旧配置。前端统一使用同源 `/api`，本地 `vite.config.ts` 已代理到 `127.0.0.1:3020`。
 
 项目使用 hash 路由，不依赖服务器做路径回退：
 

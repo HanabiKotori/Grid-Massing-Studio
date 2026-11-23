@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import type { CommentAnchor, ShareComment } from '../core/shareApi'
+import type {
+  CommentAnchor,
+  ShareComment,
+  ShareCommentEvent,
+  ShareCommentEventReply,
+} from '../core/shareApi'
 
 const props = withDefaults(
   defineProps<{
@@ -19,6 +24,7 @@ const props = withDefaults(
     commentEnabled?: boolean
     /** 当前访问者是否已登录；未登录只读并展示登录门槛 */
     authLoggedIn?: boolean
+    currentUserId?: number | null
     objectLabel?: (comment: ShareComment) => string
   }>(),
   {
@@ -30,6 +36,7 @@ const props = withDefaults(
     closable: false,
     commentEnabled: true,
     authLoggedIn: true,
+    currentUserId: null,
     objectLabel: undefined,
   },
 )
@@ -37,6 +44,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'select', comment: ShareComment): void
   (e: 'reply', payload: { comment: ShareComment; content: string }): void
+  (e: 'event-reply', payload: { comment: ShareComment; event: ShareCommentEvent; content: string }): void
+  (e: 'remove-event-reply', payload: { comment: ShareComment; event: ShareCommentEvent; reply: ShareCommentEventReply }): void
   (e: 'resolve', comment: ShareComment): void
   (e: 'remove', comment: ShareComment): void
   (e: 'locate', comment: ShareComment): void
@@ -56,6 +65,11 @@ const unreadSet = computed(() => new Set(props.unreadIds ?? []))
 const collapsedThreads = ref<Set<number>>(new Set())
 const pendingDeleteId = ref<number | null>(null)
 let deleteConfirmTimer = 0
+const expandedEventIds = ref<Set<number>>(new Set())
+const expandedEventHistory = ref<Set<number>>(new Set())
+const eventDrafts = ref<Record<number, string>>({})
+const pendingEventReplyDeleteId = ref<number | null>(null)
+let eventDeleteConfirmTimer = 0
 
 const sorted = computed(() =>
   props.comments
@@ -226,10 +240,23 @@ watch(
     ) {
       clearDeleteConfirm()
     }
+    if (pendingEventReplyDeleteId.value !== null) {
+      const replyExists = list.some((comment) =>
+        (comment.events ?? []).some((event) =>
+          event.replies.some(
+            (reply) => reply.id === pendingEventReplyDeleteId.value,
+          ),
+        ),
+      )
+      if (!replyExists) clearEventReplyDeleteConfirm()
+    }
   },
 )
 
-onBeforeUnmount(clearDeleteConfirm)
+onBeforeUnmount(() => {
+  clearDeleteConfirm()
+  clearEventReplyDeleteConfirm()
+})
 
 function canResolve(comment: ShareComment): boolean {
   if (!props.commentEnabled || !props.authLoggedIn) return false
@@ -240,6 +267,107 @@ function canResolve(comment: ShareComment): boolean {
 function canReply(comment: ShareComment): boolean {
   if (!props.commentEnabled || !props.authLoggedIn) return false
   return !comment.legacy
+}
+
+/* ---------- 解决日志与状态讨论 ---------- */
+
+function eventsOf(comment: ShareComment): ShareCommentEvent[] {
+  return (comment.events ?? [])
+    .slice()
+    .sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt) || a.id - b.id)
+}
+
+function visibleEvents(comment: ShareComment): ShareCommentEvent[] {
+  const all = eventsOf(comment)
+  if (expandedEventHistory.value.has(comment.id)) return all
+  return all.slice(-3)
+}
+
+function hiddenEventCount(comment: ShareComment): number {
+  return Math.max(0, eventsOf(comment).length - 3)
+}
+
+function toggleEventHistory(commentId: number) {
+  const next = new Set(expandedEventHistory.value)
+  if (next.has(commentId)) next.delete(commentId)
+  else next.add(commentId)
+  expandedEventHistory.value = next
+}
+
+function eventActionText(event: ShareCommentEvent): string {
+  return event.action === 'resolved'
+    ? '将评论标记为已解决'
+    : '取消了解决状态'
+}
+
+function canDiscussEvent(comment: ShareComment): boolean {
+  if (!props.commentEnabled || !props.authLoggedIn) return false
+  return !comment.legacy
+}
+
+function canDeleteEventReply(reply: ShareCommentEventReply): boolean {
+  if (!props.commentEnabled || !props.authLoggedIn) return false
+  return (
+    props.mode === 'owner' ||
+    reply.mine ||
+    (props.currentUserId != null && reply.actorUserId === props.currentUserId)
+  )
+}
+
+function isEventExpanded(eventId: number): boolean {
+  return expandedEventIds.value.has(eventId)
+}
+
+function toggleEventThread(eventId: number) {
+  const next = new Set(expandedEventIds.value)
+  if (next.has(eventId)) next.delete(eventId)
+  else next.add(eventId)
+  expandedEventIds.value = next
+}
+
+function eventDraft(eventId: number): string {
+  return eventDrafts.value[eventId] ?? ''
+}
+
+function setEventDraft(eventId: number, value: string) {
+  eventDrafts.value = { ...eventDrafts.value, [eventId]: value }
+}
+
+function submitEventReply(comment: ShareComment, event: ShareCommentEvent) {
+  if (!canDiscussEvent(comment)) return
+  const content = eventDraft(event.id).trim()
+  if (!content) return
+  emit('event-reply', { comment, event, content })
+  setEventDraft(event.id, '')
+  if (!isEventExpanded(event.id)) toggleEventThread(event.id)
+}
+
+function clearEventReplyDeleteConfirm() {
+  window.clearTimeout(eventDeleteConfirmTimer)
+  eventDeleteConfirmTimer = 0
+  pendingEventReplyDeleteId.value = null
+}
+
+function requestEventReplyDelete(reply: ShareCommentEventReply) {
+  clearEventReplyDeleteConfirm()
+  pendingEventReplyDeleteId.value = reply.id
+  eventDeleteConfirmTimer = window.setTimeout(() => {
+    pendingEventReplyDeleteId.value = null
+    eventDeleteConfirmTimer = 0
+  }, 4000)
+}
+
+function confirmEventReplyDelete(
+  comment: ShareComment,
+  event: ShareCommentEvent,
+  reply: ShareCommentEventReply,
+) {
+  clearEventReplyDeleteConfirm()
+  emit('remove-event-reply', { comment, event, reply })
+}
+
+function cancelEventReplyDelete() {
+  clearEventReplyDeleteConfirm()
 }
 
 function onComposerFocus() {
@@ -464,6 +592,102 @@ watch(
               </div>
             </div>
           </Transition>
+
+          <div v-if="eventsOf(root).length" class="rp-events">
+            <div class="rp-events-head">
+              <span>解决记录</span>
+              <i />
+              <span>{{ eventsOf(root).length }} 条</span>
+            </div>
+            <div class="rp-event-list">
+              <div
+                v-for="event in visibleEvents(root)"
+                :key="event.id"
+                class="rp-event"
+                :class="event.action"
+              >
+                <div class="rp-event-line">
+                  <span class="rp-event-dot" />
+                  <span class="rp-role" :class="{ visitor: event.actorRole !== 'owner' }">
+                    {{ event.actorRole === 'owner' ? '作者' : '访客' }}
+                  </span>
+                  <b>{{ event.actorName }}</b>
+                  <span class="rp-event-action">{{ eventActionText(event) }}</span>
+                  <span class="rp-time">{{ timeText(event.createdAt) }}</span>
+                  <button
+                    v-if="canDiscussEvent(root) || event.replyCount"
+                    type="button"
+                    class="rp-event-reply-btn"
+                    @click.stop="toggleEventThread(event.id)"
+                  >
+                    {{ event.replyCount ? `回复 ${event.replyCount}` : '回复' }}
+                  </button>
+                </div>
+
+                <div v-if="isEventExpanded(event.id)" class="rp-event-thread">
+                  <div
+                    v-for="eventReply in event.replies"
+                    :key="eventReply.id"
+                    class="rp-event-reply"
+                  >
+                    <div class="rp-event-reply-head">
+                      <span class="rp-role" :class="{ visitor: eventReply.actorRole !== 'owner' }">
+                        {{ eventReply.actorRole === 'owner' ? '作者' : '访客' }}
+                      </span>
+                      <b>{{ eventReply.actorName }}</b>
+                      <span class="rp-time">{{ timeText(eventReply.createdAt) }}</span>
+                      <template v-if="pendingEventReplyDeleteId === eventReply.id">
+                        <button
+                          type="button"
+                          class="rp-event-del confirm"
+                          @click.stop="confirmEventReplyDelete(root, event, eventReply)"
+                        >
+                          确认删除
+                        </button>
+                        <button
+                          type="button"
+                          class="rp-event-del"
+                          @click.stop="cancelEventReplyDelete"
+                        >
+                          取消
+                        </button>
+                      </template>
+                      <button
+                        v-else-if="canDeleteEventReply(eventReply)"
+                        type="button"
+                        class="rp-event-del"
+                        @click.stop="requestEventReplyDelete(eventReply)"
+                      >
+                        删除
+                      </button>
+                    </div>
+                    <p class="rp-event-reply-text">{{ eventReply.content }}</p>
+                  </div>
+
+                  <div v-if="canDiscussEvent(root)" class="rp-event-compose">
+                    <input
+                      :value="eventDraft(event.id)"
+                      :placeholder="`回复这条${event.action === 'resolved' ? '已解决' : '取消解决'}记录…`"
+                      @input="setEventDraft(event.id, ($event.target as HTMLInputElement).value)"
+                      @keydown.enter.prevent="submitEventReply(root, event)"
+                    />
+                    <button type="button" @click.stop="submitEventReply(root, event)">
+                      发送
+                    </button>
+                  </div>
+                  <div v-else class="rp-event-closed">状态讨论只读</div>
+                </div>
+              </div>
+            </div>
+            <button
+              v-if="hiddenEventCount(root)"
+              type="button"
+              class="rp-events-more"
+              @click.stop="toggleEventHistory(root.id)"
+            >
+              {{ expandedEventHistory.has(root.id) ? '收起解决记录' : `展开剩余 ${hiddenEventCount(root)} 条记录` }}
+            </button>
+          </div>
         </article>
       </template>
     </div>

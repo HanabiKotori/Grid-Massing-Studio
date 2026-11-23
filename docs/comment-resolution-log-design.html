@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>评论解决日志与状态讨论 · 设计稿</title>
+<style>
+  :root{
+    --bg:#0b0c0f;--bg1:#101217;--bg2:#15181e;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);
+    --tx:#e9e9e5;--tx2:#a7abb5;--tx3:#707681;--tx4:#4d535e;
+    --accent:#8b9cff;--mint:#5bd6bd;--amber:#ffb86b;--rose:#f07f93;--green:#76d09d;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;color:var(--tx);font-family:var(--sans);-webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(900px 480px at 80% -5%,rgba(139,156,255,.14),transparent 65%),
+      radial-gradient(700px 420px at 5% 16%,rgba(91,214,189,.06),transparent 65%),
+      var(--bg);
+  }
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+    background-size:48px 48px;mask-image:linear-gradient(to bottom,#000,transparent 78%)}
+  .wrap{position:relative;z-index:1;max-width:1260px;margin:0 auto;padding:0 34px}
+  .mono{font-family:var(--mono)}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--tx3)}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--mint);box-shadow:0 0 12px var(--mint)}
+
+  .hero{padding:72px 0 58px;border-bottom:1px solid var(--line)}
+  .hero-top{display:flex;align-items:center;gap:10px;margin-bottom:34px}
+  .ver{font-family:var(--mono);font-size:9px;color:var(--tx3);border:1px solid var(--line2);border-radius:99px;padding:4px 9px}
+  .hero-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr);gap:54px;align-items:end}
+  h1{font-size:clamp(42px,6vw,78px);line-height:1.03;letter-spacing:-.055em;margin:0 0 22px;font-weight:590}
+  h1 em{font-style:normal;color:var(--accent);white-space:nowrap}
+  .hero p{max-width:640px;color:var(--tx2);font-size:14.5px;line-height:1.9;margin:0}
+  .hero-note{display:flex;flex-wrap:wrap;gap:8px;margin-top:28px}
+  .pill{font-family:var(--mono);font-size:8.5px;color:var(--tx2);border:1px solid var(--line2);background:rgba(255,255,255,.02);border-radius:99px;padding:6px 10px}
+  .pill.good{color:var(--green);border-color:rgba(118,208,157,.25);background:rgba(118,208,157,.055)}
+  .pill.warn{color:var(--amber);border-color:rgba(255,184,107,.24);background:rgba(255,184,107,.05)}
+  .hero-panel{border-left:1px solid var(--line2);border-top:1px solid var(--line2);display:grid;grid-template-columns:1fr 1fr}
+  .stat{padding:17px 18px;border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);min-height:96px}
+  .stat b{display:block;font-family:var(--mono);font-size:29px;line-height:1;font-weight:500;letter-spacing:-.05em}
+  .stat b small{font-size:12px;color:var(--tx3);letter-spacing:0}
+  .stat span{display:block;margin-top:9px;font-size:10px;line-height:1.55;color:var(--tx3)}
+  .stat .up{color:var(--green)}
+
+  section{padding:72px 0;border-bottom:1px solid var(--line)}
+  .sec-head{display:grid;grid-template-columns:74px minmax(0,1fr) minmax(250px,.52fr);gap:26px;margin-bottom:36px;align-items:start}
+  .sec-no{font-family:var(--mono);font-size:9.5px;color:var(--tx4);padding-top:6px}
+  .kicker{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;color:var(--accent);text-transform:uppercase;margin-bottom:11px}
+  .kicker::before{content:"";width:14px;height:1px;background:var(--accent)}
+  h2{font-size:clamp(25px,3.1vw,38px);line-height:1.12;letter-spacing:-.045em;margin:0;font-weight:560}
+  .sec-head p{margin:4px 0 0;color:var(--tx3);font-size:11.5px;line-height:1.8}
+
+  .card{border:1px solid var(--line);border-radius:9px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,.008));padding:20px}
+  .card h3{font-size:12px;margin:0 0 8px;font-weight:560}
+  .card p{margin:0;color:var(--tx3);font-size:10.5px;line-height:1.8}
+  .card .num{font-family:var(--mono);font-size:8px;color:var(--tx4);letter-spacing:.08em;margin-bottom:13px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+  /* WHY */
+  .problem{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .problem-card{border:1px solid var(--line);border-radius:8px;padding:18px;background:var(--bg1)}
+  .problem-card .tag{font-family:var(--mono);font-size:7.5px;color:var(--rose);margin-bottom:12px;letter-spacing:.08em}
+  .problem-card h3{font-size:13px;margin:0 0 7px;font-weight:550}
+  .problem-card p{font-size:10px;line-height:1.8;color:var(--tx3);margin:0}
+  .problem-card.good .tag{color:var(--green)}
+  .problem-card .mini-line{margin-top:13px;padding:9px 10px;border:1px solid var(--line);border-radius:4px;background:#0d0f13;font-family:var(--mono);font-size:8px;color:var(--tx4);line-height:1.7}
+
+  /* PRINCIPLES */
+  .principles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .principle{border:1px solid var(--line);border-radius:7px;padding:15px;background:rgba(255,255,255,.016)}
+  .principle .p{font-family:var(--mono);font-size:8px;color:var(--tx4);margin-bottom:13px}
+  .principle h3{font-size:11px;margin:0 0 6px;font-weight:550}
+  .principle p{font-size:9.5px;line-height:1.7;color:var(--tx3);margin:0}
+  .principle.hi{border-color:rgba(139,156,255,.28);background:linear-gradient(180deg,rgba(139,156,255,.07),transparent)}
+
+  /* COMMENT MOCK */
+  .panel-mock{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:16px;align-items:start}
+  .panel-wrap{border:1px solid var(--line2);border-radius:10px;background:#0f1116;overflow:hidden;box-shadow:0 30px 80px -50px #000}
+  .panel-head{height:48px;border-bottom:1px solid var(--line);padding:0 13px;display:flex;align-items:center;gap:9px;background:#12141a}
+  .panel-head b{font-size:10px;font-weight:560}
+  .panel-head .count{font-family:var(--mono);font-size:8px;color:var(--tx4);border:1px solid var(--line);padding:2px 5px;border-radius:3px}
+  .panel-head .sp{flex:1}
+  .panel-tools{display:flex;gap:4px}
+  .panel-tools span{font-size:8px;color:var(--tx4);border:1px solid var(--line);border-radius:3px;padding:3px 5px}
+  .panel-tools span.on{color:var(--tx2);background:rgba(255,255,255,.06)}
+  .comment-scroll{padding:12px;max-height:760px;overflow:hidden;background:linear-gradient(#0f1116,#0d0f13)}
+  .comment-card{border:1px solid var(--line);border-radius:7px;background:#12141a;padding:12px;margin-bottom:9px}
+  .comment-card.on{border-color:rgba(139,156,255,.32);background:linear-gradient(180deg,rgba(139,156,255,.05),#12141a)}
+  .comment-card.resolved{border-color:rgba(118,208,157,.18)}
+  .comment-head{display:flex;align-items:center;gap:6px}
+  .pin{width:19px;height:19px;border-radius:4px;display:grid;place-items:center;background:rgba(139,156,255,.16);border:1px solid rgba(139,156,255,.32);color:var(--accent);font-family:var(--mono);font-size:8px;flex:none}
+  .pin.done{background:rgba(118,208,157,.12);border-color:rgba(118,208,157,.3);color:var(--green)}
+  .comment-head b{font-size:10px;font-weight:560}
+  .role{font-family:var(--mono);font-size:7px;border:1px solid rgba(255,184,107,.25);border-radius:3px;padding:2px 4px;color:var(--amber);background:rgba(255,184,107,.06)}
+  .role.visitor{color:var(--mint);border-color:rgba(91,214,189,.23);background:rgba(91,214,189,.06)}
+  .comment-head .sp{flex:1}
+  .time{font-family:var(--mono);font-size:7.5px;color:var(--tx4)}
+  .status{font-family:var(--mono);font-size:7px;border-radius:3px;padding:2px 5px;border:1px solid rgba(255,184,107,.24);color:var(--amber);background:rgba(255,184,107,.06)}
+  .status.solved{color:var(--green);border-color:rgba(118,208,157,.24);background:rgba(118,208,157,.06)}
+  .comment-text{font-size:10.5px;line-height:1.7;color:var(--tx2);margin:9px 0 8px;padding-left:25px}
+  .comment-meta{display:flex;gap:8px;padding-left:25px;font-family:var(--mono);font-size:7px;color:var(--tx4)}
+  .comment-meta span:first-child{color:var(--tx3)}
+  .comment-actions{display:flex;gap:10px;padding:9px 0 0 25px;border-top:1px solid rgba(255,255,255,.06);margin-top:8px;font-size:8px;color:var(--tx4)}
+  .comment-actions .danger{color:#d98c8c}
+
+  .reply{border-left:1px solid rgba(255,255,255,.12);margin:9px 0 0 25px;padding:8px 0 0 10px}
+  .reply .comment-head b{font-size:9px}
+  .reply .comment-text{font-size:9.5px;padding-left:21px;margin:6px 0 3px}
+  .reply .time{padding-left:21px}
+  .reply .pin{width:16px;height:16px;font-size:7px}
+
+  /* ACTIVITY */
+  .activity{margin:10px 0 0 25px;padding:9px 0 0;border-top:1px dashed rgba(255,255,255,.09)}
+  .activity-head{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+  .activity-head span{font-family:var(--mono);font-size:7px;color:var(--tx4);letter-spacing:.06em}
+  .activity-head .rule{height:1px;flex:1;background:var(--line)}
+  .activity-list{position:relative;padding-left:12px}
+  .activity-list::before{content:"";position:absolute;left:3px;top:5px;bottom:5px;width:1px;background:rgba(255,255,255,.1)}
+  .activity-row{position:relative;display:flex;align-items:flex-start;gap:6px;padding:3px 0;font-size:8px;line-height:1.5;color:var(--tx3)}
+  .activity-row::before{content:"";position:absolute;left:-12px;top:8px;width:5px;height:5px;border-radius:50%;background:#2d323c;border:1px solid #596170}
+  .activity-row.solved::before{background:var(--green);border-color:var(--green);box-shadow:0 0 7px rgba(118,208,157,.45)}
+  .activity-row.unresolved::before{background:var(--tx4);border-color:#78808e}
+  .activity-row b{font-weight:500;color:var(--tx2);white-space:nowrap}
+  .activity-row .role{font-size:6.5px;padding:1px 3px;flex:none}
+  .activity-row .act{flex:1;color:var(--tx3)}
+  .activity-row .at{font-family:var(--mono);font-size:6.5px;color:var(--tx4);white-space:nowrap;flex:none;padding-top:1px}
+  .activity-row .reply-btn{font-family:var(--mono);font-size:6.5px;color:var(--accent);flex:none;padding-top:1px}
+  .activity-thread{margin:4px 0 7px 0;border:1px solid rgba(139,156,255,.16);border-radius:5px;background:rgba(139,156,255,.045);padding:7px 8px}
+  .thread-line{display:flex;align-items:flex-start;gap:5px;font-size:7.5px;line-height:1.6;color:var(--tx3);padding:2px 0}
+  .thread-line b{color:var(--tx2);font-weight:500;white-space:nowrap}
+  .thread-line .role{font-size:6px;padding:1px 3px;flex:none}
+  .thread-line .t{font-family:var(--mono);font-size:6px;color:var(--tx4);margin-left:auto;flex:none;padding-top:1px}
+  .thread-compose{display:flex;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.07)}
+  .thread-compose span{flex:1;height:22px;border:1px solid rgba(255,255,255,.1);border-radius:4px;background:#0c0e12;color:var(--tx4);font-size:7px;padding:5px 6px}
+  .thread-compose i{width:27px;height:22px;border-radius:4px;background:rgba(139,156,255,.18);color:var(--accent);font-style:normal;font-family:var(--mono);font-size:7px;display:grid;place-items:center}
+  .activity-more{font-family:var(--mono);font-size:7px;color:var(--accent);padding:5px 0 0 0;display:inline-block}
+  .activity-note{margin-top:8px;padding:6px 8px;background:rgba(139,156,255,.05);border-left:2px solid rgba(139,156,255,.3);font-size:7.5px;line-height:1.6;color:var(--tx4)}
+
+  /* SIDE NOTES */
+  .side-notes{display:flex;flex-direction:column;gap:9px}
+  .side-note{border:1px solid var(--line);border-radius:7px;background:var(--bg1);padding:13px}
+  .side-note .n{font-family:var(--mono);font-size:7px;color:var(--tx4);margin-bottom:7px}
+  .side-note h3{font-size:9.5px;margin:0 0 5px;font-weight:550}
+  .side-note p{font-size:8.5px;line-height:1.7;color:var(--tx3);margin:0}
+  .side-note.hi{border-color:rgba(139,156,255,.23);background:linear-gradient(180deg,rgba(139,156,255,.06),var(--bg1))}
+  .side-note .sample{font-family:var(--mono);font-size:7.5px;line-height:1.8;color:var(--tx2);background:#0d0f13;border:1px solid var(--line);border-radius:4px;padding:7px 8px;margin-top:8px;white-space:pre-wrap}
+
+  /* DATA */
+  .schema{display:grid;grid-template-columns:1.08fr .92fr;gap:14px}
+  .code{background:#0d0f13;border:1px solid var(--line);border-radius:7px;padding:15px;font-family:var(--mono);font-size:8.3px;line-height:1.8;color:var(--tx3);overflow:auto}
+  .code .k{color:var(--accent)}
+  .code .s{color:var(--mint)}
+  .code .c{color:var(--tx4)}
+  .code .n{color:var(--amber)}
+  .schema-table{width:100%;border-collapse:collapse;font-size:9px}
+  .schema-table th{text-align:left;font-family:var(--mono);font-size:7px;color:var(--tx4);letter-spacing:.08em;font-weight:400;padding:0 0 7px;border-bottom:1px solid var(--line2)}
+  .schema-table td{padding:7px 7px 7px 0;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.6;color:var(--tx3)}
+  .schema-table td:first-child{font-family:var(--mono);font-size:7.5px;color:var(--tx2);white-space:nowrap}
+  .schema-table tr:last-child td{border-bottom:0}
+
+  /* COMPARE */
+  .compare{width:100%;border-collapse:collapse;font-size:9px}
+  .compare th{text-align:left;font-family:var(--mono);font-size:7px;color:var(--tx4);font-weight:400;letter-spacing:.06em;padding:7px 8px;border-bottom:1px solid var(--line2)}
+  .compare td{padding:8px;border-bottom:1px solid var(--line);color:var(--tx3);line-height:1.6}
+  .compare td:first-child{color:var(--tx2)}
+  .compare tr:last-child td{border-bottom:0}
+
+  /* FLOW */
+  .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-top:1px solid var(--line2);margin-top:8px}
+  .flow-step{padding:16px 12px 0 0;position:relative}
+  .flow-step::before{content:"";position:absolute;top:-4px;left:0;width:7px;height:7px;border-radius:50%;background:var(--bg);border:1px solid var(--accent)}
+  .flow-step .n{font-family:var(--mono);font-size:7px;color:var(--tx4);margin-bottom:7px}
+  .flow-step b{display:block;font-size:9px;font-weight:540;margin-bottom:4px}
+  .flow-step span{display:block;font-size:7.5px;line-height:1.65;color:var(--tx4)}
+
+  .decisions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .decision{border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:0 6px 6px 0;padding:14px;background:rgba(255,255,255,.018)}
+  .decision .q{font-family:var(--mono);font-size:7px;color:var(--accent);margin-bottom:5px}
+  .decision b{display:block;font-size:9.5px;font-weight:550;margin-bottom:4px}
+  .decision p{font-size:8.5px;line-height:1.7;color:var(--tx3);margin:0}
+  .decision strong{color:var(--green);font-weight:500}
+
+  footer{padding:30px 0 42px;color:var(--tx4);font-size:8px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  footer .mono{font-size:7px}
+
+  @media(max-width:1000px){
+    .hero-grid{grid-template-columns:1fr}.panel-mock{grid-template-columns:1fr}
+    .principles{grid-template-columns:1fr 1fr}.schema{grid-template-columns:1fr}
+    .flow{grid-template-columns:1fr 1fr;gap:14px}.sec-head{grid-template-columns:50px 1fr}.sec-head p{grid-column:2}
+  }
+  @media(max-width:640px){
+    .wrap{padding:0 18px}.hero{padding:48px 0 42px}section{padding:52px 0}
+    .problem,.grid-2,.grid-3,.principles,.decisions{grid-template-columns:1fr}
+    .flow{grid-template-columns:1fr}.sec-head{grid-template-columns:1fr;gap:10px}.sec-head p{grid-column:1}
+    .comment-card{padding:10px}.comment-text{padding-left:0}.comment-meta,.comment-actions{padding-left:0}
+    .reply{margin-left:0;padding-left:8px}.activity{margin-left:0}.comment-scroll{padding:8px}
+    .schema-table,.compare{display:block;overflow-x:auto;white-space:nowrap}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="hero-top"><span class="dot"></span><span class="eyebrow">Review Comments / Resolution Thread</span><span class="ver">DESIGN · 2026.11</span></div>
+    <div class="hero-grid">
+      <div>
+        <h1>解决状态会变，<br><em>讨论也要留下。</em></h1>
+        <p>作者和访客在标记「已解决 / 取消解决」时，评论线程新增一条不可变日志；<b>每条日志都可以继续评论 / 回复</b>。状态变化、操作者身份和围绕它的讨论，在同一个上下文里被完整保留。</p>
+        <div class="hero-note"><span class="pill good">独立事件表</span><span class="pill">日志可讨论</span><span class="pill">作者 / 访客</span><span class="pill warn">设计稿 · 待确认</span></div>
+      </div>
+      <div class="hero-panel">
+        <div class="stat"><b>2<small> 类</small></b><span>解决 / 取消解决<br>都能产生讨论线程</span></div>
+        <div class="stat"><b>1<small> 条</small></b><span>一条日志一个讨论串<br>和普通评论回复分开</span></div>
+        <div class="stat"><b>0<small> 条</small></b><span>不增加根评论数<br>不改变解决状态</span></div>
+        <div class="stat"><b class="up">∞</b><span>可反复切换<br>历史不覆盖</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="problem">
+      <div class="sec-head">
+        <div class="sec-no">01 / WHY</div>
+        <div><div class="kicker">当前问题</div><h2>现在只看到结果，<br>看不到谁改的、为什么改。</h2></div>
+        <p>`resolved_at` 只保存当前状态和最后操作人；取消再解决会覆盖历史。访客想说“为什么取消”，只能另起一条根评论，脱离上下文。</p>
+      </div>
+      <div class="problem">
+        <div class="problem-card">
+          <div class="tag">BEFORE / 现在</div>
+          <h3>状态覆盖，讨论脱节</h3>
+          <p>评论只显示当前已解决；谁在什么时候取消、为什么取消，刷新后不可见。想追问只能再发一条评论。</p>
+          <div class="mini-line">resolved_at = 15:02<br>resolved_by = 林晓<br><span style="color:#5b6270">// 14:20 → 14:32 的操作与讨论已丢失</span></div>
+        </div>
+        <div class="problem-card good">
+          <div class="tag">AFTER / 设计</div>
+          <h3>状态行 + 就地讨论</h3>
+          <p>每条解决 / 取消记录成为线程中的一条状态行；作者和访客可以就地回复，讨论挂在这条记录上，不污染根评论列表。</p>
+          <div class="mini-line">作者 吴老师 · 标记已解决 · 14:20<br>  ↳ 访客 林晓：好的，我确认下现场<br>  ↳ 作者 吴老师：已调整到 3.2m</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="principles">
+      <div class="sec-head">
+        <div class="sec-no">02 / RULES</div>
+        <div><div class="kicker">设计原则</div><h2>日志是状态记录，<br>讨论挂在日志下。</h2></div>
+        <p>既保留完整操作历史，又让讨论紧贴触发点；不改变现有根评论、回复、筛选和未读模型。</p>
+      </div>
+      <div class="principles">
+        <div class="principle hi"><div class="p">01 / EVENT</div><h3>事件表，不塞评论表</h3><p>解决日志存 `share_comment_events`；日志下的讨论存 `event_replies`，避免被根评论计数和回复树混入。</p></div>
+        <div class="principle"><div class="p">02 / IDENTITY</div><h3>记录操作者身份</h3><p>操作者记录 userId、角色（作者 / 访客）和显示名快照；改名后历史仍可读。</p></div>
+        <div class="principle"><div class="p">03 / STATE</div><h3>状态与讨论分离</h3><p>`resolved_at` 仍是唯一状态源；讨论不反向改变状态，也不会因回复自动重新打开。</p></div>
+        <div class="principle"><div class="p">04 / THREAD</div><h3>一层讨论，不套娃</h3><p>每条状态日志下是一层平铺回复，不继续嵌套；保证移动端可读和数据结构简单。</p></div>
+      </div>
+    </section>
+
+    <section id="ui">
+      <div class="sec-head">
+        <div class="sec-no">03 / UI</div>
+        <div><div class="kicker">评论线程设计图</div><h2>状态行下，<br>可以接着聊。</h2></div>
+        <p>状态行使用更小字号和状态点；右侧「回复」展开当前记录的讨论串。输入框只属于这条状态，不占用根评论回复框。</p>
+      </div>
+
+      <div class="panel-mock">
+        <div class="panel-wrap">
+          <div class="panel-head">
+            <b>评审</b><span class="count">3</span><span class="sp"></span>
+            <div class="panel-tools"><span class="on">全部</span><span>未解决 1</span><span>我的 1</span></div>
+          </div>
+          <div class="comment-scroll">
+            <article class="comment-card on resolved">
+              <div class="comment-head">
+                <span class="pin done">03</span><b>林晓</b><span class="role visitor">访客</span><span class="status solved">已解决</span><span class="sp"></span><span class="time">14:18</span>
+              </div>
+              <p class="comment-text">主通道这边建议再留 1.2m，现场人流会更大。</p>
+              <div class="comment-meta"><span>W1 · 主通道</span><span>#3</span></div>
+              <div class="reply">
+                <div class="comment-head"><span class="pin">04</span><b>吴老师</b><span class="role">作者</span><span class="sp"></span><span class="time">14:19</span></div>
+                <p class="comment-text">收到，我把岛型展台整体往右移了 0.8m，通道净宽已调整。</p>
+              </div>
+
+              <div class="activity">
+                <div class="activity-head"><span>解决记录</span><i class="rule"></i><span>3 条</span></div>
+                <div class="activity-list">
+                  <div class="activity-row solved">
+                    <span class="role">作者</span><b>吴老师</b><span class="act">将评论标记为已解决</span><span class="at">14:20</span><span class="reply-btn">回复 2</span>
+                  </div>
+                  <div class="activity-thread">
+                    <div class="thread-line"><span class="role visitor">访客</span><b>林晓</b><span>好的，我确认一下现场再回复。</span><span class="t">14:22</span></div>
+                    <div class="thread-line"><span class="role">作者</span><b>吴老师</b><span>通道已调到 3.2m，现场照片发你了。</span><span class="t">14:24</span></div>
+                    <div class="thread-compose"><span>回复这条解决记录…</span><i>发送</i></div>
+                  </div>
+                  <div class="activity-row unresolved">
+                    <span class="role">作者</span><b>吴老师</b><span class="act">取消了解决状态</span><span class="at">14:32</span><span class="reply-btn">回复</span>
+                  </div>
+                  <div class="activity-row solved">
+                    <span class="role visitor">访客</span><b>林晓</b><span class="act">将评论标记为已解决</span><span class="at">15:02</span><span class="reply-btn">回复</span>
+                  </div>
+                </div>
+              </div>
+              <div class="activity-note">状态行是日志，不是评论；「回复」只讨论这条解决记录，不改变根评论状态。</div>
+              <div class="comment-actions"><span>取消解决</span><span>回复评论</span><span>删除</span></div>
+            </article>
+
+            <article class="comment-card">
+              <div class="comment-head">
+                <span class="pin">05</span><b>陈默</b><span class="role visitor">访客</span><span class="status solved">已解决</span><span class="sp"></span><span class="time">11:06</span>
+              </div>
+              <p class="comment-text">这个门头 Logo 位置可以再高一点，避免被展台挡住。</p>
+              <div class="comment-meta"><span>W1 · 门头</span><span>#5</span></div>
+              <div class="activity">
+                <div class="activity-head"><span>解决记录</span><i class="rule"></i><span>2 条</span></div>
+                <div class="activity-list">
+                  <div class="activity-row solved"><span class="role visitor">访客</span><b>陈默</b><span class="act">将评论标记为已解决</span><span class="at">11:10</span><span class="reply-btn">回复 1</span></div>
+                  <div class="activity-thread">
+                    <div class="thread-line"><span class="role">作者</span><b>吴老师</b><span>这个高度可以，下午统一改。</span><span class="t">11:12</span></div>
+                  </div>
+                  <div class="activity-row unresolved"><span class="role">作者</span><b>吴老师</b><span class="act">取消了解决状态</span><span class="at">11:14</span><span class="reply-btn">回复</span></div>
+                </div>
+                <span class="activity-more">展开剩余 1 条记录</span>
+              </div>
+              <div class="comment-actions"><span>解决</span><span>回复评论</span><span>删除</span></div>
+            </article>
+
+            <article class="comment-card">
+              <div class="comment-head">
+                <span class="pin">06</span><b>周宁</b><span class="role visitor">访客</span><span class="status">未解决</span><span class="sp"></span><span class="time">10:42</span>
+              </div>
+              <p class="comment-text">这里增加一个接待台会不会更完整？</p>
+              <div class="comment-meta"><span>W1 · 岛型</span><span>#6</span></div>
+              <div class="comment-actions"><span>解决</span><span>回复评论</span><span>删除</span></div>
+            </article>
+          </div>
+        </div>
+
+        <div class="side-notes">
+          <div class="side-note hi">
+            <div class="n">DISCUSSION / 讨论</div>
+            <h3>每条状态都能单独回复</h3>
+            <p>状态行右侧的 `回复` 展开一条平铺讨论串；不嵌套，不占用根评论的回复框。</p>
+            <div class="sample">作者 吴老师 · 标记已解决
+  ↳ 访客 林晓：我确认一下
+  ↳ 作者 吴老师：已调整</div>
+          </div>
+          <div class="side-note">
+            <div class="n">ROLE / 身份</div>
+            <h3>角色跟随操作者</h3>
+            <p>作者操作显示「作者」，访客操作显示「访客」；不是评论原作者的固定角色。</p>
+          </div>
+          <div class="side-note">
+            <div class="n">QUIET / 噪声</div>
+            <h3>不改变根评论计数</h3>
+            <p>状态日志和其回复都不计入根评论数；只在对应状态行显示回复数。</p>
+          </div>
+          <div class="side-note">
+            <div class="n">MOBILE / 移动端</div>
+            <h3>就地展开，不跳页</h3>
+            <p>点击状态行「回复」在卡片内展开输入框；发送后保持展开并追加，不打断当前阅读位置。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="model">
+      <div class="sec-head">
+        <div class="sec-no">04 / DATA</div>
+        <div><div class="kicker">数据模型</div><h2>事件一张表，<br>讨论一张表。</h2></div>
+        <p>解决状态仍由 `share_comments.resolved_at` 决定；日志与讨论是附属数据，随评论级联删除。</p>
+      </div>
+
+      <div class="schema">
+        <div class="code"><span class="c">-- 解决 / 取消解决事件</span>
+<span class="k">CREATE TABLE</span> share_comment_events (
+  id            <span class="n">BIGINT UNSIGNED</span> AUTO_INCREMENT,
+  comment_id    <span class="n">BIGINT UNSIGNED</span> <span class="k">NOT NULL</span>,
+  share_id      <span class="n">BIGINT UNSIGNED</span> <span class="k">NOT NULL</span>,
+  action        <span class="n">ENUM</span>(<span class="s">'resolved'</span>, <span class="s">'unresolved'</span>) <span class="k">NOT NULL</span>,
+  actor_user_id <span class="n">BIGINT UNSIGNED</span> <span class="k">NULL</span>,
+  actor_name    <span class="n">VARCHAR</span>(32) <span class="k">NOT NULL</span> <span class="k">DEFAULT</span> <span class="s">''</span>,
+  actor_role    <span class="n">ENUM</span>(<span class="s">'owner'</span>, <span class="s">'visitor'</span>) <span class="k">NOT NULL</span>,
+  created_at    <span class="n">DATETIME</span> <span class="k">NOT NULL</span> DEFAULT CURRENT_TIMESTAMP,
+  <span class="k">PRIMARY KEY</span> (id),
+  <span class="k">KEY</span> idx_event_comment (comment_id, created_at),
+  <span class="k">CONSTRAINT</span> fk_event_comment
+    <span class="k">FOREIGN KEY</span> (comment_id)
+    <span class="k">REFERENCES</span> share_comments(id) <span class="k">ON DELETE CASCADE</span>
+) ENGINE=InnoDB;
+
+<span class="c">-- 针对某条解决记录的讨论</span>
+<span class="k">CREATE TABLE</span> share_comment_event_replies (
+  id            <span class="n">BIGINT UNSIGNED</span> AUTO_INCREMENT,
+  event_id      <span class="n">BIGINT UNSIGNED</span> <span class="k">NOT NULL</span>,
+  actor_user_id <span class="n">BIGINT UNSIGNED</span> <span class="k">NULL</span>,
+  actor_name    <span class="n">VARCHAR</span>(32) <span class="k">NOT NULL</span> <span class="k">DEFAULT</span> <span class="s">''</span>,
+  actor_role    <span class="n">ENUM</span>(<span class="s">'owner'</span>, <span class="s">'visitor'</span>) <span class="k">NOT NULL</span>,
+  content       <span class="n">VARCHAR</span>(1000) <span class="k">NOT NULL</span>,
+  client_id     <span class="n">VARCHAR</span>(32) <span class="k">NOT NULL</span> <span class="k">DEFAULT</span> <span class="s">''</span>,
+  created_at    <span class="n">DATETIME</span> <span class="k">NOT NULL</span> DEFAULT CURRENT_TIMESTAMP,
+  <span class="k">PRIMARY KEY</span> (id),
+  <span class="k">KEY</span> idx_event_reply (event_id, created_at),
+  <span class="k">CONSTRAINT</span> fk_event_reply
+    <span class="k">FOREIGN KEY</span> (event_id)
+    <span class="k">REFERENCES</span> share_comment_events(id) <span class="k">ON DELETE CASCADE</span>
+) ENGINE=InnoDB;
+</div>
+        <div class="card">
+          <div class="num">RELATION</div>
+          <div class="mini-relation" style="font-family:var(--mono);font-size:8px;line-height:2;color:var(--tx3);background:#0d0f13;border:1px solid var(--line);border-radius:5px;padding:10px;margin-bottom:12px">
+share_links<br>  └─ share_comments<br>       └─ share_comment_events<br>            └─ share_comment_event_replies
+          </div>
+          <table class="schema-table">
+            <thead><tr><th>字段</th><th>用途</th></tr></thead>
+            <tbody>
+              <tr><td>action</td><td>resolved / unresolved，决定日志文案和状态点颜色</td></tr>
+              <tr><td>actorRole</td><td>owner / visitor，表示谁执行了状态操作</td></tr>
+              <tr><td>actorName</td><td>显示名快照；改名不改变历史文案</td></tr>
+              <tr><td>content</td><td>针对该状态记录的讨论内容</td></tr>
+              <tr><td>clientId</td><td>客户端幂等键，避免网络重试重复插入</td></tr>
+            </tbody>
+          </table>
+          <p style="margin-top:12px">删除评论 → 事件级联删除 → 事件回复级联删除；状态日志本身不提供删除按钮。</p>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top:13px">
+        <div class="card">
+          <div class="num">COMMENT JSON</div>
+          <div class="code" style="border:0;padding:0;background:none">{
+  id: 3,
+  content: "主通道…",
+  resolvedAt: "2026-11-23T15:02:00+08:00",
+  resolvedBy: "林晓",
+  events: [{
+    id: 18,
+    action: "resolved",
+    actorName: "吴老师",
+    actorRole: "owner",
+    createdAt: "…14:20",
+    replyCount: 2,
+    replies: [{
+      id: 7,
+      content: "好的，我确认一下现场",
+      actorName: "林晓",
+      actorRole: "visitor",
+      createdAt: "…14:22"
+    }, {
+      id: 8,
+      content: "通道已调到 3.2m",
+      actorName: "吴老师",
+      actorRole: "owner",
+      createdAt: "…14:24"
+    }]
+  }]
+}</div>
+        </div>
+        <div class="card">
+          <div class="num">SSE EVENT</div>
+          <div class="code" style="border:0;padding:0;background:none">{
+  type: "comment.event.replied",
+  commentId: 3,
+  eventId: 18,
+  reply: {
+    id: 7,
+    content: "好的，我确认一下现场",
+    actorName: "林晓",
+    actorRole: "visitor",
+    createdAt: "…14:22"
+  }
+}</div>
+          <p style="margin-top:10px">客户端按 eventId 追加、按 reply.id 去重；根评论的 `comment.updated` 逻辑保持不变。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="compare">
+      <div class="sec-head">
+        <div class="sec-no">05 / DIFFERENCE</div>
+        <div><div class="kicker">两种回复</div><h2>回复评论，<br>还是回复状态。</h2></div>
+        <p>两者都在同一个评论卡片内，但属于不同对象；UI 和数据都不能混在一起。</p>
+      </div>
+      <div class="card">
+        <table class="compare">
+          <thead><tr><th>维度</th><th>普通评论回复</th><th>状态记录回复（新增）</th></tr></thead>
+          <tbody>
+            <tr><td>挂载对象</td><td>根评论 `share_comments.parent_id`</td><td>解决日志 `share_comment_event_replies.event_id`</td></tr>
+            <tr><td>是否会改变解决状态</td><td>不会</td><td>不会</td></tr>
+            <tr><td>是否计入根评论数</td><td>不计入根评论数</td><td>不计入根评论数</td></tr>
+            <tr><td>是否显示在画布引脚</td><td>不增加新引脚，属于线程</td><td>不增加新引脚</td></tr>
+            <tr><td>输入框位置</td><td>评论卡片底部「回复评论」</td><td>状态行右侧「回复」展开就地输入</td></tr>
+            <tr><td>删除权限</td><td>作者 / 回复作者</td><td>作者 / 回复作者</td></tr>
+            <tr><td>通知 / 音效</td><td>现有直接回复 B 类通知 + S7</td><td>B 类通知 + S7；作者删除他人状态回复时 S8 危险通知</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="api">
+      <div class="sec-head">
+        <div class="sec-no">06 / API</div>
+        <div><div class="kicker">接口与实时</div><h2>一条状态，<br>一个独立讨论入口。</h2></div>
+        <p>状态操作沿用现有 PATCH；新增状态回复接口。所有写操作都验证链接、评论、事件归属和登录身份。</p>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="num">RESOLVE / EXISTING</div>
+          <div class="code" style="border:0;padding:0;background:none"><span class="k">PATCH</span> /api/shares/:token/comments/:id
+{
+  "resolved": true
+}
+
+<span class="c">// 事务内：</span>
+<span class="c">// 1. 更新 resolved_at / resolved_by</span>
+<span class="c">// 2. 插入 share_comment_events</span>
+<span class="c">// 3. 返回 { comment, activity }</span></div>
+        </div>
+        <div class="card">
+          <div class="num">EVENT REPLY / NEW</div>
+          <div class="code" style="border:0;padding:0;background:none"><span class="k">POST</span> /api/shares/:token/comments/:id/events/:eventId/replies
+{
+  "content": "好的，我确认一下现场",
+  "clientId": "c-8f2a…"
+}
+
+<span class="c">// 返回 { reply }，广播 comment.event.replied</span>
+<span class="k">DELETE</span> /api/shares/:token/comments/:id/events/:eventId/replies/:replyId</div>
+        </div>
+      </div>
+      <div class="flow" style="margin-top:16px">
+        <div class="flow-step"><span class="n">01</span><b>校验链接</b><span>token 有效，评论未删除；事件必须属于该评论。</span></div>
+        <div class="flow-step"><span class="n">02</span><b>校验权限</b><span>作者或登录访客；评论关闭时访客只读。</span></div>
+        <div class="flow-step"><span class="n">03</span><b>写回复</b><span>插入 event_replies，带 clientId 幂等。</span></div>
+        <div class="flow-step"><span class="n">04</span><b>广播</b><span>`comment.event.replied` 带 commentId / eventId / reply。</span></div>
+        <div class="flow-step"><span class="n">05</span><b>渲染</b><span>按 eventId 定位状态行，就地追加并展开。</span></div>
+      </div>
+    </section>
+
+    <section id="permissions">
+      <div class="sec-head">
+        <div class="sec-no">07 / PERMISSIONS</div>
+        <div><div class="kicker">权限矩阵</div><h2>状态操作与讨论<br>各自受控。</h2></div>
+        <p>解决权限保持不变；状态讨论沿用“登录 + 评论开放”的回复规则，作者始终可管理。</p>
+      </div>
+      <div class="card">
+        <table class="compare">
+          <thead><tr><th>角色</th><th>解决 / 取消</th><th>回复状态记录</th><th>删除状态回复</th><th>日志角色</th></tr></thead>
+          <tbody>
+            <tr><td>作者</td><td>任何评论</td><td>可回复</td><td>可删除任何回复</td><td>作者</td></tr>
+            <tr><td>访客（登录）</td><td>仅自己的评论</td><td>评论开放时可回复</td><td>仅自己的回复</td><td>访客</td></tr>
+            <tr><td>访客（未登录）</td><td>不可</td><td>只读</td><td>不可</td><td>—</td></tr>
+            <tr><td>历史匿名评论</td><td>不可</td><td>不适用（无事件）</td><td>不适用</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="edge">
+      <div class="sec-head">
+        <div class="sec-no">08 / EDGE</div>
+        <div><div class="kicker">边界与验收</div><h2>讨论不能<br>反过来改状态。</h2></div>
+        <p>状态和讨论解耦，所有实时和删除行为都必须可预测。</p>
+      </div>
+      <div class="grid-3">
+        <div class="card"><div class="num">COUNT</div><h3>不计入评论数</h3><p>事件和事件回复都不进入根评论数、未解决数、我的筛选和画布引脚。</p></div>
+        <div class="card"><div class="num">SOUND</div><h3>状态回复发声</h3><p>状态回复使用 B 类通知 + S7；作者删除他人状态回复使用危险通知 + S8。</p></div>
+        <div class="card"><div class="num">DELETE</div><h3>随评论级联删除</h3><p>评论删除时事件和讨论一起删除；删除状态回复只删除该回复。</p></div>
+        <div class="card"><div class="num">LEGACY</div><h3>旧状态无历史</h3><p>旧已解决评论没有事件时不伪造历史；后续新操作开始记录。</p></div>
+        <div class="card"><div class="num">IDEMPOTENT</div><h3>重复操作不重复写</h3><p>状态相同直接返回；回复用 clientId 去重，避免双击产生两条。</p></div>
+        <div class="card"><div class="num">REALTIME</div><h3>状态行就地追加</h3><p>收到 SSE 后按 eventId 找到状态行；保持展开和滚动位置，不重置整个面板。</p></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="num">ACCEPTANCE</div>
+        <p>① 作者解决访客评论，日志出现且可回复；② 访客回复该日志，作者收到 B 类通知 + S7 并看到同一状态行下的讨论；③ 取消解决再解决，产生两条独立日志和各自讨论；④ 日志/讨论不改变根评论数、不增加画布引脚；⑤ 关闭评论后访客不能新增状态回复；⑥ 删除根评论后事件与讨论全部消失。</p>
+      </div>
+    </section>
+
+    <section id="decisions">
+      <div class="sec-head">
+        <div class="sec-no">09 / DECISIONS</div>
+        <div><div class="kicker">需要拍板</div><h2>三个细节，<br>确认后落代码。</h2></div>
+        <p>其余交互按设计图默认执行；这三个点会影响通知和数据结构。</p>
+      </div>
+      <div class="decisions">
+        <div class="decision"><div class="q">Q.01 / NOTIFY · CONFIRMED</div><b>状态回复要通知</b><p><strong>已选：B 类通知 + S7</strong>。只通知状态记录作者与根评论作者；自己回复不通知。作者删除他人状态回复使用危险通知 + S8。</p></div>
+        <div class="decision"><div class="q">Q.02 / NEST · CONFIRMED</div><b>一层平铺</b><p><strong>已选：一层平铺</strong>。所有回复挂在事件下，不继续回复某条状态回复；移动端更清晰，也避免数据无限树。</p></div>
+        <div class="decision"><div class="q">Q.03 / VISIBILITY · CONFIRMED</div><b>最近 3 条常驻</b><p><strong>已选：最近 3 条</strong>，更多折叠为「展开剩余 N 条」；展开状态只在当前面板保持，不写入场景。</p></div>
+        <div class="decision"><div class="q">Q.04 / DELETE · CONFIRMED</div><b>作者与回复作者可删</b><p><strong>已选：作者与回复作者可删</strong>，沿用普通评论删除的二次确认；删除不改变解决状态和日志。</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>评论解决日志与状态讨论 · 设计稿 v1 · 2026-11-23</span>
+    <span class="mono">EVENT LOG · EVENT REPLIES · AUTHOR / VISITOR</span>
+  </footer>
+</div>
+</body>
+</html>

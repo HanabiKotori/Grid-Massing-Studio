@@ -7,6 +7,13 @@ export default defineConfig({
   server: {
     port: 5173,
     host: '0.0.0.0',
+    proxy: {
+      // 本地开发与生产保持同一套同源 /api 路径
+      '/api': {
+        target: 'http://127.0.0.1:3020',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     chunkSizeWarningLimit: 900,

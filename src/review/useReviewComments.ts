@@ -10,6 +10,8 @@ import {
   shareApi,
   type ReviewEvent,
   type ShareComment,
+  type ShareCommentEvent,
+  type ShareCommentEventReply,
 } from '../core/shareApi'
 import {
   openShareStream,
@@ -23,6 +25,27 @@ interface Options {
   /** 需要登录、有场景且当前存档已有分享链接 */
   enabled: Ref<boolean>
   onNewComment?: (comment: ShareComment) => void
+  onCommentUpdated?: (
+    comment: ShareComment,
+    before: ShareComment | null,
+    activity?: ShareCommentEvent,
+  ) => void
+  onCommentDeleted?: (
+    removed: ShareComment | null,
+    actorUserId?: number,
+    actorRole?: 'owner' | 'visitor',
+  ) => void
+  onEventReply?: (
+    comment: ShareComment,
+    event: ShareCommentEvent,
+    reply: ShareCommentEventReply,
+  ) => void
+  onEventReplyDeleted?: (
+    comment: ShareComment,
+    event: ShareCommentEvent,
+    reply: ShareCommentEventReply,
+    actorUserId?: number,
+  ) => void
   onError?: (message: string) => void
   isPanelOpen?: () => boolean
 }
@@ -39,6 +62,50 @@ function mergeComment(list: ShareComment[], next: ShareComment): ShareComment[] 
   const copy = list.slice()
   copy[index] = { ...next, mine: next.mine || copy[index].mine }
   return copy
+}
+
+function updateEventReply(
+  list: ShareComment[],
+  commentId: number,
+  eventId: number,
+  reply: ShareCommentEventReply,
+): ShareComment[] {
+  return list.map((comment) => {
+    if (comment.id !== commentId) return comment
+    return {
+      ...comment,
+      events: (comment.events ?? []).map((event) => {
+        if (event.id !== eventId) return event
+        const index = event.replies.findIndex((item) => item.id === reply.id)
+        const replies =
+          index < 0
+            ? [...event.replies, reply]
+            : event.replies.map((item) =>
+                item.id === reply.id ? { ...item, ...reply } : item,
+              )
+        return { ...event, replies, replyCount: replies.length }
+      }),
+    }
+  })
+}
+
+function deleteEventReply(
+  list: ShareComment[],
+  commentId: number,
+  eventId: number,
+  replyId: number,
+): ShareComment[] {
+  return list.map((comment) => {
+    if (comment.id !== commentId) return comment
+    return {
+      ...comment,
+      events: (comment.events ?? []).map((event) => {
+        if (event.id !== eventId) return event
+        const replies = event.replies.filter((item) => item.id !== replyId)
+        return { ...event, replies, replyCount: replies.length }
+      }),
+    }
+  })
 }
 
 function readSeen(key: string): number {
@@ -142,17 +209,62 @@ export function useReviewComments(options: Options) {
       return
     }
     if (event.type === 'comment.updated') {
-      comments.value = mergeComment(
-        comments.value,
-        event.comment as ShareComment,
-      )
+      const comment = event.comment as ShareComment
+      const before =
+        comments.value.find((item) => item.id === comment.id) ?? null
+      comments.value = mergeComment(comments.value, comment)
+      options.onCommentUpdated?.(comment, before, event.activity)
       return
     }
     if (event.type === 'comment.deleted') {
       const id = Number(event.id)
+      const removed =
+        comments.value.find((item) => item.id === id) ?? null
       comments.value = comments.value.filter(
         (item) => item.id !== id && item.parentId !== id,
       )
+      options.onCommentDeleted?.(
+        removed,
+        event.actorUserId,
+        event.actorRole,
+      )
+      return
+    }
+    if (event.type === 'comment.event.replied') {
+      const commentId = Number(event.commentId)
+      const eventId = Number(event.eventId)
+      const comment = comments.value.find((item) => item.id === commentId)
+      if (!comment) return
+      comments.value = updateEventReply(
+        comments.value,
+        commentId,
+        eventId,
+        event.reply,
+      )
+      const activity = (comment.events ?? []).find((item) => item.id === eventId)
+      if (activity) options.onEventReply?.(comment, activity, event.reply)
+      return
+    }
+    if (event.type === 'comment.event.reply.deleted') {
+      const commentId = Number(event.commentId)
+      const eventId = Number(event.eventId)
+      const comment = comments.value.find((item) => item.id === commentId)
+      if (!comment) return
+      comments.value = deleteEventReply(
+        comments.value,
+        commentId,
+        eventId,
+        Number(event.reply.id),
+      )
+      const activity = (comment.events ?? []).find((item) => item.id === eventId)
+      if (activity) {
+        options.onEventReplyDeleted?.(
+          comment,
+          activity,
+          event.reply,
+          event.actorUserId,
+        )
+      }
       return
     }
     if (event.type === 'revoked') {
@@ -239,6 +351,61 @@ export function useReviewComments(options: Options) {
     }
   }
 
+  async function replyEvent(
+    comment: ShareComment,
+    event: ShareCommentEvent,
+    content: string,
+  ) {
+    const text = content.trim()
+    if (!text) return null
+    try {
+      const { reply } = await shareApi.createEventReply(
+        comment.shareToken,
+        comment.id,
+        event.id,
+        {
+          content: text,
+          clientId: `e${Date.now().toString(36)}`,
+        },
+      )
+      comments.value = updateEventReply(
+        comments.value,
+        comment.id,
+        event.id,
+        reply,
+      )
+      return reply
+    } catch (err) {
+      options.onError?.(err instanceof Error ? err.message : '回复状态记录失败')
+      return null
+    }
+  }
+
+  async function removeEventReply(
+    comment: ShareComment,
+    event: ShareCommentEvent,
+    reply: ShareCommentEventReply,
+  ) {
+    const before = comments.value
+    comments.value = deleteEventReply(
+      comments.value,
+      comment.id,
+      event.id,
+      reply.id,
+    )
+    try {
+      await shareApi.deleteEventReply(
+        comment.shareToken,
+        comment.id,
+        event.id,
+        reply.id,
+      )
+    } catch (err) {
+      comments.value = before
+      options.onError?.(err instanceof Error ? err.message : '删除状态回复失败')
+    }
+  }
+
   watch(
     [() => options.shareToken.value, () => options.enabled.value],
     () => {
@@ -265,5 +432,7 @@ export function useReviewComments(options: Options) {
     resolve,
     reply,
     remove,
+    replyEvent,
+    removeEventReply,
   }
 }

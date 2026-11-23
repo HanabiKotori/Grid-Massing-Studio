@@ -13,7 +13,13 @@
     "keep": [
       ".user.ini",
       ".htaccess"
-    ]
+    ],
+    "nginx": {
+      "path": "/www/server/panel/vhost/nginx/extension/your-site/proxy.conf",
+      "apiTarget": "http://127.0.0.1:3020",
+      "wsTarget": "http://127.0.0.1:3010",
+      "reloadCommand": "systemctl reload nginx"
+    }
   },
   "multiplayer": {
     "remotePath": "/www/wwwroot/多人",

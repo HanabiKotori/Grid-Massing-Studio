@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>统一右侧栏与登录窗口 · 设计稿</title>
+<style>
+  :root{
+    --bg:#0b0c0f;--bg1:#101217;--bg2:#15181e;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);
+    --tx:#e9e9e5;--tx2:#a7abb5;--tx3:#707681;--tx4:#4d535e;
+    --accent:#8b9cff;--mint:#5bd6bd;--amber:#ffb86b;--rose:#f07f93;--green:#76d09d;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;color:var(--tx);font-family:var(--sans);-webkit-font-smoothing:antialiased;
+    background:radial-gradient(900px 520px at 82% -5%,rgba(139,156,255,.14),transparent 64%),radial-gradient(700px 420px at 5% 14%,rgba(91,214,189,.055),transparent 65%),var(--bg)}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(to bottom,#000,transparent 78%)}
+  .wrap{position:relative;z-index:1;max-width:1260px;margin:0 auto;padding:0 34px}
+  .mono{font-family:var(--mono)}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--tx3)}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--mint);box-shadow:0 0 12px var(--mint)}
+
+  .hero{padding:72px 0 58px;border-bottom:1px solid var(--line)}
+  .hero-top{display:flex;align-items:center;gap:10px;margin-bottom:34px}
+  .ver{font-family:var(--mono);font-size:9px;color:var(--tx3);border:1px solid var(--line2);border-radius:99px;padding:4px 9px}
+  .hero-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(330px,.8fr);gap:54px;align-items:end}
+  h1{font-size:clamp(42px,6vw,78px);line-height:1.03;letter-spacing:-.055em;margin:0 0 22px;font-weight:590}
+  h1 em{font-style:normal;color:var(--accent);white-space:nowrap}
+  .hero p{max-width:640px;color:var(--tx2);font-size:14.5px;line-height:1.9;margin:0}
+  .hero-note{display:flex;flex-wrap:wrap;gap:8px;margin-top:28px}
+  .pill{font-family:var(--mono);font-size:8.5px;color:var(--tx2);border:1px solid var(--line2);background:rgba(255,255,255,.02);border-radius:99px;padding:6px 10px}
+  .pill.good{color:var(--green);border-color:rgba(118,208,157,.25);background:rgba(118,208,157,.055)}
+  .pill.warn{color:var(--amber);border-color:rgba(255,184,107,.24);background:rgba(255,184,107,.05)}
+  .hero-panel{border-left:1px solid var(--line2);border-top:1px solid var(--line2);display:grid;grid-template-columns:1fr 1fr}
+  .stat{padding:17px 18px;border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);min-height:96px}
+  .stat b{display:block;font-family:var(--mono);font-size:29px;line-height:1;font-weight:500;letter-spacing:-.05em}
+  .stat b small{font-size:12px;color:var(--tx3);letter-spacing:0}
+  .stat span{display:block;margin-top:9px;font-size:10px;line-height:1.55;color:var(--tx3)}
+  .stat .up{color:var(--green)}
+
+  section{padding:72px 0;border-bottom:1px solid var(--line)}
+  .sec-head{display:grid;grid-template-columns:74px minmax(0,1fr) minmax(250px,.52fr);gap:26px;margin-bottom:36px;align-items:start}
+  .sec-no{font-family:var(--mono);font-size:9.5px;color:var(--tx4);padding-top:6px}
+  .kicker{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;color:var(--accent);text-transform:uppercase;margin-bottom:11px}
+  .kicker::before{content:"";width:14px;height:1px;background:var(--accent)}
+  h2{font-size:clamp(25px,3.1vw,38px);line-height:1.12;letter-spacing:-.045em;margin:0;font-weight:560}
+  .sec-head p{margin:4px 0 0;color:var(--tx3);font-size:11.5px;line-height:1.8}
+
+  .card{border:1px solid var(--line);border-radius:9px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,.008));padding:20px}
+  .card h3{font-size:12px;margin:0 0 8px;font-weight:560}
+  .card p{margin:0;color:var(--tx3);font-size:10.5px;line-height:1.8}
+  .card .num{font-family:var(--mono);font-size:8px;color:var(--tx4);letter-spacing:.08em;margin-bottom:13px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+  /* AUDIT */
+  .audit{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .audit-card{border:1px solid var(--line);border-radius:8px;padding:17px;background:var(--bg1)}
+  .audit-card .tag{font-family:var(--mono);font-size:7.5px;color:var(--rose);margin-bottom:11px;letter-spacing:.08em}
+  .audit-card h3{font-size:12.5px;margin:0 0 7px;font-weight:550}
+  .audit-card p{font-size:10px;line-height:1.8;color:var(--tx3);margin:0}
+  .audit-card .mini-code{margin-top:11px;padding:8px 9px;border:1px solid var(--line);border-radius:4px;background:#0d0f13;font-family:var(--mono);font-size:7.8px;line-height:1.7;color:var(--tx4)}
+  .audit-card.good .tag{color:var(--green)}
+
+  /* RIGHT RAIL MOCKS */
+  .rail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}
+  .rail{border:1px solid var(--line2);border-radius:9px;background:#0f1116;overflow:hidden;min-height:560px;display:flex;flex-direction:column;box-shadow:0 30px 80px -55px #000}
+  .rail-top{display:flex;gap:4px;height:40px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--surface);flex:none}
+  .rail-tab{flex:1;display:flex;align-items:center;justify-content:center;height:26px;border-radius:4px;font-size:10px;color:var(--tx3)}
+  .rail-tab.on{background:#1a1d24;color:var(--tx)}
+  .rail-tab .badge{font-family:var(--mono);font-size:7px;color:var(--accent);background:rgba(139,156,255,.12);padding:1px 4px;border-radius:5px;margin-left:3px}
+  .rail-subhead{height:34px;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid var(--line);flex:none}
+  .rail-subhead b{font-size:10px;font-weight:550}
+  .rail-subhead .meta{margin-left:auto;font-family:var(--mono);font-size:6.8px;color:var(--tx4)}
+  .rail-subhead .live{font-family:var(--mono);font-size:6.5px;color:var(--green);background:rgba(118,208,157,.07);border:1px solid rgba(118,208,157,.18);padding:2px 4px;border-radius:3px}
+  .rail-body{padding:10px 10px 14px;overflow:hidden;flex:1}
+  .rail-empty{margin:2px 0;padding:12px 10px;border:1px solid var(--line);border-radius:5px;background:rgba(255,255,255,.012);font-size:8px;line-height:1.7;color:var(--tx3)}
+  .rail-empty::before{content:"";display:block;width:16px;height:1px;margin-bottom:7px;background:var(--line2)}
+  .rail-obj{font-size:11px;font-weight:600;margin:1px 0 8px}
+  .rail-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+  .rail-stats div{border:1px solid var(--line);background:#12141a;border-radius:4px;padding:6px}
+  .rail-stats span{display:block;font-size:6.5px;color:var(--tx4);text-transform:uppercase;letter-spacing:.05em}
+  .rail-stats b{display:block;margin-top:2px;font-family:var(--mono);font-size:9px;font-weight:500;color:var(--tx2)}
+  .rail-field{display:flex;align-items:center;gap:6px;margin:7px 0;font-size:7.5px;color:var(--tx3)}
+  .rail-field span{flex:1}
+  .rail-field i{display:block;height:4px;width:58%;background:rgba(255,255,255,.08);border-radius:3px}
+  .rail-field b{font-family:var(--mono);font-size:7px;color:var(--tx2)}
+  .rail-chips{display:flex;gap:3px;height:34px;align-items:center;padding:0 10px;border-bottom:1px solid rgba(255,255,255,.045);flex:none}
+  .rail-chip{font-size:7px;color:var(--tx3);padding:3px 6px;border-radius:3px}
+  .rail-chip.on{background:#1a1d24;color:var(--tx)}
+  .rail-card{border:1px solid var(--line);border-radius:6px;background:#12141a;padding:9px;margin-bottom:7px}
+  .rail-card-head{display:flex;align-items:center;gap:4px}
+  .rail-pin{width:15px;height:15px;display:grid;place-items:center;border-radius:3px;background:rgba(139,156,255,.15);border:1px solid rgba(139,156,255,.28);color:var(--accent);font-family:var(--mono);font-size:6px}
+  .rail-card-head b{font-size:8px}
+  .rail-role{font-family:var(--mono);font-size:5.8px;padding:1px 3px;border-radius:2px;color:var(--mint);border:1px solid rgba(91,214,189,.2)}
+  .rail-time{margin-left:auto;font-family:var(--mono);font-size:6px;color:var(--tx4)}
+  .rail-card p{margin:6px 0 4px 19px;font-size:8px;line-height:1.6;color:var(--tx3)}
+  .rail-actions{display:flex;gap:7px;margin-left:19px;font-size:6.5px;color:var(--tx4)}
+  .rail-foot{margin-top:auto;border-top:1px solid var(--line);padding:8px 10px;font-size:7px;color:var(--tx4);display:flex;align-items:center;gap:5px}
+  .rail-foot b{color:var(--tx2);font-weight:500}
+  .rail-foot .btn{margin-left:auto;background:rgba(139,156,255,.16);border:1px solid rgba(139,156,255,.25);color:var(--accent);border-radius:3px;padding:3px 6px;font-family:var(--mono);font-size:6px}
+  .guide{display:flex;align-items:center;gap:6px;margin:9px 0 0;font-family:var(--mono);font-size:7px;color:var(--tx4)}
+  .guide::before{content:"";width:18px;height:1px;background:var(--line2)}
+
+  /* AUTH DIALOG */
+  .auth-showcase{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+  .auth-stage{border:1px solid var(--line);border-radius:9px;background:radial-gradient(70% 60% at 50% 38%,#171a20,#0d0f13);padding:24px;display:flex;justify-content:center;min-height:650px}
+  .auth-dialog{width:min(430px,100%);align-self:center;border:1px solid var(--line2);border-radius:12px;background:#0e0f12;box-shadow:0 40px 90px -30px #000;overflow:hidden}
+  .auth-head{display:flex;align-items:flex-start;gap:10px;padding:18px 20px 12px}
+  .auth-mark{width:28px;height:28px;flex:none;display:grid;place-items:center;border:1px solid rgba(139,156,255,.25);border-radius:7px;background:rgba(139,156,255,.09);color:var(--accent);font-size:14px}
+  .auth-kicker{font-family:var(--mono);font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx4);margin:0 0 4px}
+  .auth-head h3{margin:0;font-size:16px;line-height:1.3;font-weight:580;letter-spacing:-.02em}
+  .auth-head p{margin:4px 0 0;font-size:9px;line-height:1.6;color:var(--tx3)}
+  .auth-close{margin-left:auto;width:25px;height:25px;border:1px solid transparent;border-radius:5px;background:none;color:var(--tx3);font-size:16px;line-height:1;flex:none}
+  .auth-tabs{display:flex;gap:4px;margin:0 20px;padding:3px;border:1px solid var(--line);border-radius:6px;background:#0b0c0e}
+  .auth-tab{flex:1;height:26px;border:0;border-radius:4px;background:none;font-size:10px;color:var(--tx3)}
+  .auth-tab.on{background:#191c22;color:var(--tx)}
+  .auth-body{padding:12px 20px 0}
+  .auth-field{display:block;margin-top:9px}
+  .auth-field > span{display:block;margin-bottom:4px;font-family:var(--mono);font-size:7px;letter-spacing:.08em;text-transform:uppercase;color:var(--tx4)}
+  .auth-input{height:34px;border:1px solid var(--line);border-radius:5px;background:#101217;display:flex;align-items:center;padding:0 9px;font-size:9.5px;color:var(--tx4)}
+  .auth-captcha{margin-top:11px;position:relative}
+  .auth-pic{height:128px;border:1px solid var(--line);border-radius:6px;background:
+    radial-gradient(circle at 72% 34%,rgba(190,95,151,.7) 0 11%,transparent 12%),
+    radial-gradient(circle at 26% 28%,rgba(93,164,137,.65) 0 9%,transparent 10%),
+    radial-gradient(circle at 82% 78%,rgba(72,160,86,.7) 0 7%,transparent 8%),
+    linear-gradient(128deg,#78a65c 0 28%,#7b8560 28% 55%,#645d82 55% 78%,#4f8b6a 78%);position:relative;overflow:hidden}
+  .auth-pic::before{content:"";position:absolute;left:12%;top:22%;width:34%;height:42%;border:2px solid rgba(255,255,255,.35);border-radius:7px;transform:rotate(-8deg)}
+  .auth-pic::after{content:"";position:absolute;left:55%;top:38%;width:26px;height:26px;border:2px dashed #fff;border-radius:5px}
+  .auth-pic .refresh{position:absolute;right:6px;top:6px;font-size:7px;background:rgba(10,11,14,.72);border:1px solid rgba(255,255,255,.16);border-radius:3px;padding:3px 5px;color:var(--tx2)}
+  .auth-pic .slider{position:absolute;left:5px;right:5px;bottom:5px;height:8px;background:rgba(10,11,14,.65);border-radius:3px;overflow:hidden}
+  .auth-pic .slider::before{content:"";display:block;width:19%;height:100%;background:rgba(139,156,255,.42)}
+  .auth-slider{height:33px;margin-top:7px;border:1px solid var(--line);border-radius:5px;background:#101217;display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--tx3)}
+  .auth-error{display:none;margin:10px 0 0;padding:6px 8px;border:1px solid rgba(235,87,87,.22);border-radius:4px;background:rgba(235,87,87,.055);font-size:8px;color:#e98a8a}
+  .auth-foot{display:flex;align-items:center;gap:8px;margin-top:13px;padding:11px 20px;border-top:1px solid var(--line);background:#0b0c0e}
+  .auth-foot .note{font-size:7.5px;line-height:1.5;color:var(--tx4);flex:1}
+  .auth-btn{height:30px;padding:0 13px;border-radius:5px;border:1px solid var(--line2);background:#15181e;color:var(--tx2);font-size:9px}
+  .auth-btn.pri{border-color:transparent;background:var(--accent);color:#fff;min-width:74px}
+  .auth-context{margin-top:10px;font-family:var(--mono);font-size:7px;color:var(--tx4);text-align:center}
+  .auth-badge{display:inline-flex;align-items:center;gap:5px;margin-bottom:10px;font-family:var(--mono);font-size:7px;color:var(--tx3);border:1px solid var(--line);border-radius:99px;padding:4px 7px}
+  .auth-badge i{width:4px;height:4px;border-radius:50%;background:var(--mint)}
+
+  .auth-mobile{margin-top:14px;border:1px solid var(--line);border-radius:9px;background:var(--bg1);padding:18px;display:grid;grid-template-columns:210px 1fr;gap:22px;align-items:center}
+  .phone{width:210px;height:430px;border:5px solid #242830;border-radius:24px;background:#0b0c0f;overflow:hidden;box-shadow:0 20px 45px -26px #000;position:relative}
+  .phone::before{content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);width:50px;height:4px;border-radius:2px;background:#2c3038;z-index:1}
+  .phone-screen{height:100%;padding:24px 12px 10px;display:flex;flex-direction:column}
+  .phone .auth-head{padding:8px 8px 8px}
+  .phone .auth-mark{display:none}
+  .phone .auth-head h3{font-size:14px}
+  .phone .auth-head p{font-size:7.5px}
+  .phone .auth-close{width:20px;height:20px;font-size:13px}
+  .phone .auth-tabs{margin:0 8px}
+  .phone .auth-body{padding:8px 8px 0}
+  .phone .auth-pic{height:104px}
+  .phone .auth-foot{padding:8px;margin-top:auto;flex-direction:column;align-items:stretch;gap:5px}
+  .phone .auth-foot .note{display:none}
+  .phone .auth-btn{width:100%;height:30px}
+  .phone .auth-btn.pri{order:-1}
+  .mobile-copy h3{font-size:15px;margin:0 0 8px;font-weight:560}
+  .mobile-copy p{font-size:10px;line-height:1.8;color:var(--tx3);margin:0 0 14px}
+  .mobile-copy ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+  .mobile-copy li{font-size:9px;line-height:1.6;color:var(--tx3);padding-left:13px;position:relative}
+  .mobile-copy li::before{content:"";position:absolute;left:0;top:6px;width:5px;height:5px;border:1px solid var(--accent);border-radius:50%}
+
+  .context-table{width:100%;border-collapse:collapse;font-size:9px}
+  .context-table th{text-align:left;font-family:var(--mono);font-size:7px;color:var(--tx4);font-weight:400;letter-spacing:.06em;padding:7px 8px;border-bottom:1px solid var(--line2)}
+  .context-table td{padding:8px;border-bottom:1px solid var(--line);color:var(--tx3);line-height:1.6}
+  .context-table td:first-child{color:var(--tx2)}
+  .context-table tr:last-child td{border-bottom:0}
+  .context-table .yes{color:var(--green)}
+
+  .states{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .state{border:1px solid var(--line);border-radius:6px;background:#0e1014;padding:12px}
+  .state .n{font-family:var(--mono);font-size:6.5px;color:var(--accent);margin-bottom:8px}
+  .state b{display:block;font-size:9px;font-weight:550;margin-bottom:4px}
+  .state span{display:block;font-size:7.5px;line-height:1.65;color:var(--tx4)}
+
+  .decisions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .decision{border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:0 6px 6px 0;padding:14px;background:rgba(255,255,255,.018)}
+  .decision .q{font-family:var(--mono);font-size:7px;color:var(--accent);margin-bottom:5px}
+  .decision b{display:block;font-size:9.5px;font-weight:550;margin-bottom:4px}
+  .decision p{font-size:8.5px;line-height:1.7;color:var(--tx3);margin:0}
+  .decision strong{color:var(--green);font-weight:500}
+
+  footer{padding:30px 0 42px;color:var(--tx4);font-size:8px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  footer .mono{font-size:7px}
+
+  @media(max-width:1050px){
+    .hero-grid{grid-template-columns:1fr}
+    .rail-grid{grid-template-columns:1fr 1fr}
+    .auth-showcase{grid-template-columns:1fr}
+    .audit{grid-template-columns:1fr}
+    .sec-head{grid-template-columns:50px 1fr}
+    .sec-head p{grid-column:2}
+  }
+  @media(max-width:720px){
+    .wrap{padding:0 18px}.hero{padding:48px 0 42px}section{padding:52px 0}
+    .rail-grid,.grid-2,.grid-3,.audit,.auth-showcase,.decisions,.states{grid-template-columns:1fr}
+    .auth-mobile{grid-template-columns:1fr}.phone{margin:0 auto}
+    .sec-head{grid-template-columns:1fr;gap:10px}.sec-head p{grid-column:1}
+    .context-table{display:block;overflow-x:auto;white-space:nowrap}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="hero-top"><span class="dot"></span><span class="eyebrow">Right Rail / Shared Auth</span><span class="ver">DESIGN · 2026.11</span></div>
+    <div class="hero-grid">
+      <div>
+        <h1>一个右侧栏，<br><em>一个登录窗口。</em></h1>
+        <p>属性与评审共用同一套右栏骨架；云端存储与评论登录共用同一个认证弹窗。只保留 40px Tab 栏、34px 内容头和一个 430px 登录窗口，不再让空状态、标题层级和底部操作各自漂移。</p>
+        <div class="hero-note"><span class="pill good">右栏已按此方向调整</span><span class="pill">登录窗口先出设计</span><span class="pill warn">未改登录代码</span></div>
+      </div>
+      <div class="hero-panel">
+        <div class="stat"><b>40<small>px</small></b><span>固定 Tab 栏<br>属性 / 评审等宽</span></div>
+        <div class="stat"><b>34<small>px</small></b><span>统一内容头<br>标题、状态、工具</span></div>
+        <div class="stat"><b>1<small> 个</small></b><span>共用认证组件<br>两个入口只换文案</span></div>
+        <div class="stat"><b class="up">0<small> 处</small></b><span>空评论时<br>裸空区域</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="audit">
+      <div class="sec-head">
+        <div class="sec-no">01 / AUDIT</div>
+        <div><div class="kicker">现状拆解</div><h2>不是颜色问题，<br>是组件骨架不一致。</h2></div>
+        <p>右栏用绝对定位 Tab + 子面板 padding 顶开；登录分别由云端存储和分享评论两个弹窗实现，所以标题、宽度、底部按钮和验证码比例都不同。</p>
+      </div>
+      <div class="audit">
+        <div class="audit-card">
+          <div class="tag">RIGHT RAIL / BEFORE</div>
+          <h3>属性 / 评审各自开头</h3>
+          <p>Tab 绝对定位，内容靠 padding-top 让位；属性头 34px，评审头 40px。无评论时只剩大段裸文本，和有内容时的卡片密度不一致。</p>
+          <div class="mini-code">tab: absolute + padding-top 36<br>property head: 34px<br>review head: 40px<br>empty: 42px 裸空区</div>
+        </div>
+        <div class="audit-card good">
+          <div class="tag">RIGHT RAIL / AFTER</div>
+          <h3>同一骨架，同一密度</h3>
+          <p>Tab 进入正常文档流，等宽两段；内容头统一 34px。评审空状态变成紧凑卡片，和属性栏的卡片系统同一边距、同一分割线。</p>
+          <div class="mini-code">tab: in-flow 40px<br>property / review head: 34px<br>empty: 12px 间距卡片<br>active: 等宽不再被角标推挤</div>
+        </div>
+        <div class="audit-card">
+          <div class="tag">AUTH / BEFORE</div>
+          <h3>两个窗口、两套语言</h3>
+          <p>云端窗口有 kicker、全宽登录按钮和大图；分享窗口没有 kicker，使用底部取消 + 登录。验证码、标题、关闭和脚注尺寸各自变化。</p>
+          <div class="mini-code">cloud: 552px · 全宽主按钮<br>share: 420px · 底部双按钮<br>title / kicker / note 均不同</div>
+        </div>
+        <div class="audit-card good">
+          <div class="tag">AUTH / AFTER</div>
+          <h3>一个组件、一个骨架</h3>
+          <p>共用一个 430px 认证弹窗：kicker + 标题 + 说明、等宽登录/注册、统一输入与验证码、统一底部操作。只按上下文替换文案和成功后的去向。</p>
+          <div class="mini-code">auth-dialog: 430px<br>header + tabs + form + captcha + footer<br>context: cloud | comment</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="rail">
+      <div class="sec-head">
+        <div class="sec-no">02 / RIGHT RAIL</div>
+        <div><div class="kicker">右侧栏设计图</div><h2>无论有没有评论，<br>第一屏都一样稳。</h2></div>
+        <p>三种状态共用同一条 Tab 栏、同一个内容头高度和同一套卡片边距。评审标题和属性标题都从 y=86 开始，不再因为空状态少一块或错一行。</p>
+      </div>
+
+      <div class="rail-grid">
+        <div class="rail">
+          <div class="rail-top"><div class="rail-tab on">属性</div><div class="rail-tab">评审</div></div>
+          <div class="rail-subhead"><b>属性</b><span class="meta">编辑模式</span></div>
+          <div class="rail-body">
+            <div class="rail-obj">W1</div>
+            <div class="rail-stats"><div><span>场馆面积</span><b>10,000 m²</b></div><div><span>展台覆盖率</span><b>42%</b></div></div>
+            <div class="rail-field"><span>占地面积</span><i></i><b>10,000 m²</b></div>
+            <div class="rail-field"><span>轮廓周长</span><i></i><b>424 m</b></div>
+            <div class="rail-field"><span>轮廓顶点</span><i></i><b>4</b></div>
+            <div class="rail-stats" style="margin-top:10px"><div><span>净高</span><b>8 m</b></div><div><span>半透明</span><b>开</b></div></div>
+            <div class="rail-field"><span>应用校验</span><i></i><b>已开启</b></div>
+            <div class="rail-field"><span>最小净距</span><i></i><b>0.6 m</b></div>
+          </div>
+          <div class="guide">tab 40 · subhead 34</div>
+        </div>
+
+        <div class="rail">
+          <div class="rail-top"><div class="rail-tab">属性</div><div class="rail-tab on">评审</div></div>
+          <div class="rail-subhead"><b>评审评论</b><span class="meta">0</span><span class="live">实时</span><span class="meta">↻ ×</span></div>
+          <div class="rail-chips"><span class="rail-chip on">全部 0</span><span class="rail-chip">未解决 0</span><span class="rail-chip">我的 0</span></div>
+          <div class="rail-body">
+            <div class="rail-empty">还没有评论。分享链接后，访客的评论会实时出现在这里。</div>
+          </div>
+          <div class="rail-foot"><b>登录后参与评论</b><span style="font-size:6.5px;color:var(--tx4)">共享账号</span><span class="btn">登录</span></div>
+          <div class="guide">空评论 · 同一内容头 + 紧凑空卡片</div>
+        </div>
+
+        <div class="rail">
+          <div class="rail-top"><div class="rail-tab">属性</div><div class="rail-tab on">评审<span class="badge">3</span></div></div>
+          <div class="rail-subhead"><b>评审评论</b><span class="meta">3</span><span class="live">实时</span><span class="meta">↻ ×</span></div>
+          <div class="rail-chips"><span class="rail-chip on">全部 3</span><span class="rail-chip">未解决 1</span><span class="rail-chip">我的 1</span></div>
+          <div class="rail-body">
+            <div class="rail-card">
+              <div class="rail-card-head"><span class="rail-pin">01</span><b>林晓</b><span class="rail-role">访客</span><span class="rail-time">刚刚</span></div>
+              <p>主通道这边建议再留 1.2m。</p>
+              <div class="rail-actions"><span>定位 W1</span><span>回复</span><span>解决</span></div>
+            </div>
+            <div class="rail-card">
+              <div class="rail-card-head"><span class="rail-pin">02</span><b>吴老师</b><span class="rail-role" style="color:var(--amber);border-color:rgba(255,184,107,.2)">作者</span><span class="rail-time">2m</span></div>
+              <p>已把岛型展台整体右移。</p>
+              <div class="rail-actions"><span>定位 W1</span><span>回复</span><span>解决</span></div>
+            </div>
+          </div>
+          <div class="rail-foot"><b>评论需要先选位置</b><span class="btn">在画布点选</span></div>
+          <div class="guide">有评论 · 同一头部和滚动起点</div>
+        </div>
+      </div>
+
+      <div class="grid-3" style="margin-top:13px">
+        <div class="card"><div class="num">TAB / EQUAL</div><h3>等宽两段</h3><p>「属性 / 评审」占 1:1；评审出现未读角标时也不会把「属性」挤窄，Tab 栏不会跳。</p></div>
+        <div class="card"><div class="num">HEAD / 34</div><h3>内容头统一</h3><p>属性、评审都用 34px 头和一条底线；右侧状态、刷新、关闭都在同一垂直中心。</p></div>
+        <div class="card"><div class="num">EMPTY / CARD</div><h3>空状态卡片化</h3><p>12px 外边距、6px 圆角、1px 边框；不再使用 42px 大块裸文本，和有评论时的卡片同一密度。</p></div>
+      </div>
+    </section>
+
+    <section id="auth">
+      <div class="sec-head">
+        <div class="sec-no">03 / AUTH</div>
+        <div><div class="kicker">统一登录窗口</div><h2>两个入口，<br>同一张登录表单。</h2></div>
+        <p>云端存储和评论登录只改变顶部 kicker、标题、说明和登录成功后的去向；表单、验证码、操作按钮和键盘行为完全一致。</p>
+      </div>
+
+      <div class="auth-showcase">
+        <div class="auth-stage">
+          <div class="auth-dialog">
+            <div class="auth-badge"><i></i>云端存储 · 入口变体 A</div>
+            <header class="auth-head">
+              <div class="auth-mark">◇</div>
+              <div><p class="auth-kicker">CLOUD STORAGE</p><h3>登录后同步场景</h3><p>登录后可在 10 个存储位置间保存、加载和自动同步。</p></div>
+              <button class="auth-close" type="button">×</button>
+            </header>
+            <div class="auth-tabs"><button class="auth-tab on">登录</button><button class="auth-tab">注册</button></div>
+            <div class="auth-body">
+              <label class="auth-field"><span>用户名</span><div class="auth-input">3-24 位中文、字母、数字或下划线</div></label>
+              <label class="auth-field"><span>密码</span><div class="auth-input">至少 6 位</div></label>
+              <div class="auth-captcha">
+                <div class="auth-pic"><span class="refresh">换一张</span><span class="slider"></span></div>
+                <div class="auth-slider">拖动滑块完成拼图</div>
+              </div>
+              <div class="auth-error">用户名或密码不正确</div>
+            </div>
+            <footer class="auth-foot"><span class="note">登录成功后继续选择存储位置</span><button class="auth-btn">取消</button><button class="auth-btn pri">登录</button></footer>
+            <div class="auth-context">Esc 关闭 · Enter 提交</div>
+          </div>
+        </div>
+
+        <div class="auth-stage">
+          <div class="auth-dialog">
+            <div class="auth-badge"><i></i>评论登录 · 入口变体 B</div>
+            <header class="auth-head">
+              <div class="auth-mark">◇</div>
+              <div><p class="auth-kicker">REVIEW IDENTITY</p><h3>登录后参与评论</h3><p>查看不需要登录。登录用于评论、回复和标记解决状态。</p></div>
+              <button class="auth-close" type="button">×</button>
+            </header>
+            <div class="auth-tabs"><button class="auth-tab on">登录</button><button class="auth-tab">注册</button></div>
+            <div class="auth-body">
+              <label class="auth-field"><span>用户名</span><div class="auth-input">3-24 位中文、字母、数字或下划线</div></label>
+              <label class="auth-field"><span>密码</span><div class="auth-input">至少 6 位</div></label>
+              <div class="auth-captcha">
+                <div class="auth-pic"><span class="refresh">换一张</span><span class="slider"></span></div>
+                <div class="auth-slider">拖动滑块完成拼图</div>
+              </div>
+              <div class="auth-error">用户名或密码不正确</div>
+            </div>
+            <footer class="auth-foot"><span class="note">成功后回到当前视角，位置和草稿保留</span><button class="auth-btn">取消</button><button class="auth-btn pri">登录</button></footer>
+            <div class="auth-context">Esc 关闭 · Enter 提交</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="auth-mobile">
+        <div class="phone">
+          <div class="phone-screen">
+            <header class="auth-head">
+              <div><p class="auth-kicker">REVIEW IDENTITY</p><h3>登录后参与评论</h3><p>查看不需要登录。</p></div>
+              <button class="auth-close" type="button">×</button>
+            </header>
+            <div class="auth-tabs"><button class="auth-tab on">登录</button><button class="auth-tab">注册</button></div>
+            <div class="auth-body">
+              <label class="auth-field"><span>用户名</span><div class="auth-input">用户名</div></label>
+              <label class="auth-field"><span>密码</span><div class="auth-input">至少 6 位</div></label>
+              <div class="auth-captcha"><div class="auth-pic"><span class="refresh">换一张</span><span class="slider"></span></div><div class="auth-slider">拖动滑块完成拼图</div></div>
+            </div>
+            <footer class="auth-foot"><span class="note">成功后回到当前视角</span><button class="auth-btn">取消</button><button class="auth-btn pri">登录</button></footer>
+          </div>
+        </div>
+        <div class="mobile-copy">
+          <h3>移动端不另做一套</h3>
+          <p>仍然是同一个 `AuthDialog`：宽度变为屏幕宽度，底部按钮纵向排列，关闭与提交都保留。</p>
+          <ul>
+            <li>底部安全区内边距，不压住键盘</li>
+            <li>点遮罩或 Esc 关闭，提交中禁止关闭</li>
+            <li>验证码保持 16:9，不再因弹窗宽度改变裁切比例</li>
+            <li>登录成功后回到分享页的锚点与草稿状态</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="context">
+      <div class="sec-head">
+        <div class="sec-no">04 / CONTEXT</div>
+        <div><div class="kicker">两种上下文</div><h2>只换三处文案，<br>不动表单结构。</h2></div>
+        <p>`AuthDialog` 通过 `context` 选择标题、说明和成功回调；其余 DOM、验证码、错误、焦点和关闭逻辑共用。</p>
+      </div>
+      <div class="card">
+        <table class="context-table">
+          <thead><tr><th>字段</th><th>context = cloud</th><th>context = comment</th><th>是否共用</th></tr></thead>
+          <tbody>
+            <tr><td>Kicker</td><td>CLOUD STORAGE</td><td>REVIEW IDENTITY</td><td>否</td></tr>
+            <tr><td>标题</td><td>登录后同步场景</td><td>登录后参与评论</td><td>否</td></tr>
+            <tr><td>说明</td><td>登录后管理 10 个存储位置</td><td>登录用于评论、回复和解决</td><td>否</td></tr>
+            <tr><td>表单 / 验证码</td><td>用户名、密码、滑块拼图</td><td>用户名、密码、滑块拼图</td><td class="yes">是</td></tr>
+            <tr><td>底部操作</td><td>取消 / 登录</td><td>取消 / 登录</td><td class="yes">是</td></tr>
+            <tr><td>成功后</td><td>打开存储位置列表</td><td>返回当前评论锚点</td><td>否（回调）</td></tr>
+            <tr><td>Esc / 点遮罩</td><td>关闭</td><td>关闭</td><td class="yes">是</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="states">
+      <div class="sec-head">
+        <div class="sec-no">05 / STATES</div>
+        <div><div class="kicker">状态规范</div><h2>错误、加载、注册<br>都在同一张窗口里。</h2></div>
+        <p>不新增另一套弹窗，不把错误变成系统 Toast；错误留在表单上方，提交按钮进入等待态。</p>
+      </div>
+      <div class="states">
+        <div class="state"><div class="n">01 / DEFAULT</div><b>默认登录</b><span>用户名为空，密码为空，验证码加载完成；主按钮可用。</span></div>
+        <div class="state"><div class="n">02 / REGISTER</div><b>注册模式</b><span>多一行确认密码；主按钮文案变为「注册并登录」；验证码换新。</span></div>
+        <div class="state"><div class="n">03 / ERROR</div><b>校验失败</b><span>表单顶部红色窄条；验证码自动刷新；焦点回到用户名或错误字段。</span></div>
+        <div class="state"><div class="n">04 / LOADING</div><b>提交中</b><span>主按钮「请稍候…」并禁用；遮罩关闭禁用；成功后关闭弹窗。</span></div>
+      </div>
+      <div class="grid-2" style="margin-top:13px">
+        <div class="card"><div class="num">TOKENS</div><h3>统一尺寸</h3><p>弹窗 430px；头部 18/20px；Tab 26px；输入 34px；验证码 16:9；主按钮 30px；底部 11/20px。分享页与编辑器共用。</p></div>
+        <div class="card"><div class="num">A11Y</div><h3>键盘与焦点</h3><p>打开聚焦用户名；Tab 顺序固定；Enter 提交；Esc 关闭；提交中禁止关闭；错误使用 `role=alert`，不打断现有编辑器快捷键。</p></div>
+      </div>
+    </section>
+
+    <section id="decisions">
+      <div class="sec-head">
+        <div class="sec-no">06 / DECISIONS</div>
+        <div><div class="kicker">需要确认</div><h2>登录设计先定这三点。</h2></div>
+        <p>右栏已经按左侧方案调整；登录窗口等确认后再落代码。</p>
+      </div>
+      <div class="decisions">
+        <div class="decision"><div class="q">Q.01 / WIDTH</div><b>统一宽度 430px？</b><p>推荐 <strong>430px</strong>。比当前分享窗口略宽、比云端窗口更窄，验证码 16:9 不挤压，桌面和移动端都好排。</p></div>
+        <div class="decision"><div class="q">Q.02 / FOOTER</div><b>底部统一为「取消 + 登录」？</b><p>推荐 <strong>是</strong>。不再使用全宽主按钮；两个入口的底部操作、键盘和等待态完全一致。</p></div>
+        <div class="decision"><div class="q">Q.03 / KICKER</div><b>保留云端 / 评论的英文 kicker？</b><p>推荐 <strong>保留但弱化</strong>：CLOUD STORAGE / REVIEW IDENTITY 只作为上下文标签，不抢标题层级。</p></div>
+        <div class="decision"><div class="q">Q.04 / EMPTY</div><b>评论空状态是否加「新增」按钮？</b><p>推荐 <strong>不加</strong>。空状态只解释为什么没有内容；新增仍由底部输入区和画布入口承担，避免重复 CTA。</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>统一右侧栏与登录窗口 · 设计稿 v1 · 2026-11-24</span>
+    <span class="mono">RIGHT RAIL · AUTH DIALOG · CLOUD / COMMENT</span>
+  </footer>
+</div>
+</body>
+</html>

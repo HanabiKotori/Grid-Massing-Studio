@@ -16,7 +16,13 @@ import ShareDialog from './review/ShareDialog.vue'
 import { useReviewComments } from './review/useReviewComments'
 import { useLiveShare } from './review/useLiveShare'
 import { resolveAnchor } from './review/anchors'
-import { shareApi, type ShareComment, type ShareMeta } from './core/shareApi'
+import {
+  shareApi,
+  type ShareComment,
+  type ShareCommentEvent,
+  type ShareCommentEventReply,
+  type ShareMeta,
+} from './core/shareApi'
 import { pushMessage } from './core/messageCenter'
 import { playCollabSound } from './core/notificationSound'
 import './review/review.css'
@@ -428,6 +434,7 @@ const selectedCommentId = ref<number | null>(null)
 
 const reviewLoggedIn = computed(() => cloud.enabled && !!cloud.user.value)
 const reviewAuthorName = computed(() => cloud.user.value?.username || '作者')
+const reviewCurrentUserId = computed(() => cloud.user.value?.id ?? null)
 /** 没有场馆轮廓时不开放分享与评论 */
 const canShareScene = computed(() => !!venue.value)
 
@@ -462,6 +469,8 @@ const {
   resolve: resolveReview,
   reply: replyReview,
   remove: removeReview,
+  replyEvent: replyReviewEvent,
+  removeEventReply: removeReviewEventReply,
 } = useReviewComments({
   shareToken: reviewShareToken,
   enabled: computed(() => reviewLoggedIn.value && canShareScene.value),
@@ -493,6 +502,100 @@ const {
           openReviewFromToast(
             replyToMe ? comment.parentId ?? comment.id : comment.id,
           ),
+      },
+    })
+  },
+  onCommentUpdated: (comment, before, activity) => {
+    const me = cloud.user.value
+    if (
+      !me ||
+      !activity ||
+      activity.actorRole !== 'visitor' ||
+      activity.actorUserId === me.id
+    ) {
+      return
+    }
+    const statusChanged =
+      !before ||
+      Boolean(before.resolvedAt) !== Boolean(comment.resolvedAt)
+    if (!statusChanged) return
+    playCollabSound('reply', 'editor', true)
+    pushMessage({
+      scope: 'editor',
+      type: 'collab',
+      title: `${activity.actorName} ${
+        comment.resolvedAt ? '将评论标记为已解决' : '取消了评论解决状态'
+      }`,
+      text: comment.content.slice(0, 48),
+      dedupeKey: `review-status-${comment.id}-${activity.id}`,
+      action: {
+        label: '查看',
+        run: () => openReviewFromToast(comment.id),
+      },
+    })
+  },
+  onCommentDeleted: (removed, actorUserId, actorRole) => {
+    const me = cloud.user.value
+    if (
+      !me ||
+      !removed ||
+      actorRole !== 'visitor' ||
+      actorUserId === me.id
+    ) {
+      return
+    }
+    const kind = removed.parentId ? '回复' : '评论'
+    playCollabSound('danger', 'editor', true)
+    pushMessage({
+      scope: 'editor',
+      type: 'collab',
+      severity: 'error',
+      title: `${removed.authorName} 删除了自己的${kind}`,
+      text: removed.content.slice(0, 48),
+      dedupeKey: `review-delete-${removed.id}`,
+      action: {
+        label: '查看',
+        run: () =>
+          openReviewFromToast(removed.parentId ?? undefined),
+      },
+    })
+  },
+  onEventReplyDeleted: (comment, event, reply, actorUserId) => {
+    const me = cloud.user.value
+    if (!me || !actorUserId || actorUserId === me.id) return
+    playCollabSound('danger', 'editor', true)
+    pushMessage({
+      scope: 'editor',
+      type: 'collab',
+      severity: 'error',
+      title: `${reply.actorName} 删除了状态回复`,
+      text: reply.content.slice(0, 48),
+      dedupeKey: `review-event-del-${event.id}-${reply.id}`,
+      action: {
+        label: '查看',
+        run: () => openReviewFromToast(comment.id),
+      },
+    })
+  },
+  onEventReply: (comment, event, reply) => {
+    const me = cloud.user.value
+    if (!me || reply.actorUserId === me.id) return
+    const targetMe =
+      event.actorUserId === me.id || comment.authorUserId === me.id
+    if (!targetMe) return
+    playCollabSound('reply', 'editor', true)
+    pushMessage({
+      scope: 'editor',
+      type: 'collab',
+      title:
+        event.actorUserId === me.id
+          ? `${reply.actorName} 回复了你的解决记录`
+          : `${reply.actorName} 回复了你评论的解决记录`,
+      text: reply.content.slice(0, 48),
+      dedupeKey: `review-event-${event.id}-${reply.id}`,
+      action: {
+        label: '查看',
+        run: () => openReviewFromToast(comment.id),
       },
     })
   },
@@ -740,6 +843,22 @@ function locateReviewComment(comment: ShareComment) {
 
 function onReviewReply(payload: { comment: ShareComment; content: string }) {
   void replyReview(payload.comment, payload.content)
+}
+
+function onReviewEventReply(payload: {
+  comment: ShareComment
+  event: ShareCommentEvent
+  content: string
+}) {
+  void replyReviewEvent(payload.comment, payload.event, payload.content)
+}
+
+function onReviewRemoveEventReply(payload: {
+  comment: ShareComment
+  event: ShareCommentEvent
+  reply: ShareCommentEventReply
+}) {
+  void removeReviewEventReply(payload.comment, payload.event, payload.reply)
 }
 
 function onReviewResolve(comment: ShareComment) {
@@ -2069,6 +2188,16 @@ onBeforeUnmount(() => {
       :visible="!renderOnly && !isMobile && walkState === 'off' && !presentationOn && !showWelcome && canShareScene && mode === 'idle'"
       @select="selectReviewComment"
     />
+    <div class="canvas-toasts">
+      <ToastHost scope="editor" kind="collab" placement="top-right" />
+      <ToastHost scope="editor" kind="system" placement="top-center" />
+      <ToastHost
+        scope="editor"
+        kind="action"
+        placement="bottom-center"
+        offset="14px"
+      />
+    </div>
   </div>
 
   <WalkMinimap
@@ -2258,12 +2387,15 @@ onBeforeUnmount(() => {
         :connected="reviewConnected"
         :loading="reviewLoading"
         :author-label="reviewAuthorName"
+        :current-user-id="reviewCurrentUserId"
         :object-label="reviewObjectLabel"
         closable
         @select="selectReviewComment"
         @locate="locateReviewComment"
         @resolve="onReviewResolve"
         @reply="onReviewReply"
+        @event-reply="onReviewEventReply"
+        @remove-event-reply="onReviewRemoveEventReply"
         @login="loginForShare"
         @register="loginForShare"
         @remove="removeReview"
@@ -2480,15 +2612,6 @@ onBeforeUnmount(() => {
       @freeze="freezeShare"
       @revoke="revokeShare"
       @login="loginForShare"
-    />
-
-    <ToastHost scope="editor" kind="collab" placement="top-right" />
-    <ToastHost scope="editor" kind="system" placement="top-center" />
-    <ToastHost
-      scope="editor"
-      kind="action"
-      placement="bottom-center"
-      offset="calc(var(--wb-time, 44px) + var(--wb-status, 26px) + 14px)"
     />
 
     <Transition name="dialog">
