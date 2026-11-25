@@ -22,7 +22,7 @@ const projectRoot = path.resolve(buildDir, '..')
 
 function buildNginxProxyConfig(nginx) {
   const apiTarget = String(nginx.apiTarget || 'http://127.0.0.1:3020').trim()
-  const wsTarget = String(nginx.wsTarget || 'http://127.0.0.1:3010').trim()
+  const wsTarget = String(nginx.wsTarget || 'http://127.0.0.1:3020').trim()
   if (!/^https?:\/\/[^\s;]+$/.test(apiTarget) || !/^https?:\/\/[^\s;]+$/.test(wsTarget)) {
     throw new Error('web.nginx.apiTarget / wsTarget 必须是合法的 http(s) 地址')
   }

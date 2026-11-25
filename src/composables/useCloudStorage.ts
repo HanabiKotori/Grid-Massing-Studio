@@ -231,14 +231,19 @@ export function useCloudStorage(): CloudStorageController {
 
   /** 编辑器静默自动保存：失败只记录错误，不打断编辑；同一时间只保留一个请求 */
   let autosaveInFlight = false
+  let autosaveQueued: { slot: number; scene: unknown } | null = null
   async function saveAutosave(scene: unknown): Promise<boolean> {
     if (!ready.value || currentSlot.value === null) return false
-    // 上一次保存还在路上：视为已处理，避免并发请求与误报失败
-    if (autosaveInFlight) return true
-    autosaveInFlight = true
     const slot = currentSlot.value
+    // 上一次保存还在路上：记住最新场景，等当前请求结束后再补一次
+    if (autosaveInFlight) {
+      autosaveQueued = { slot, scene }
+      return true
+    }
+    autosaveInFlight = true
     const existing = slots.value.find((item) => item.slot === slot)
-    const name = existing?.name || sceneNameOf(scene) || `位置 ${slot}`
+    // 场馆名称是存档名称的唯一来源：改名后自动保存同步更新云端存档名
+    const name = sceneNameOf(scene) || existing?.name || `位置 ${slot}`
     try {
       const meta = await cloudApi.putSlot(slot, name, scene)
       upsertSlot(meta)
@@ -249,6 +254,11 @@ export function useCloudStorage(): CloudStorageController {
       return false
     } finally {
       autosaveInFlight = false
+      const queued = autosaveQueued
+      autosaveQueued = null
+      if (queued && currentSlot.value === queued.slot) {
+        void saveAutosave(queued.scene)
+      }
     }
   }
 

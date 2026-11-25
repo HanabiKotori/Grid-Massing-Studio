@@ -42,6 +42,16 @@ export const config = {
   slotLimit: 10,
   passwordMin: 6,
   usernamePattern: /^[A-Za-z0-9_\u4e00-\u9fa5]{3,24}$/,
+  multiplayer: {
+    enabled: process.env.MULTIPLAYER_ENABLED !== 'false',
+    maxRoomSize: Math.max(
+      2,
+      Math.min(8, readInt(process.env.MAX_ROOM_SIZE, 8)),
+    ),
+    tickHz: Math.max(1, Math.min(30, readInt(process.env.TICK_HZ, 10))),
+    /** WebSocket 连接票有效期（秒） */
+    ticketTtl: Math.max(30, Math.min(300, readInt(process.env.WS_TICKET_TTL, 60))),
+  },
 }
 
 if (secretIsPlaceholder) {

@@ -1,5 +1,6 @@
 import { parseSceneJson, type LoadedScene } from '../core/sceneParse'
 import { loadStoredProject, type StoredProject } from '../core/projectStore'
+import { readMultiplayerSceneHandoff } from './sceneHandoff'
 
 export type LoadedMultiplayerScene = LoadedScene
 
@@ -20,9 +21,12 @@ function readSessionScene(): StoredProject | null {
   }
 }
 
-/** 房主读取当前标签页传递的场景，兼容本地 IndexedDB 模式 */
+/** 房主读取当前标签页传递的场景：内存优先，其次 sessionStorage / IndexedDB */
 export async function loadCurrentMultiplayerScene(): Promise<LoadedMultiplayerScene> {
-  const stored = readSessionScene() ?? (await loadStoredProject())
+  const stored =
+    readMultiplayerSceneHandoff() ??
+    readSessionScene() ??
+    (await loadStoredProject())
   if (!stored || !stored.scene) {
     throw new Error('当前没有可用的场馆场景，请先在主页面创建或载入场景')
   }

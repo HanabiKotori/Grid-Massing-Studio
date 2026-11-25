@@ -1,24 +1,12 @@
-import http from 'node:http'
 import crypto from 'node:crypto'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import dotenv from 'dotenv'
 import { WebSocketServer, WebSocket } from 'ws'
+import { config } from '../config.mjs'
+import { consumeTicket } from './tickets.mjs'
 
-dotenv.config({
-  path: path.join(path.dirname(fileURLToPath(import.meta.url)), '.env'),
-})
-
-const PORT = Number(process.env.PORT) || 3010
-const HOST = process.env.HOST || '0.0.0.0'
-const MAX_ROOM_SIZE = Math.max(2, Math.min(8, Number(process.env.MAX_ROOM_SIZE) || 8))
-const TICK_HZ = Math.max(1, Math.min(30, Number(process.env.TICK_HZ) || 10))
-const MAX_SCENE_MB = Math.max(1, Number(process.env.MAX_SCENE_MB) || 40)
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
-  .split(',')
-  .map((value) => value.trim())
-  .filter(Boolean)
-
+const MAX_ROOM_SIZE = config.multiplayer.maxRoomSize
+const TICK_HZ = config.multiplayer.tickHz
+const MAX_SCENE_MB = config.maxSceneMb
+const ALLOWED_ORIGINS = config.allowedOrigins
 const WEATHERS = new Set([
   'clear',
   'partly',
@@ -158,16 +146,6 @@ function validScene(scene) {
   return Array.isArray(points) && points.length >= 3
 }
 
-function ipFromRequest(req) {
-  const forwarded = req.headers['x-forwarded-for']
-  const raw = Array.isArray(forwarded)
-    ? forwarded[0]
-    : typeof forwarded === 'string' && forwarded.length
-      ? forwarded.split(',')[0]
-      : req.socket.remoteAddress || 'unknown'
-  return raw.trim().replace(/^::ffff:/, '').replace(/^::1$/, '127.0.0.1')
-}
-
 function snapshot(room) {
   return {
     type: 'room',
@@ -184,6 +162,7 @@ function snapshot(room) {
     gates: room.gates,
     players: [...room.players.values()].map((player) => ({
       id: player.id,
+      accountId: player.accountId,
       nickname: player.nickname,
       color: player.color,
       isHost: player.isHost,
@@ -246,6 +225,7 @@ function createRoom(ws, client, message) {
 
   const player = {
     id: client.id,
+    accountId: client.accountId,
     ws,
     nickname: sanitizeNickname(client.nickname, client.nickname),
     color: playerColor(0),
@@ -262,6 +242,7 @@ function createRoom(ws, client, message) {
     code,
     selfId: client.id,
     nickname: player.nickname,
+    account: { id: client.accountId, username: player.nickname },
     room: snapshot(room),
   })
   console.info(`[room] ${code} 创建，房主 ${client.nickname}，上限 ${maxPlayers}`)
@@ -289,6 +270,7 @@ function joinRoom(ws, client, message) {
 
   const player = {
     id: client.id,
+    accountId: client.accountId,
     ws,
     nickname: sanitizeNickname(client.nickname, client.nickname),
     color: nextPlayerColor(room),
@@ -304,6 +286,7 @@ function joinRoom(ws, client, message) {
     code,
     selfId: client.id,
     nickname: player.nickname,
+    account: { id: client.accountId, username: player.nickname },
     scene: room.scene,
     room: snapshot(room),
   })
@@ -313,6 +296,7 @@ function joinRoom(ws, client, message) {
       type: 'player-joined',
       player: {
         id: player.id,
+        accountId: player.accountId,
         nickname: player.nickname,
         color: player.color,
         isHost: false,
@@ -460,16 +444,15 @@ function setPlayerProfile(ws, client, message) {
   const room = rooms.get(client.roomCode)
   const player = room?.players.get(client.id)
   if (!room || !player) return
-  const nickname = sanitizeNickname(message.nickname, player.nickname)
+  // 昵称固定为登录账号名，房间内只允许修改模型颜色
   const color = sanitizeColor(message.color, player.color)
-  if (nickname === player.nickname && color === player.color) return
-  player.nickname = nickname
+  if (color === player.color) return
   player.color = color
-  client.nickname = nickname
   broadcast(room, {
     type: 'player-updated',
     player: {
       id: player.id,
+      accountId: player.accountId,
       nickname: player.nickname,
       color: player.color,
       isHost: player.isHost,
@@ -708,108 +691,141 @@ function onMessage(ws, client, message) {
   }
 }
 
-const server = http.createServer((req, res) => {
-  if (req.url === '/health') {
-    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-    res.end(
-      JSON.stringify({
-        ok: true,
-        rooms: rooms.size,
-        players: [...rooms.values()].reduce((sum, room) => sum + room.players.size, 0),
-        online: clients.size,
-        tickHz: TICK_HZ,
-      }),
-    )
-    return
-  }
-  res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
-  res.end('Grid Massing Studio multiplayer WebSocket server\n')
-})
-
-const wss = new WebSocketServer({
-  server,
-  maxPayload: MAX_SCENE_MB * 1024 * 1024,
-})
-
-wss.on('connection', (ws, req) => {
-  const origin = req.headers.origin
-  if (ALLOWED_ORIGINS.length && origin && !ALLOWED_ORIGINS.includes(origin)) {
-    ws.close(1008, 'Origin not allowed')
-    return
-  }
-
-  ws.isAlive = true
-  const client = {
-    id: makeId(),
-    ws,
-    nickname: ipFromRequest(req),
-    roomCode: null,
-    isHost: false,
-  }
-  ws.client = client
-  clients.add(client)
-
-  ws.on('pong', () => {
-    ws.isAlive = true
-  })
-
-  ws.on('message', (data) => {
-    let message
-    try {
-      message = JSON.parse(data.toString())
-    } catch {
-      return
-    }
-    if (!message || typeof message !== 'object') return
-    onMessage(ws, client, message)
-  })
-
-  ws.on('close', () => {
-    clients.delete(client)
-    leaveRoom(ws, client, 'disconnect')
-  })
-
-  ws.on('error', (err) => {
-    console.warn('[ws]', err instanceof Error ? err.message : err)
-  })
-})
-
-const heartbeat = setInterval(() => {
-  for (const ws of wss.clients) {
-    if (ws.isAlive === false) {
-      ws.terminate()
-      continue
-    }
-    ws.isAlive = false
-    try {
-      ws.ping()
-    } catch {
-      ws.terminate()
-    }
-  }
-}, HEARTBEAT_MS)
-
-const tickMs = 1000 / TICK_HZ
-const tick = setInterval(() => {
-  for (const room of rooms.values()) {
-    const payload = snapshot(room)
-    for (const player of room.players.values()) send(player.ws, payload)
-  }
-}, tickMs)
-
-server.listen(PORT, HOST, () => {
-  console.info(`[server] ws://${HOST}:${PORT}  TICK_HZ=${TICK_HZ}  MAX_ROOM_SIZE=${MAX_ROOM_SIZE}`)
-})
-
-function shutdown() {
-  clearInterval(heartbeat)
-  clearInterval(tick)
-  for (const room of rooms.values()) {
-    broadcast(room, { type: 'room-closed', reason: 'server-shutdown' })
-  }
-  wss.close()
-  server.close(() => process.exit(0))
+/** 返回 HTTP 拒绝响应，WebSocket 升级不会进入连接事件 */
+function rejectUpgrade(socket, status, message) {
+  const body = `${message}\n`
+  socket.write(
+    `HTTP/1.1 ${status} ${message}\r\n` +
+      'Connection: close\r\n' +
+      'Content-Type: text/plain; charset=utf-8\r\n' +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n` +
+      body,
+  )
+  socket.destroy()
 }
 
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+/**
+ * 把多人房间 WebSocket 挂到 dataService 的 HTTP server 上。
+ * 浏览器必须先通过 /api/multiplayer/ticket 换取一次性票，
+ * /ws?ticket=... 升级成功后才允许 create / join / list。
+ */
+export function registerMultiplayer(server, options = {}) {
+  if (!config.multiplayer.enabled) {
+    return { close() {} }
+  }
+
+  const wss = new WebSocketServer({
+    noServer: true,
+    maxPayload: MAX_SCENE_MB * 1024 * 1024,
+  })
+
+  const heartbeat = setInterval(() => {
+    for (const ws of wss.clients) {
+      if (ws.isAlive === false) {
+        ws.terminate()
+        continue
+      }
+      ws.isAlive = false
+      try {
+        ws.ping()
+      } catch {
+        ws.terminate()
+      }
+    }
+  }, HEARTBEAT_MS)
+
+  const tickMs = 1000 / TICK_HZ
+  const tick = setInterval(() => {
+    for (const room of rooms.values()) {
+      const payload = snapshot(room)
+      for (const player of room.players.values()) send(player.ws, payload)
+    }
+  }, tickMs)
+
+  const onUpgrade = (req, socket, head) => {
+    let url
+    try {
+      url = new URL(req.url || '/', 'http://localhost')
+    } catch {
+      rejectUpgrade(socket, 400, 'Bad Request')
+      return
+    }
+    if (url.pathname !== '/ws') {
+      socket.destroy()
+      return
+    }
+
+    const origin = req.headers.origin
+    const originOk =
+      typeof options.originAllowed === 'function'
+        ? options.originAllowed(origin)
+        : !ALLOWED_ORIGINS.length || !origin || ALLOWED_ORIGINS.includes(origin)
+    if (!originOk) {
+      rejectUpgrade(socket, 403, 'Origin not allowed')
+      return
+    }
+
+    const user = consumeTicket(url.searchParams.get('ticket'))
+    if (!user) {
+      rejectUpgrade(socket, 401, 'Login required')
+      return
+    }
+
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req, user)
+    })
+  }
+
+  server.on('upgrade', onUpgrade)
+
+  wss.on('connection', (ws, req, user) => {
+    ws.isAlive = true
+    const client = {
+      id: makeId(),
+      ws,
+      accountId: user.id,
+      nickname: sanitizeNickname(user.username, '登录用户'),
+      roomCode: null,
+      isHost: false,
+    }
+    ws.client = client
+    clients.add(client)
+
+    ws.on('pong', () => {
+      ws.isAlive = true
+    })
+
+    ws.on('message', (data) => {
+      let message
+      try {
+        message = JSON.parse(data.toString())
+      } catch {
+        return
+      }
+      if (!message || typeof message !== 'object') return
+      onMessage(ws, client, message)
+    })
+
+    ws.on('close', () => {
+      clients.delete(client)
+      leaveRoom(ws, client, 'disconnect')
+    })
+
+    ws.on('error', (err) => {
+      console.warn('[ws]', err instanceof Error ? err.message : err)
+    })
+  })
+
+  return {
+    async close() {
+      clearInterval(heartbeat)
+      clearInterval(tick)
+      for (const room of rooms.values()) {
+        broadcast(room, { type: 'room-closed', reason: 'server-shutdown' })
+      }
+      server.off('upgrade', onUpgrade)
+      for (const ws of wss.clients) ws.terminate()
+      await new Promise((resolve) => wss.close(resolve))
+    },
+  }
+}

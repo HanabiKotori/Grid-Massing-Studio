@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>多人漫游并入 dataService · 登录制设计稿</title>
+<style>
+  :root{
+    --bg:#0b0c0f;--bg1:#101217;--bg2:#15181e;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);
+    --tx:#e9e9e5;--tx2:#a7abb5;--tx3:#707681;--tx4:#4d535e;
+    --accent:#8b9cff;--mint:#5bd6bd;--amber:#ffb86b;--rose:#f07f93;--green:#76d09d;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;color:var(--tx);font-family:var(--sans);-webkit-font-smoothing:antialiased;
+    background:radial-gradient(900px 520px at 78% -5%,rgba(139,156,255,.14),transparent 65%),radial-gradient(680px 420px at 5% 18%,rgba(91,214,189,.055),transparent 66%),var(--bg)}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(to bottom,#000,transparent 80%)}
+  .wrap{position:relative;z-index:1;max-width:1260px;margin:0 auto;padding:0 34px}
+  .mono{font-family:var(--mono)}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--tx3)}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--mint);box-shadow:0 0 12px var(--mint)}
+
+  .hero{padding:70px 0 56px;border-bottom:1px solid var(--line)}
+  .hero-top{display:flex;align-items:center;gap:10px;margin-bottom:32px}
+  .ver{font-family:var(--mono);font-size:9px;color:var(--tx3);border:1px solid var(--line2);border-radius:99px;padding:4px 9px}
+  .hero-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr);gap:54px;align-items:end}
+  h1{font-size:clamp(42px,5.8vw,76px);line-height:1.04;letter-spacing:-.055em;margin:0 0 22px;font-weight:590}
+  h1 em{font-style:normal;color:var(--accent);white-space:nowrap}
+  .hero p{max-width:660px;color:var(--tx2);font-size:14.5px;line-height:1.9;margin:0}
+  .pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+  .pill{font-family:var(--mono);font-size:8.5px;color:var(--tx2);border:1px solid var(--line2);background:rgba(255,255,255,.02);border-radius:99px;padding:6px 10px}
+  .pill.good{color:var(--green);border-color:rgba(118,208,157,.25);background:rgba(118,208,157,.055)}
+  .pill.warn{color:var(--amber);border-color:rgba(255,184,107,.24);background:rgba(255,184,107,.05)}
+  .stats{border-left:1px solid var(--line2);border-top:1px solid var(--line2);display:grid;grid-template-columns:1fr 1fr}
+  .stat{padding:16px 18px;border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);min-height:94px}
+  .stat b{display:block;font-family:var(--mono);font-size:30px;line-height:1;font-weight:500;letter-spacing:-.05em}
+  .stat b small{font-size:11px;color:var(--tx3);letter-spacing:0}
+  .stat span{display:block;margin-top:9px;font-size:9.5px;line-height:1.6;color:var(--tx3)}
+  .stat .up{color:var(--green)}
+
+  section{padding:70px 0;border-bottom:1px solid var(--line)}
+  .sec-head{display:grid;grid-template-columns:74px minmax(0,1fr) minmax(250px,.52fr);gap:26px;margin-bottom:34px;align-items:start}
+  .sec-no{font-family:var(--mono);font-size:9.5px;color:var(--tx4);padding-top:6px}
+  .kicker{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;color:var(--accent);text-transform:uppercase;margin-bottom:11px}
+  .kicker::before{content:"";width:14px;height:1px;background:var(--accent)}
+  h2{font-size:clamp(25px,3.1vw,38px);line-height:1.12;letter-spacing:-.045em;margin:0;font-weight:560}
+  .sec-head p{margin:4px 0 0;color:var(--tx3);font-size:11.5px;line-height:1.8}
+
+  .card{border:1px solid var(--line);border-radius:9px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,.008));padding:20px}
+  .card .num{font-family:var(--mono);font-size:8px;color:var(--tx4);letter-spacing:.08em;margin-bottom:13px}
+  .card h3{font-size:12px;margin:0 0 8px;font-weight:560}
+  .card p{margin:0;color:var(--tx3);font-size:10.5px;line-height:1.8}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .audit{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .audit-card{border:1px solid var(--line);border-radius:8px;padding:17px;background:var(--bg1)}
+  .audit-card .tag{font-family:var(--mono);font-size:7.5px;color:var(--rose);margin-bottom:11px;letter-spacing:.08em}
+  .audit-card.good .tag{color:var(--green)}
+  .audit-card h3{font-size:12.5px;margin:0 0 7px;font-weight:550}
+  .audit-card p{font-size:10px;line-height:1.8;color:var(--tx3);margin:0}
+  .mini-code{margin-top:11px;padding:8px 9px;border:1px solid var(--line);border-radius:4px;background:#0d0f13;font-family:var(--mono);font-size:7.8px;line-height:1.7;color:var(--tx4)}
+
+  /* architecture */
+  .arch{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .arch-panel{border:1px solid var(--line);border-radius:9px;background:var(--bg1);padding:18px;min-height:350px}
+  .arch-label{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:8px;color:var(--tx4);margin-bottom:15px}
+  .arch-label::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--rose)}
+  .arch-panel.after .arch-label::before{background:var(--green)}
+  .topology{display:flex;flex-direction:column;gap:8px}
+  .node{display:flex;align-items:center;gap:9px;padding:9px 10px;border:1px solid var(--line);border-radius:5px;background:#12141a}
+  .node b{font-family:var(--mono);font-size:7.5px;color:var(--tx2);font-weight:500}
+  .node span{margin-left:auto;font-family:var(--mono);font-size:7px;color:var(--tx4)}
+  .node .ic{width:19px;height:19px;flex:none;display:grid;place-items:center;border:1px solid var(--line2);border-radius:4px;font-family:var(--mono);font-size:7px;color:var(--accent)}
+  .node.www{border-color:rgba(139,156,255,.3);background:rgba(139,156,255,.06)}
+  .node.ws{border-color:rgba(91,214,189,.28);background:rgba(91,214,189,.05)}
+  .node.db{border-color:rgba(255,184,107,.23);background:rgba(255,184,107,.04)}
+  .connector{width:1px;height:15px;margin-left:25px;background:var(--line2)}
+  .connector.double{height:22px;border-left:1px dashed var(--line2);background:none}
+  .branch-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .arch-note{margin-top:12px;font-size:8.5px;line-height:1.75;color:var(--tx4)}
+  .arch-note b{color:var(--tx2);font-weight:500}
+
+  .tree{border:1px solid var(--line);border-radius:7px;background:#0d0f13;padding:14px 15px;font-family:var(--mono);font-size:8.5px;line-height:1.9;color:var(--tx3);margin-top:12px;white-space:pre}
+  .tree b{color:var(--tx);font-weight:500}
+  .tree em{font-style:normal;color:var(--green)}
+  .tree s{color:var(--rose);text-decoration:line-through}
+
+  /* auth sequence */
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;position:relative;margin-top:4px}
+  .flow-step{border:1px solid var(--line);border-radius:6px;padding:12px;background:#0e1014;position:relative}
+  .flow-step .n{font-family:var(--mono);font-size:7px;color:var(--accent);margin-bottom:7px}
+  .flow-step b{display:block;font-size:9px;font-weight:550;margin-bottom:4px}
+  .flow-step span{display:block;font-size:7.8px;line-height:1.65;color:var(--tx4)}
+  .flow-line{display:flex;justify-content:space-between;padding:0 12.5%;margin-top:10px;color:var(--tx4);font-family:var(--mono);font-size:7px}
+  .flow-line i{flex:1;height:1px;background:var(--line2);margin:3px 5px 0}
+  .ticket-card{margin-top:12px;border:1px solid rgba(91,214,189,.2);border-radius:7px;background:rgba(91,214,189,.035);padding:14px}
+  .ticket-card h3{font-size:10.5px;margin:0 0 6px;font-weight:550;color:var(--mint)}
+  .ticket-card p{font-size:8.8px;line-height:1.8;color:var(--tx3);margin:0}
+  .ticket-card code{font-family:var(--mono);font-size:8px;color:var(--tx2)}
+
+  /* UI mockups */
+  .ui-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:12px;align-items:start}
+  .browser{border:1px solid var(--line2);border-radius:9px;overflow:hidden;background:#0b0d11;box-shadow:0 30px 80px -55px #000}
+  .browser-bar{height:27px;display:flex;align-items:center;gap:5px;padding:0 9px;border-bottom:1px solid var(--line);background:#11141a}
+  .browser-bar i{width:5px;height:5px;border-radius:50%;background:#3b414c}
+  .browser-bar span{margin-left:7px;font-family:var(--mono);font-size:6.5px;color:var(--tx4)}
+  .mp-page{padding:14px}
+  .mp-top{display:flex;align-items:center;gap:8px;height:28px;border-bottom:1px solid var(--line);padding-bottom:9px}
+  .mp-top b{font-size:9px;font-weight:550}.mp-top .sp{flex:1}
+  .mp-acct{display:flex;align-items:center;gap:4px;border:1px solid rgba(118,208,157,.2);border-radius:99px;padding:3px 6px;font-size:7px;color:var(--green)}
+  .mp-acct i{width:4px;height:4px;border-radius:50%;background:var(--green)}
+  .mp-hero{padding:17px 0 12px;border-bottom:1px solid var(--line)}
+  .mp-hero h3{margin:0;font-size:21px;letter-spacing:-.04em;font-weight:560}
+  .mp-hero p{margin:6px 0 0;font-size:8.5px;line-height:1.7;color:var(--tx3);max-width:430px}
+  .mp-kicker{font-family:var(--mono);font-size:6.5px;letter-spacing:.15em;color:var(--accent);margin-bottom:6px}
+  .mp-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px}
+  .mp-card{border:1px solid var(--line);border-radius:5px;background:#11141a;padding:10px}
+  .mp-card small{display:block;font-family:var(--mono);font-size:6px;color:var(--tx4);margin-bottom:5px}
+  .mp-card h4{margin:0 0 4px;font-size:10px;font-weight:550}
+  .mp-card p{margin:0 0 8px;font-size:7.5px;line-height:1.6;color:var(--tx3)}
+  .mp-input{height:23px;border:1px solid var(--line);border-radius:4px;background:#0e1014;display:flex;align-items:center;padding:0 6px;font-size:7.5px;color:var(--tx4);margin-bottom:6px}
+  .mp-btn{height:24px;border-radius:4px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:7.5px;font-weight:500}
+  .mp-btn.ghost{border:1px solid var(--line2);background:#14171d;color:var(--tx2)}
+  .mp-note{font-size:6.5px;color:var(--tx4);line-height:1.6;margin-top:6px}
+  .mp-roomlist{margin-top:9px;border:1px solid var(--line);border-radius:5px;padding:8px;font-size:7px;color:var(--tx3)}
+  .mp-roomlist b{font-size:8.5px;color:var(--tx2)}
+  .room-row{display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid rgba(255,255,255,.04);margin-top:5px}
+  .room-code{font-family:var(--mono);font-size:7px;color:var(--accent)}
+  .room-row span{font-size:6.5px;color:var(--tx4)}.room-row .sp{flex:1}
+  .ui-copy h3{font-size:16px;margin:0 0 8px;font-weight:560}
+  .ui-copy p{font-size:10px;line-height:1.8;color:var(--tx3);margin:0 0 14px}
+  .ui-copy ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+  .ui-copy li{position:relative;padding-left:13px;font-size:9px;line-height:1.7;color:var(--tx3)}
+  .ui-copy li::before{content:"";position:absolute;left:0;top:6px;width:5px;height:5px;border:1px solid var(--accent);border-radius:50%}
+  .gate{margin-top:12px;border:1px solid var(--line);border-radius:9px;background:var(--bg1);padding:18px;display:grid;grid-template-columns:1fr 320px;gap:22px;align-items:center}
+  .gate h3{font-size:16px;margin:0 0 7px;font-weight:560}
+  .gate p{font-size:9.5px;line-height:1.8;color:var(--tx3);margin:0}
+  .auth-card{border:1px solid var(--line2);border-radius:9px;background:#0e0f12;padding:14px}
+  .auth-card .k{font-family:var(--mono);font-size:6.5px;color:var(--tx4);letter-spacing:.1em;margin-bottom:5px}
+  .auth-card h4{margin:0 0 3px;font-size:13px}
+  .auth-card p{margin:0 0 10px;font-size:7.5px;color:var(--tx3)}
+  .auth-tabs{display:flex;gap:3px;border:1px solid var(--line);border-radius:4px;padding:2px;margin-bottom:8px}
+  .auth-tabs span{flex:1;text-align:center;font-size:7px;color:var(--tx4);padding:3px}
+  .auth-tabs .on{background:#1a1d24;border-radius:3px;color:var(--tx2)}
+  .auth-input{height:23px;border:1px solid var(--line);border-radius:3px;background:#101217;margin-bottom:5px;display:flex;align-items:center;padding:0 6px;font-size:7px;color:var(--tx4)}
+  .auth-btn{height:25px;border-radius:4px;background:var(--accent);display:grid;place-items:center;font-size:7.5px;color:#fff;margin-top:7px}
+
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:9px}
+  th{text-align:left;font-family:var(--mono);font-size:7px;color:var(--tx4);font-weight:400;letter-spacing:.06em;padding:7px 8px;border-bottom:1px solid var(--line2)}
+  td{padding:8px;border-bottom:1px solid var(--line);color:var(--tx3);line-height:1.65}
+  td:first-child{color:var(--tx2)}
+  tr:last-child td{border-bottom:0}
+  td code{font-family:var(--mono);font-size:7.8px;color:var(--accent)}
+  .yes{color:var(--green)}.no{color:var(--rose)}
+
+  .deploy-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .deploy-card{border:1px solid var(--line);border-radius:8px;background:var(--bg1);padding:16px}
+  .deploy-card h3{font-size:11px;margin:0 0 10px;font-weight:550}
+  .deploy-card .code{font-family:var(--mono);font-size:7.8px;line-height:1.8;color:var(--tx3);white-space:pre-wrap;background:#0d0f13;border:1px solid var(--line);border-radius:4px;padding:9px}
+  .deploy-card .code b{color:var(--tx)}
+  .deploy-card .code em{font-style:normal;color:var(--green)}
+  .deploy-card .code s{color:var(--rose);text-decoration:line-through}
+
+  .phases{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .phase{border:1px solid var(--line);border-radius:6px;background:#0e1014;padding:12px;position:relative}
+  .phase .n{font-family:var(--mono);font-size:6.5px;color:var(--accent);margin-bottom:7px}
+  .phase b{font-size:9px;font-weight:550;display:block;margin-bottom:4px}
+  .phase span{font-size:7.5px;line-height:1.7;color:var(--tx4);display:block}
+  .phase.risk{border-color:rgba(255,184,107,.18)}
+  .phase.risk .n{color:var(--amber)}
+
+  .decisions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .decision{border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:0 6px 6px 0;padding:14px;background:rgba(255,255,255,.018)}
+  .decision .q{font-family:var(--mono);font-size:7px;color:var(--accent);margin-bottom:5px}
+  .decision b{display:block;font-size:9.5px;font-weight:550;margin-bottom:4px}
+  .decision p{font-size:8.5px;line-height:1.7;color:var(--tx3);margin:0}
+  .decision strong{color:var(--green);font-weight:500}
+
+  footer{padding:30px 0 42px;color:var(--tx4);font-size:8px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  footer .mono{font-size:7px}
+
+  @media(max-width:1050px){
+    .hero-grid{grid-template-columns:1fr}
+    .arch,.ui-grid,.deploy-grid{grid-template-columns:1fr}
+    .sec-head{grid-template-columns:50px 1fr}.sec-head p{grid-column:2}
+    .flow,.phases{grid-template-columns:1fr 1fr}
+  }
+  @media(max-width:720px){
+    .wrap{padding:0 18px}.hero{padding:48px 0 42px}section{padding:52px 0}
+    .audit,.grid2,.grid3,.mp-cards,.gate,.decisions{grid-template-columns:1fr}
+    .sec-head{grid-template-columns:1fr;gap:10px}.sec-head p{grid-column:1}
+    .flow,.phases{grid-template-columns:1fr}
+    table{display:block;overflow-x:auto;white-space:nowrap}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="hero-top"><span class="dot"></span><span class="eyebrow">Multiplayer Merge / Account Required</span><span class="ver">DESIGN · 2026.11</span></div>
+    <div class="hero-grid">
+      <div>
+        <h1>退役 3010，<br><em>用一个账号进入房间。</em></h1>
+        <p>把 `gameService` 的房间状态、WebSocket 协议和心跳整体迁入 `dataService`。对外只剩同源 `/api` 与 `/ws`；多人漫游从“输入昵称/IP 即可连接”改为“登录云端账号后换取短时票再连接”，房间玩法本身不变。</p>
+        <div class="pills"><span class="pill good">gameService 最终删除</span><span class="pill">单进程 3020</span><span class="pill warn">匿名入口关闭</span><span class="pill">房间协议保持兼容</span></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><b>1<small> 个</small></b><span>Node 进程<br>HTTP + WebSocket</span></div>
+        <div class="stat"><b>3020<small> 端口</small></b><span>替代 3010<br>只保留一个后端</span></div>
+        <div class="stat"><b>60<small>s</small></b><span>一次性的<br>WS 连接票</span></div>
+        <div class="stat"><b class="up">0<small> 个</small></b><span>匿名玩家<br>IP 昵称入口</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="audit">
+      <div class="sec-head">
+        <div class="sec-no">01 / AUDIT</div>
+        <div><div class="kicker">现状拆解</div><h2>两个服务、两套部署，<br>还没有账号边界。</h2></div>
+        <p>前端和 nginx 已经统一走同源 `/api`；多人服务仍是独立 3010 端口，前端默认回退直连，服务端用 IP 当昵称，没有 JWT 或用户身份。</p>
+      </div>
+      <div class="audit">
+        <div class="audit-card">
+          <div class="tag">CURRENT / TWO PROCESSES</div>
+          <h3>gameService 独立运行</h3>
+          <p>`gameService/server.mjs` 自带 HTTP、WebSocket、房间、心跳和 10Hz 广播；有自己的 `.env`、依赖、PM2、端口和部署脚本。</p>
+          <div class="mini-code">3010 ws:// / health / rooms<br>3020 仅 Express + MySQL + SSE<br>每多一个服务就多一份配置和进程</div>
+        </div>
+        <div class="audit-card">
+          <div class="tag">CURRENT / NO AUTH</div>
+          <h3>IP 即昵称，连接即游客</h3>
+          <p>WebSocket 升级不做身份校验，`nickname = ipFromRequest(req)`；玩家可在 `profile` 里改任意昵称，房间内无法区分真实账号。</p>
+          <div class="mini-code">wss.on('connection') → ipFromRequest<br>profile.nickname 任意覆盖<br>没有 ticket / JWT / user_id</div>
+        </div>
+        <div class="audit-card good">
+          <div class="tag">TARGET / ONE PROCESS</div>
+          <h3>dataService 承载 /ws</h3>
+          <p>HTTP API 继续走 Express；同一个 server 处理 `/ws` upgrade，复用 JWT_SECRET、用户表、Origin 校验和进程管理。</p>
+          <div class="mini-code">app.listen() server reused<br>WebSocketServer({ noServer: true })<br>/api + /ws → 127.0.0.1:3020</div>
+        </div>
+        <div class="audit-card good">
+          <div class="tag">TARGET / ACCOUNT ONLY</div>
+          <h3>先登录，再换票连接</h3>
+          <p>浏览器带 Bearer JWT 请求 `/api/multiplayer/ticket`，拿 60 秒一次性票；WebSocket 升级时校验票并把账号挂到连接。</p>
+          <div class="mini-code">Authorization: Bearer &lt;jwt&gt;<br>POST /api/multiplayer/ticket<br>GET /ws?ticket=...</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <div class="sec-head">
+        <div class="sec-no">02 / TARGET</div>
+        <div><div class="kicker">目标架构</div><h2>一个后端，<br>两条同源通道。</h2></div>
+        <p>浏览器不需要知道 3010/3020：Nginx 把 `/api` 与 `/ws` 都转给 dataService；房间状态仍在内存，账号身份来自 MySQL 用户。</p>
+      </div>
+
+      <div class="arch">
+        <div class="arch-panel">
+          <div class="arch-label">BEFORE / 两个进程</div>
+          <div class="topology">
+            <div class="node www"><span class="ic">WEB</span><b>浏览器</b><span>https://site</span></div>
+            <div class="connector"></div>
+            <div class="node"><span class="ic">NGX</span><b>Nginx</b><span>/ws → 3010 · /api → 3020</span></div>
+            <div class="connector double"></div>
+            <div class="branch-row">
+              <div class="node ws"><span class="ic">WS</span><b>gameService</b><span>:3010 · 无鉴权 · 独立 PM2</span></div>
+              <div class="node db"><span class="ic">DB</span><b>dataService</b><span>:3020 · JWT · MySQL · SSE</span></div>
+            </div>
+          </div>
+          <div class="arch-note"><b>问题：</b>两条通道各自独立；多人服务无法复用账号；两套部署、两套环境、两套健康检查；3010 暴露在公网时仍可被匿名连接。</div>
+        </div>
+
+        <div class="arch-panel after">
+          <div class="arch-label">AFTER / 单进程</div>
+          <div class="topology">
+            <div class="node www"><span class="ic">WEB</span><b>浏览器</b><span>https://site</span></div>
+            <div class="connector"></div>
+            <div class="node"><span class="ic">NGX</span><b>Nginx</b><span>/api + /ws → 127.0.0.1:3020</span></div>
+            <div class="connector"></div>
+            <div class="node ws"><span class="ic">DS</span><b>dataService :3020</b><span>Express + WebSocketServer + SSE</span></div>
+            <div class="connector double"></div>
+            <div class="node db"><span class="ic">DB</span><b>MySQL</b><span>users · storage · comments</span></div>
+          </div>
+          <div class="arch-note"><b>收益：</b>一个进程、一个 `.env`、一个 PM2；账号、票、Origin、限流统一；`/ws` 不再需要独立公网端口。</div>
+        </div>
+      </div>
+
+      <div class="tree"><b>dataService/</b>
+├── server.mjs                <em>Express + listen server</em>
+├── schema.sql
+└── src/
+    ├── auth.mjs              <em>JWT / requireAuth</em>
+    ├── shares.mjs            <em>SSE / 评论</em>
+    └── multiplayer/
+        ├── index.mjs         <em>registerMultiplayer(server, app)</em>
+        ├── rooms.mjs         <em>房间、玩家、10Hz 快照</em>
+        ├── protocol.mjs      <em>sanitize / 消息常量</em>
+        └── tickets.mjs       <em>60s 一次性连接票</em>
+
+<s>gameService/</s>                <em>迁移完成并回归后删除</em></div>
+    </section>
+
+    <section id="auth">
+      <div class="sec-head">
+        <div class="sec-no">03 / AUTH</div>
+        <div><div class="kicker">登录与连接</div><h2>JWT 不直接进 WebSocket，<br>先换一次性票。</h2></div>
+        <p>浏览器 WebSocket 不能设置 Authorization 头。用短时票代替长效 JWT，既避免 URL 暴露登录令牌，也能在 upgrade 阶段直接返回 401。</p>
+      </div>
+
+      <div class="flow">
+        <div class="flow-step"><div class="n">01 / LOGIN</div><b>云端账号登录</b><span>多人页复用现有 JWT；无 token 显示登录门禁，不创建 WebSocket。</span></div>
+        <div class="flow-step"><div class="n">02 / TICKET</div><b>请求一次性票</b><span>Bearer JWT → POST `/api/multiplayer/ticket`；服务端校验账号并签发 60s 票。</span></div>
+        <div class="flow-step"><div class="n">03 / UPGRADE</div><b>带票升级</b><span>`/ws?ticket=...`；服务端原子消费票据，绑定 userId / username。</span></div>
+        <div class="flow-step"><div class="n">04 / ROOM</div><b>创建或加入</b><span>原 `create` / `join` / `state` 协议不变；玩家身份来自账号。</span></div>
+      </div>
+      <div class="flow-line"><span>已登录</span><i></i><span>短时票</span><i></i><span>升级成功</span><i></i><span>房间</span></div>
+
+      <div class="grid2" style="margin-top:12px">
+        <div class="ticket-card">
+          <h3>票据规则</h3>
+          <p>32 字节随机值，服务端只存哈希；TTL 60 秒、单次使用、绑定 userId。房间内不再保存 JWT；票过期或重放直接关闭 1008。</p>
+        </div>
+        <div class="ticket-card">
+          <h3>失败状态</h3>
+          <p><code>401</code> 未登录 / 过期；<code>429</code> 票请求过频；<code>403</code> Origin 不匹配；<code>400</code> 票无效或已使用；<code>409</code> 重复账号策略见待确认项。</p>
+        </div>
+      </div>
+
+      <div class="gate">
+        <div>
+          <h3>多人页自己处理登录，不把场景甩回编辑器</h3>
+          <p>邀请链接进入时保留 `?room=CODE`。用户登录成功后自动验证并加入原房间；房主场景仍在 sessionStorage，刷新和登录都不会丢失邀请码。</p>
+          <ul class="ui-copy" style="margin-top:12px">
+            <li>编辑器点击「多人漫游」先检查登录；未登录可先打开登录窗口</li>
+            <li>直接打开邀请链接：多人页显示登录门禁，登录后自动加入</li>
+            <li>token 过期：清 token、显示重新登录，连接不进入房间</li>
+            <li>登录中不允许创建房间，避免匿名 socket 先占用连接</li>
+          </ul>
+        </div>
+        <div class="auth-card">
+          <div class="k">REVIEW IDENTITY / CLOUD</div>
+          <h4>登录后进入多人漫游</h4>
+          <p>使用与编辑器相同的云端账号</p>
+          <div class="auth-tabs"><span class="on">登录</span><span>注册</span></div>
+          <div class="auth-input">用户名</div>
+          <div class="auth-input">密码</div>
+          <div class="auth-input">拖动滑块完成拼图</div>
+          <div class="auth-btn">登录并连接</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="ui">
+      <div class="sec-head">
+        <div class="sec-no">04 / UI</div>
+        <div><div class="kicker">多人页设计</div><h2>大厅第一屏，<br>先确认“我是谁”。</h2></div>
+        <p>账号名替代 IP 昵称；颜色仍可改，昵称不再任意填写。登录后顶部显示账号状态，创建 / 加入 / 房间列表仍沿用现有布局。</p>
+      </div>
+
+      <div class="ui-grid">
+        <div class="browser">
+          <div class="browser-bar"><i></i><i></i><i></i><span>/#/multiplayer</span></div>
+          <div class="mp-page">
+            <div class="mp-top"><b>Grid Massing Studio</b><span class="sp"></span><span class="mp-acct"><i></i>吴老师</span><span style="font-size:7px;color:var(--tx4)">退出</span></div>
+            <div class="mp-hero">
+              <div class="mp-kicker">MULTIPLAYER WALKTHROUGH</div>
+              <h3>一起在场馆里走一圈</h3>
+              <p>当前账号 <b style="color:var(--tx2)">吴老师</b>。房主使用当前场景创建房间，朋友用邀请链接登录后加入。</p>
+            </div>
+            <div class="mp-cards">
+              <div class="mp-card"><small>HOST / 已登录</small><h4>创建房间</h4><p>使用当前场景，生成邀请链接。</p><div class="mp-input">房间人数：4 人</div><div class="mp-btn">创建并获取邀请链接</div><div class="mp-note">创建后进入等待房间</div></div>
+              <div class="mp-card"><small>GUEST / 需登录</small><h4>加入房间</h4><p>输入 6 位房间号，或打开邀请链接。</p><div class="mp-input">例如 A7K2Q9</div><div class="mp-btn ghost">登录后加入</div><div class="mp-note">未登录不会建立连接</div></div>
+            </div>
+            <div class="mp-roomlist"><div style="display:flex;align-items:center"><b>在线房间</b><span style="margin-left:auto;font-size:6.5px;color:var(--tx4)">刷新</span></div>
+              <div class="room-row"><span class="room-code">A7K2Q9</span><span>吴老师 · 2/4 人</span><span class="sp"></span><span>等待中</span></div>
+              <div class="room-row"><span class="room-code">D8M3PX</span><span>林晓 · 4/6 人</span><span class="sp"></span><span>漫游中</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="ui-copy">
+          <h3>账号身份固定</h3>
+          <p>房间内 `nickname` 默认等于账号用户名，服务端从 ticket 的 userId 取身份，客户端不能再伪造昵称。</p>
+          <ul>
+            <li>顶部始终显示账号名与在线状态</li>
+            <li>玩家卡片使用账号名，不再出现 IP 地址</li>
+            <li>仍可修改个人模型颜色</li>
+            <li>房主 / 客人权限仍按连接上的 host 标记</li>
+            <li>登录门禁复用统一 `AuthDialog`，不新增第三套登录 UI</li>
+            <li>未登录时创建 / 加入按钮禁用，点击打开登录</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="grid3" style="margin-top:12px">
+        <div class="card"><div class="num">STATE / UNAUTH</div><h3>未登录</h3><p>登录门禁覆盖大厅；不显示在线房间，不建立 socket。邀请码保留在 URL，登录后继续。</p></div>
+        <div class="card"><div class="num">STATE / EXPIRED</div><h3>登录过期</h3><p>清理本地 token，显示“登录已过期”，关闭 socket；重新登录后重新请求票。</p></div>
+        <div class="card"><div class="num">STATE / CONNECTED</div><h3>已登录连接</h3><p>顶部账号标签绿色；只有票验证成功后，才允许 `create` / `join` / `list`。</p></div>
+      </div>
+    </section>
+
+    <section id="protocol">
+      <div class="sec-head">
+        <div class="sec-no">05 / PROTOCOL</div>
+        <div><div class="kicker">协议兼容</div><h2>消息结构不变，<br>身份从连接上取。</h2></div>
+        <p>房间、状态、天气、时间、门、聊天、踢人协议全部保留；客户端不再发送任意昵称。每个连接在服务端已经绑定账号，房间快照只暴露展示信息。</p>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <div class="num">CLIENT → SERVER</div>
+          <h3>保留现有消息</h3>
+          <table>
+            <tr><td><code>create</code></td><td>人数、场景、天气、天气开关、粒子浓度、能见度、太阳进度</td></tr>
+            <tr><td><code>join</code> / <code>list</code></td><td>房间号 / 在线房间</td></tr>
+            <tr><td><code>state</code></td><td>位置、朝向、视角、自动巡游</td></tr>
+            <tr><td><code>profile</code></td><td class="yes">只允许颜色；昵称忽略</td></tr>
+            <tr><td><code>gate</code> / <code>weather</code> / <code>time</code></td><td>房主权限与原逻辑一致</td></tr>
+            <tr><td><code>message</code> / <code>kick</code> / <code>leave</code></td><td>聊天、踢人、退出</td></tr>
+            <tr><td><code>interact</code></td><td>击退 / 拖拽，服务端校验目标</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <div class="num">SERVER → CLIENT</div>
+          <h3>快照补账号字段</h3>
+          <table>
+            <tr><td><code>created</code> / <code>joined</code></td><td>新增 `account: { id, username }`，昵称取账号名</td></tr>
+            <tr><td><code>room</code></td><td>players 增加 `accountId`；不返回 JWT / 票</td></tr>
+            <tr><td><code>player-joined</code> / <code>updated</code></td><td>展示名固定账号名，颜色可更新</td></tr>
+            <tr><td><code>room-list</code></td><td>房主显示账号名；在线人数只统计已登录连接</td></tr>
+            <tr><td><code>error</code> / <code>join-error</code></td><td>保留并新增 401 / ticket 失效提示</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="num">ROOM LIFECYCLE</div>
+        <h3>房间仍然只存在内存里</h3>
+        <p>不新增 MySQL 房间表，不改变“房主退出即解散、服务重启即清空”的行为。登录只解决身份，不会把房间、位置或聊天持久化。</p>
+      </div>
+    </section>
+
+    <section id="deploy">
+      <div class="sec-head">
+        <div class="sec-no">06 / DEPLOY</div>
+        <div><div class="kicker">部署切换</div><h2>删除 3010，<br>把代理指向 3020。</h2></div>
+        <p>一次性切换：dataService 增加 `ws` 依赖和多人模块，nginx 的 `/ws` 改到 3020；前端改为同源 `/ws`，Vite 本地代理同样转发。</p>
+      </div>
+
+      <div class="deploy-grid">
+        <div class="deploy-card">
+          <h3>Nginx</h3>
+          <div class="code"><s>location ^~ /ws { proxy_pass http://127.0.0.1:3010; }</s>
+
+<em>location ^~ /ws {</em>
+  proxy_pass http://127.0.0.1:<b>3020</b>;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_read_timeout 3600s;
+<em>}</em></div>
+        </div>
+        <div class="deploy-card">
+          <h3>Frontend / Vite</h3>
+          <div class="code"><s>VITE_MULTIPLAYER_WS_URL=ws://...:3010</s>
+// 同源，不再需要独立变量
+const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+new WebSocket(`${protocol}//${location.host}/ws?ticket=...`)
+
+// vite.config.ts
+'/ws': {
+  target: 'ws://127.0.0.1:3020',
+  ws: true,
+}</div>
+        </div>
+        <div class="deploy-card">
+          <h3>dataService</h3>
+          <div class="code">package.json
+  + "ws": "^8.18.0"
+
+.env
+  + MULTIPLAYER_ENABLED=true
+  + MAX_ROOM_SIZE=8
+  + TICK_HZ=10
+  + WS_TICKET_TTL=60
+
+server.mjs
+  import { registerMultiplayer } from './src/multiplayer/index.mjs'
+  registerMultiplayer(server, { app, config })</div>
+        </div>
+        <div class="deploy-card">
+          <h3>进程与目录</h3>
+          <div class="code"><s>pm2 grid-multiplayer (3010)</s>
+pm2 grid-massing-data (3020)
+
+<s>build/deploy-multiplayer.mjs</s>
+build/deploy-data.mjs  <em>上传 src/multiplayer</em>
+build/deploy-web.mjs   <em>wsTarget → 3020</em>
+
+<s>gameService/</s>          <em>回归通过后删除</em></div>
+        </div>
+      </div>
+
+      <div class="phases" style="margin-top:12px">
+        <div class="phase"><div class="n">PHASE 01</div><b>抽离房间模块</b><span>把 gameService 状态机复制到 `src/multiplayer`，先不改前端，单测房间创建 / 加入 / 广播。</span></div>
+        <div class="phase"><div class="n">PHASE 02</div><b>接 ticket + WS</b><span>dataService 同端口注册 `/ws`，接入 JWT 票和 Origin 校验，保留原协议。</span></div>
+        <div class="phase risk"><div class="n">PHASE 03</div><b>切换客户端</b><span>多人页加登录门禁，请求 ticket；同源 `/ws`，移除 3010 地址和匿名 fallback。</span></div>
+        <div class="phase"><div class="n">PHASE 04</div><b>清理旧服务</b><span>nginx 切 3020，停 3010，删除 gameService、deploy-multiplayer 和旧 env/README。</span></div>
+      </div>
+    </section>
+
+    <section id="risks">
+      <div class="sec-head">
+        <div class="sec-no">07 / RISK</div>
+        <div><div class="kicker">风险与回滚</div><h2>先保留回滚窗口，<br>再永久删目录。</h2></div>
+        <p>房间不持久化，切换期间会丢失当前房间。建议发布窗口避开使用高峰；旧邀请链接登录后仍可继续使用房间码。</p>
+      </div>
+      <div class="grid2">
+        <div class="card"><div class="num">ROLLBACK</div><h3>两小时回滚窗口</h3><p>先部署新版 dataService（同时监听 /ws），再切 nginx `/ws` 到 3020；确认登录、创建、加入、广播都通过后，再停止 3010 并删除 gameService。</p></div>
+        <div class="card"><div class="num">COMPATIBILITY</div><h3>旧客户端直接断开</h3><p>旧页面仍连 3010；切换时应同时发布新前端。旧邀请链接只保留房间号，用户刷新到新版本并登录后可重新加入。</p></div>
+        <div class="card"><div class="num">SCALE</div><h3>仍然单实例</h3><p>房间和 ticket 都在进程内存；与现有 SSE 一样，多实例需要 Redis pub/sub。当前 2–8 人房间不需要拆服务。</p></div>
+        <div class="card"><div class="num">SECURITY</div><h3>不再暴露 3010</h3><p>关闭安全组入站；只允许 nginx 访问 3020；WebSocket 校验 Origin、票、房间权限和 payload 上限。</p></div>
+      </div>
+    </section>
+
+    <section id="decisions">
+      <div class="sec-head">
+        <div class="sec-no">08 / DECISIONS</div>
+        <div><div class="kicker">需要确认</div><h2>这四点决定实现形态。</h2></div>
+        <p>设计默认值如下；确认后再开始改代码。</p>
+      </div>
+      <div class="decisions">
+        <div class="decision"><div class="q">Q.01 / AUTH</div><b>连接票方案？</b><p>推荐 <strong>60 秒一次性票</strong>，不把长效 JWT 放进 WS URL，也不在首条消息前允许房间操作。</p></div>
+        <div class="decision"><div class="q">Q.02 / NAME</div><b>昵称固定账号名？</b><p>推荐 <strong>固定</strong>。多人页不再允许任意昵称，只保留颜色，避免冒充与身份漂移。</p></div>
+        <div class="decision"><div class="q">Q.03 / DUPLICATE</div><b>同账号多窗口？</b><p>推荐 <strong>允许</strong>，每个连接独立玩家，但显示名相同；后续可加“同一账号只保留一个连接”。</p></div>
+        <div class="decision"><div class="q">Q.04 / RECONNECT</div><b>断线自动重连？</b><p>推荐 <strong>本期不做</strong>。保留现有“断线回大厅”，先稳定迁移；重连涉及房间席位恢复，另立设计。</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>多人漫游并入 dataService · 登录制设计稿 v1 · 2026-11-25</span>
+    <span class="mono">ONE PROCESS · ONE ACCOUNT · /api + /ws</span>
+  </footer>
+</div>
+</body>
+</html>

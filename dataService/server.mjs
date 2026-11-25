@@ -15,6 +15,8 @@ import {
   notifyStorageSlotShareRemoved,
   registerShareRoutes,
 } from './src/shares.mjs'
+import { registerMultiplayer } from './src/multiplayer/index.mjs'
+import { disposeTickets, issueTicket } from './src/multiplayer/tickets.mjs'
 
 const app = express()
 app.disable('x-powered-by')
@@ -74,6 +76,7 @@ app.get('/api/health', (req, res) => {
     database: !!app.locals.dbReady,
     slotsPerUser: config.slotLimit,
     maxSceneMb: config.maxSceneMb,
+    multiplayer: config.multiplayer.enabled,
   })
 })
 
@@ -151,6 +154,31 @@ app.post('/api/auth/login', requireDatabase, async (req, res, next) => {
     await pool.query('UPDATE users SET last_login_at = NOW() WHERE id = ?', [row.id])
     const user = publicUser(row)
     res.json({ token: signToken(user), user })
+  } catch (err) {
+    next(err)
+  }
+})
+
+app.post('/api/multiplayer/ticket', requireDatabase, requireAuth, async (req, res, next) => {
+  try {
+    // JWT 里的 username 可能是旧快照；房间身份以 users 表当前名称为准
+    const [rows] = await getPool().query(
+      'SELECT username FROM users WHERE id = ? LIMIT 1',
+      [req.user.id],
+    )
+    if (!rows.length) {
+      res.status(401).json({ error: '账号不存在，请重新登录' })
+      return
+    }
+    const issued = issueTicket({
+      id: req.user.id,
+      username: rows[0].username,
+    })
+    if (issued.rateLimited) {
+      res.status(429).json({ error: '连接票申请太频繁，请稍后再试' })
+      return
+    }
+    res.json({ ticket: issued.ticket, expiresIn: issued.expiresIn })
   } catch (err) {
     next(err)
   }
@@ -314,6 +342,13 @@ const server = app.listen(config.port, config.host, () => {
   console.log(`[dataService] 监听 http://${config.host}:${config.port}`)
 })
 
+const multiplayer = registerMultiplayer(server, { originAllowed })
+if (config.multiplayer.enabled) {
+  console.log(
+    `[dataService] 多人漫游 /ws 已就绪 · TICK_HZ=${config.multiplayer.tickHz} · MAX_ROOM_SIZE=${config.multiplayer.maxRoomSize}`,
+  )
+}
+
 // 数据库初始化放到后台：MySQL 暂不可达时，健康检查与验证码接口仍立即可用
 void (async () => {
   try {
@@ -337,6 +372,8 @@ async function shutdown(signal) {
   if (shuttingDown) return
   shuttingDown = true
   console.log(`[dataService] 收到 ${signal}，正在关闭`)
+  await multiplayer.close().catch(() => {})
+  disposeTickets()
   server.close()
   await closeDatabase().catch(() => {})
   process.exit(0)

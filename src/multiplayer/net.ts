@@ -4,10 +4,16 @@ import type { ParticleDensities, WeatherKind } from '../core/weather'
 
 export interface RoomPlayer {
   id: string
+  accountId?: number
   nickname: string
   color: string
   isHost: boolean
   state: WalkNetState
+}
+
+export interface RoomAccount {
+  id: number
+  username: string
 }
 
 export interface RoomSnapshot {
@@ -54,6 +60,7 @@ export type ServerMessage =
       code: string
       selfId: string
       nickname: string
+      account?: RoomAccount
       room: RoomSnapshot
     }
   | {
@@ -61,6 +68,7 @@ export type ServerMessage =
       code: string
       selfId: string
       nickname: string
+      account?: RoomAccount
       scene: SceneJson
       room: RoomSnapshot
     }
@@ -93,15 +101,18 @@ export type ServerMessage =
   | { type: 'error'; message: string }
   | { type: 'pong'; t: number }
 
-export function multiplayerWebSocketUrl(): string {
-  const configured = String(import.meta.env.VITE_MULTIPLAYER_WS_URL || '').trim()
-  if (configured) return configured
+/**
+ * 多人服务已并入 dataService：使用同源 /ws，ticket 是登录后换取的一次性票。
+ * 本地由 vite.config.ts 的 /ws 代理转发，生产由 nginx 转发。
+ */
+export function multiplayerWebSocketUrl(ticket: string): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.hostname}:3010`
+  const query = new URLSearchParams({ ticket })
+  return `${protocol}//${window.location.host}/ws?${query.toString()}`
 }
 
-export function createMultiplayerSocket(): WebSocket {
-  return new WebSocket(multiplayerWebSocketUrl())
+export function createMultiplayerSocket(ticket: string): WebSocket {
+  return new WebSocket(multiplayerWebSocketUrl(ticket))
 }
 
 export interface ClientCreateMessage {
@@ -128,7 +139,8 @@ export interface ClientStateMessage {
 
 export interface ClientProfileMessage {
   type: 'profile'
-  nickname: string
+  /** 服务端固定使用登录账号名，昵称字段保留仅为兼容旧客户端 */
+  nickname?: string
   color: string
 }
 

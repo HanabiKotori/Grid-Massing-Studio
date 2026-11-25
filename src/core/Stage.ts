@@ -792,7 +792,6 @@ export class Stage {
   private pasteCenter: Pt = { x: 0, z: 0 }
   private pasteTarget: Pt | null = null
   private pasteBaseBox: SnapBox | null = null
-  private pasteTargets: SnapBox[] = []
   /** 家具组合落位：整组幽灵、组合数据与当前可行落点 */
   private presetGhost: THREE.Group | null = null
   private presetSpec: FurniturePreset | null = null
@@ -3329,22 +3328,7 @@ export class Stage {
     return targets
   }
 
-  /** 展台复制待放置时：吸附到现有展台与外部落地设施 */
-  private boothPasteSnapTargets(booths: Booth[]): SnapBox[] {
-    const sourcePoints = booths.flatMap((booth) => booth.points)
-    const targets: SnapBox[] = []
-    for (const booth of this.boothSpecs.values()) {
-      targets.push(snapBoxOfPoints(booth.points))
-    }
-    for (const infra of this.infras) {
-      if (isFurnitureKind(infra.kind) || infra.kind === 'gate' || infra.kind === 'window') {
-        continue
-      }
-      if (sourcePoints.length && pointInPolygon(infra, sourcePoints)) continue
-      targets.push(snapBoxOfInfra(infra))
-    }
-    return targets
-  }
+
 
   /** 门窗沿墙滑动时吸附到同墙线上的另一个门窗边缘 */
   private snapWallItemEdge(
@@ -3702,8 +3686,10 @@ export class Stage {
     this.pasteBaseBox = payload.booths.length
       ? snapBoxOfPoints(payload.booths.flatMap((booth) => booth.points))
       : null
-    this.pasteTargets = this.boothPasteSnapTargets(payload.booths)
-    this.pasteTarget = { x: payload.center.x + 4, z: payload.center.z + 4 }
+    this.pasteTarget = this.alignPasteTarget({
+      x: payload.center.x + 4,
+      z: payload.center.z + 4,
+    })
     root.position.set(
       this.pasteTarget.x - this.pasteCenter.x,
       0,
@@ -3724,32 +3710,33 @@ export class Stage {
     this.pasteGhost = null
     this.pasteTarget = null
     this.pasteBaseBox = null
-    this.pasteTargets = []
     this.snapRing.visible = false
     this.updateSnapGuide(null)
     this.opts.onHover?.(null)
   }
 
+  /**
+   * 复制组落位以包围盒边缘对齐 1m 网格，而不是对齐中心。
+   * 3m 等奇数尺寸展台的中心在 .5m 上，按中心吸附会让整组永久偏半格。
+   */
+  private alignPasteTarget(raw: Pt): Pt {
+    const anchor = snapToGrid(raw, SNAP)
+    if (!this.pasteBaseBox) return anchor
+    const baseDx = anchor.x - this.pasteCenter.x
+    const baseDz = anchor.z - this.pasteCenter.z
+    const minX = this.pasteBaseBox.minX + baseDx
+    const minZ = this.pasteBaseBox.minZ + baseDz
+    const alignedMinX = Math.round(minX / SNAP) * SNAP
+    const alignedMinZ = Math.round(minZ / SNAP) * SNAP
+    return {
+      x: this.pasteCenter.x + alignedMinX - this.pasteBaseBox.minX,
+      z: this.pasteCenter.z + alignedMinZ - this.pasteBaseBox.minZ,
+    }
+  }
+
   private updateBoothPaste(raw: Pt) {
     if (!this.pasteGhost) return
-    let target = snapToGrid(raw, SNAP)
-    let snapTarget: SnapBox | null = null
-    if (this.pasteBaseBox) {
-      const baseDx = target.x - this.pasteCenter.x
-      const baseDz = target.z - this.pasteCenter.z
-      const snapped = snapEdgeDelta(
-        this.pasteBaseBox,
-        baseDx,
-        baseDz,
-        this.pasteTargets,
-        EDGE_SNAP,
-      )
-      target = {
-        x: this.pasteCenter.x + snapped.dx,
-        z: this.pasteCenter.z + snapped.dz,
-      }
-      snapTarget = snapped.target
-    }
+    const target = this.alignPasteTarget(raw)
     this.pasteTarget = target
     this.pasteGhost.position.set(
       target.x - this.pasteCenter.x,
@@ -3758,7 +3745,7 @@ export class Stage {
     )
     this.snapRing.visible = true
     this.snapRing.position.set(target.x, 0.05, target.z)
-    this.updateSnapGuide(snapTarget)
+    this.updateSnapGuide(null)
     this.opts.onHover?.(target)
   }
 

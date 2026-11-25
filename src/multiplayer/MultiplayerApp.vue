@@ -15,7 +15,16 @@ import WalkMinimap from '../components/WalkMinimap.vue'
 import WalkOverlay from '../components/WalkOverlay.vue'
 import WeatherPanel from '../components/WeatherPanel.vue'
 import type { LiveWeather } from '../core/amapWeather'
+import {
+  CloudStorageError,
+  cloudApi,
+  readCloudToken,
+  writeCloudToken,
+  type AuthResponse,
+  type CloudUser,
+} from '../core/cloudStorage'
 import { pushMessage } from '../core/messageCenter'
+import ShareLoginDialog from '../share/ShareLoginDialog.vue'
 import {
   Stage,
   type QualityLevel,
@@ -31,7 +40,6 @@ import {
 import { useWeather } from '../composables/useWeather'
 import {
   createMultiplayerSocket,
-  multiplayerWebSocketUrl,
   type RoomPlayer,
   type RoomSnapshot,
   type RoomSummary,
@@ -53,6 +61,10 @@ const autoJoining = ref(false)
 const busy = ref(false)
 const error = ref('')
 const status = ref('')
+const currentUser = ref<CloudUser | null>(null)
+const authChecking = ref(true)
+const loginOpen = ref(false)
+const authError = ref('')
 
 const roomCode = ref('')
 const selfId = ref('')
@@ -165,13 +177,7 @@ const minimapPlayers = computed(() =>
     })),
 )
 const createSizeOptions = [2, 3, 4, 5, 6, 7, 8]
-const serverLabel = (() => {
-  try {
-    return new URL(multiplayerWebSocketUrl()).host
-  } catch {
-    return multiplayerWebSocketUrl()
-  }
-})()
+const serverLabel = `${window.location.host}/ws`
 
 const QUALITY_LABELS: Record<QualityLevel, string> = {
   ultra: '极致',
@@ -459,58 +465,165 @@ function cleanupStage() {
   showWeatherPanel.value = false
 }
 
-function ensureSocket(): Promise<WebSocket> {
-  if (socket?.readyState === WebSocket.OPEN) return Promise.resolve(socket)
-  if (socketPromise) return socketPromise
-  socketPromise = new Promise<WebSocket>((resolve, reject) => {
-    let settled = false
-    let ws: WebSocket
+let authSessionStarted = false
+
+function handleAuthExpired(err?: unknown) {
+  if (err instanceof CloudStorageError && err.status === 401) {
+    writeCloudToken(null)
+    currentUser.value = null
+    authSessionStarted = false
+    authError.value = '登录已过期，请重新登录'
+    loginOpen.value = true
     try {
-      ws = createMultiplayerSocket()
+      socket?.close()
+    } catch {
+      /* ignore */
+    }
+    socket = null
+    socketPromise = null
+    return true
+  }
+  return false
+}
+
+async function initAuth() {
+  authChecking.value = true
+  authError.value = ''
+  if (!readCloudToken()) {
+    authChecking.value = false
+    return
+  }
+  try {
+    const { user } = await cloudApi.me()
+    currentUser.value = user
+    await afterAuthReady()
+  } catch (err) {
+    if (!handleAuthExpired(err)) {
+      authError.value =
+        err instanceof Error ? err.message : '登录状态检查失败'
+    }
+  } finally {
+    authChecking.value = false
+  }
+}
+
+async function afterAuthReady() {
+  if (authSessionStarted || !currentUser.value) return
+  authSessionStarted = true
+  const rawCode = route.query.room
+  const code = Array.isArray(rawCode) ? rawCode[0] : rawCode
+  if (code) {
+    joinCode.value = code.trim().toUpperCase()
+    autoJoining.value = true
+    void joinGame(joinCode.value)
+  }
+  startRoomListPoll()
+}
+
+function handleLoginSuccess(result: AuthResponse) {
+  writeCloudToken(result.token)
+  currentUser.value = result.user
+  authError.value = ''
+  loginOpen.value = false
+  void afterAuthReady()
+}
+
+function logoutMultiplayer() {
+  writeCloudToken(null)
+  currentUser.value = null
+  authSessionStarted = false
+  authError.value = ''
+  intentionalClose = true
+  listTimer !== null && window.clearTimeout(listTimer)
+  listTimer = null
+  try {
+    socket?.close()
+  } catch {
+    /* ignore */
+  }
+  socket = null
+  socketPromise = null
+  cleanupStage()
+  resetToLobby('已退出登录')
+  loginOpen.value = true
+}
+
+async function ensureSocket(): Promise<WebSocket> {
+  if (socket?.readyState === WebSocket.OPEN) return socket
+  if (socketPromise) return socketPromise
+  if (!currentUser.value) {
+    loginOpen.value = true
+    throw new Error('请先登录云端账号')
+  }
+
+  socketPromise = (async () => {
+    let ticket: string
+    try {
+      const issued = await cloudApi.multiplayerTicket()
+      ticket = issued.ticket
     } catch (err) {
-      socketPromise = null
-      reject(err)
-      return
+      handleAuthExpired(err)
+      throw new Error(
+        err instanceof Error ? err.message : '无法申请多人连接票',
+      )
     }
-    socket = ws
-    const timer = window.setTimeout(() => {
-      if (settled) return
-      settled = true
-      socketPromise = null
+
+    return await new Promise<WebSocket>((resolve, reject) => {
+      let settled = false
+      intentionalClose = false
+      let ws: WebSocket
       try {
-        ws.close()
-      } catch {
-        /* ignore */
+        ws = createMultiplayerSocket(ticket)
+      } catch (err) {
+        socketPromise = null
+        reject(err)
+        return
       }
-      reject(new Error('连接多人服务超时，请检查 .env 中的服务地址'))
-    }, 8000)
+      socket = ws
+      const timer = window.setTimeout(() => {
+        if (settled) return
+        settled = true
+        socketPromise = null
+        try {
+          ws.close()
+        } catch {
+          /* ignore */
+        }
+        reject(new Error('连接多人服务超时，请稍后重试'))
+      }, 8000)
 
-    const succeed = () => {
-      if (settled) return
-      settled = true
-      window.clearTimeout(timer)
-      socketPromise = null
-      resolve(ws)
-    }
-    const fail = () => {
-      if (settled) return
-      settled = true
-      window.clearTimeout(timer)
-      socketPromise = null
-      reject(new Error('无法连接多人服务，请确认 Node 服务已启动'))
-    }
+      const succeed = () => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timer)
+        socketPromise = null
+        resolve(ws)
+      }
+      const fail = () => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timer)
+        socketPromise = null
+        reject(new Error('无法连接多人服务，请重新登录后重试'))
+      }
 
-    ws.addEventListener('open', succeed)
-    ws.addEventListener('message', onSocketMessage)
-    ws.addEventListener('close', onSocketClose)
-    ws.addEventListener('error', () => {
-      if (ws.readyState !== WebSocket.OPEN) fail()
+      ws.addEventListener('open', succeed)
+      ws.addEventListener('message', onSocketMessage)
+      ws.addEventListener('close', onSocketClose)
+      ws.addEventListener('error', () => {
+        if (ws.readyState !== WebSocket.OPEN) fail()
+      })
     })
-  })
+  })()
+
   return socketPromise
 }
 
 async function createGame() {
+  if (!currentUser.value) {
+    loginOpen.value = true
+    return
+  }
   if (busy.value) return
   busy.value = true
   error.value = ''
@@ -543,6 +656,10 @@ async function createGame() {
 }
 
 async function joinGame(codeValue?: string) {
+  if (!currentUser.value) {
+    loginOpen.value = true
+    return
+  }
   if (busy.value) return
   const code = String(codeValue ?? joinCode.value).trim().toUpperCase()
   if (!/^[A-Z0-9]{6}$/.test(code)) {
@@ -753,18 +870,13 @@ function kickPlayer(player: RoomPlayer) {
 function saveProfile() {
   if (!selfId.value) return
   const current = players.value.find((player) => player.id === selfId.value)
-  const nickname = profileName.value.trim().slice(0, 20)
-  if (!nickname) {
-    profileName.value = current?.nickname || ''
-    toast('玩家名称不能为空')
-    return
-  }
   const color = /^#[0-9a-f]{6}$/i.test(profileColor.value)
     ? profileColor.value
     : '#4f7cff'
-  profileName.value = nickname
+  profileName.value = current?.nickname || currentUser.value?.username || ''
   profileColor.value = color
-  send({ type: 'profile', nickname, color })
+  // 昵称由登录账号固定，只同步颜色
+  send({ type: 'profile', color })
 }
 
 function startRoom() {
@@ -1423,7 +1535,7 @@ async function copyInvite() {
 }
 
 async function requestRoomList() {
-  if (phase.value !== 'lobby') return
+  if (phase.value !== 'lobby' || !currentUser.value) return
   roomListLoading.value = true
   try {
     const ws = await ensureSocket()
@@ -1516,14 +1628,6 @@ function onMessageKeyDown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
-  const rawCode = route.query.room
-  const code = Array.isArray(rawCode) ? rawCode[0] : rawCode
-  if (code) {
-    joinCode.value = code.trim().toUpperCase()
-    autoJoining.value = true
-    void joinGame(joinCode.value)
-  }
-  startRoomListPoll()
   syncViewport()
   syncFullscreenState()
   window.addEventListener('beforeunload', onBeforeUnload)
@@ -1534,6 +1638,8 @@ onMounted(() => {
   window.addEventListener('keydown', onMessageKeyDown, true)
   window.addEventListener('keydown', onPlayerListKeyDown, true)
   window.addEventListener('blur', onWindowBlur)
+  // 多人漫游必须使用云端账号：未登录先显示门禁，登录后再连接 /ws
+  void initAuth()
 })
 
 onBeforeUnmount(() => {
@@ -1577,6 +1683,19 @@ onBeforeUnmount(() => {
           <span>Grid Massing Studio</span>
           <b>多人漫游</b>
         </div>
+        <div v-if="currentUser" class="mp-account">
+          <i aria-hidden="true" />
+          <span>{{ currentUser.username }}</span>
+          <button type="button" @click="logoutMultiplayer">退出</button>
+        </div>
+        <button
+          v-else-if="!authChecking"
+          type="button"
+          class="mp-login-btn"
+          @click="loginOpen = true"
+        >
+          登录
+        </button>
         <span class="mp-server">{{ serverLabel }}</span>
       </header>
 
@@ -1591,8 +1710,8 @@ onBeforeUnmount(() => {
           </div>
           <h1>一起在场馆里走一圈</h1>
           <p>
-            房主使用当前浏览器 IndexedDB 中的场景创建房间，邀请朋友进入。
-            只有漫游模式，不进入编辑；昵称和模型颜色可在房间内修改。
+            登录云端账号后使用当前场景创建房间，邀请朋友进入。
+            只有漫游模式，不进入编辑；昵称由账号固定，模型颜色可修改。
           </p>
         </section>
 
@@ -1606,13 +1725,32 @@ onBeforeUnmount(() => {
           <p v-if="status" class="mp-message mp-status">{{ status }}</p>
         </div>
 
-        <section v-if="autoJoining" class="mp-card mp-connecting">
+        <section v-if="authChecking" class="mp-card mp-auth-gate">
+          <span class="mp-spinner" />
+          <h2>正在检查登录状态…</h2>
+          <p>多人漫游需要云端账号。</p>
+        </section>
+
+        <section v-else-if="!currentUser" class="mp-card mp-auth-gate">
+          <p class="mp-eyebrow">ACCOUNT REQUIRED</p>
+          <h2>登录后进入多人漫游</h2>
+          <p>
+            未登录不会建立 WebSocket，也无法创建或加入房间。
+            登录后保留当前邀请码和当前场景。
+          </p>
+          <p v-if="authError" class="mp-message mp-error">{{ authError }}</p>
+          <button type="button" class="mp-primary" @click="loginOpen = true">
+            登录云端账号
+          </button>
+        </section>
+
+        <section v-if="currentUser && autoJoining" class="mp-card mp-connecting">
           <span class="mp-spinner" />
           <h2>正在加入房间 {{ joinCode }}</h2>
           <p>正在验证房间人数与房主场景…</p>
         </section>
 
-        <div v-else class="mp-grid">
+        <div v-else-if="currentUser" class="mp-grid">
           <section class="mp-card">
             <div class="mp-card-kicker">HOST</div>
             <h2>创建房间</h2>
@@ -1662,7 +1800,7 @@ onBeforeUnmount(() => {
           </section>
         </div>
 
-        <section v-if="!autoJoining" class="mp-card mp-room-list-card">
+        <section v-if="currentUser && !autoJoining" class="mp-card mp-room-list-card">
           <div class="mp-room-list-head">
             <div>
               <div class="mp-card-kicker">ONLINE ROOMS</div>
@@ -1737,17 +1875,11 @@ onBeforeUnmount(() => {
           <div class="mp-profile-editor">
             <div class="mp-profile-head">
               <b>我的资料</b>
-              <span>只能修改自己的名称和颜色</span>
+              <span>账号名固定，只可修改模型颜色</span>
             </div>
             <label class="mp-profile-field">
-              <span>名称</span>
-              <input
-                v-model="profileName"
-                maxlength="20"
-                autocomplete="off"
-                @change="saveProfile"
-                @keydown.enter.prevent="saveProfile"
-              />
+              <span>账号</span>
+              <input :value="currentUser?.username || profileName" readonly />
             </label>
             <label class="mp-profile-field">
               <span>颜色</span>
@@ -2125,6 +2257,15 @@ onBeforeUnmount(() => {
       @preview-particle="onPreviewParticle"
       @toggle="onWeatherToggle"
       @close="closeWeather"
+    />
+
+    <ShareLoginDialog
+      :open="loginOpen"
+      title="登录后进入多人漫游"
+      subtitle="查看不需要登录。多人漫游使用云端账号建立连接和房间身份。"
+      note="登录成功后保留当前邀请码和场景，并自动连接多人服务。"
+      @close="loginOpen = false"
+      @success="handleLoginSuccess"
     />
 
     <ToastHost scope="multiplayer" kind="action" placement="top-center" offset="64px" />

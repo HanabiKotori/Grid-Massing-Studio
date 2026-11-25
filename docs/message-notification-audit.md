@@ -46,7 +46,7 @@
 | 7 | 分享页全屏错误 | `ShareApp.vue` `.share-error` | 页面级 | 链接撤销 / 加载失败时覆盖画布，只提供「返回编辑器」 | 无 |
 | 8 | 编辑器状态栏 | `StatusBar.vue`：保存中 / 已保存 / 保存失败 / 云端未就绪 | 持续 | 自动保存与云端状态的唯一持久入口 | 无 `aria-live` |
 | 9 | 评审只读 / 登录门槛 | `ReviewPanel.vue` `.rp-readonly` / `.rp-login-gate` | 持续 | 未登录、评论关闭时替代输入框 | 无 |
-| 10 | 多人聊天流 | `MultiplayerApp.vue` `.mp-chat-feed`；`gameService/server.mjs` | 最近 5 条，8 秒后消失 | WebSocket `message`；自己和他人的消息同流；系统提示也走同一通道 | 无 `role="log"` |
+| 10 | 多人聊天流 | `MultiplayerApp.vue` `.mp-chat-feed`；`dataService/src/multiplayer/index.mjs` | 最近 5 条，8 秒后消失 | WebSocket `message`；自己和他人的消息同流；系统提示也走同一通道 | 无 `role="log"` |
 | 11 | 徽标 / 在线状态 | `AppTopBar` 评审未读、分享查看人数；`ReviewPanel` 未读；`CommentLayer` 引脚；多人 `mp-online-badge` | 持续 | 评论未读、在线人数、评论引脚 | 在线人数有 `aria-live`，其余无 |
 | 12 | 页面级遮罩 | `App.vue` 启动遮罩；多人房间关闭弹窗 | 持续到完成 / 跳转 | 启动加载、房主退出、连接断开 | 启动遮罩有 `role="status"` |
 
@@ -401,7 +401,7 @@ interface AppMessage {
 | 分享页评论事件 | `src/share/ShareApp.vue` `handleStreamEvent` 的 `comment.created` |
 | 多人 Toast | `src/multiplayer/MultiplayerApp.vue` `toast()` |
 | 多人大厅持久提示 | `src/multiplayer/MultiplayerApp.vue` `error` / `status`；`.mp-alert-stack` |
-| 多人聊天 | `src/multiplayer/MultiplayerApp.vue` `sendChatMessage()` / `pushChat()`；`gameService/server.mjs` `sendChatMessage()` |
+| 多人聊天 | `src/multiplayer/MultiplayerApp.vue` `sendChatMessage()` / `pushChat()`；`dataService/src/multiplayer/index.mjs` `sendChatMessage()` |
 | 分享弹窗错误 | `src/review/ShareDialog.vue` `.sd-error` |
 | 云端弹窗错误 | `src/components/CloudStorageDialog.vue` `.cs-error` |
 | 分享登录错误 | `src/share/ShareLoginDialog.vue` `.sl-error` |

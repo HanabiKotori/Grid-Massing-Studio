@@ -10,8 +10,16 @@ const props = withDefaults(
   defineProps<{
     open: boolean
     initialMode?: 'login' | 'register'
+    title?: string
+    subtitle?: string
+    note?: string
   }>(),
-  { initialMode: 'login' },
+  {
+    initialMode: 'login',
+    title: '登录后参与评论',
+    subtitle: '查看链接不需要登录。登录仅用于评论身份、回复和解决状态。',
+    note: '使用与编辑器相同的云端账号。登录成功后回到当前视角，已选位置和草稿不会丢失。',
+  },
 )
 
 const emit = defineEmits<{
@@ -157,8 +165,8 @@ watch(
         >
           <header class="sl-head">
             <div>
-              <h2 id="sl-title">登录后参与评论</h2>
-              <p>查看链接不需要登录。登录仅用于评论身份、回复和解决状态。</p>
+              <h2 id="sl-title">{{ title }}</h2>
+              <p>{{ subtitle }}</p>
             </div>
             <button class="sl-close" type="button" aria-label="关闭" @click="close">×</button>
           </header>
@@ -282,7 +290,7 @@ watch(
               {{ submitting ? '请稍候…' : mode === 'register' ? '注册并登录' : '登录' }}
             </button>
           </footer>
-          <p class="sl-note">使用与编辑器相同的云端账号。登录成功后回到当前视角，已选位置和草稿不会丢失。</p>
+          <p class="sl-note">{{ note }}</p>
         </div>
       </div>
     </Transition>

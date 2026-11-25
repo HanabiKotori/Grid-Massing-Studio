@@ -1,6 +1,6 @@
 # Grid Massing Studio 云存储服务（dataService）
 
-为前端提供账号注册 / 登录、滑块验证码与多版本场景存储。前端通过 `.env` 中的
+为前端提供账号注册 / 登录、滑块验证码、多版本场景存储，以及登录后才能进入的多人漫游房间。前端通过 `.env` 中的
 `VITE_CLOUD_STORAGE_ENABLED` 决定使用云端还是浏览器 IndexedDB。
 
 ## 功能
@@ -11,6 +11,7 @@
 - 登录状态下自动保存写入所选位置，支持手动保存 / 加载 / 删除；
 - 分享链接：绑定云端存档实例，一个存档一条链接，实时 / 冻结快照、公开查看、登录评论；删除存档会级联删除链接；
 - 实时通道：SSE 广播场景增量补丁、评论新增 / 状态变更 / 解决日志 / 状态讨论 / 删除；
+- 多人漫游：同进程 WebSocket `/ws`，登录用户换一次性票后进入房间；房间、玩家、场景只存在内存；
 - MySQL 表结构在启动时自动创建（`schema.sql` 也可手动执行）。
 
 ## 快速开始
@@ -45,6 +46,10 @@ curl http://127.0.0.1:3020/api/health
 | `JWT_SECRET` | 临时随机 | 登录令牌密钥，生产必须固定配置 |
 | `JWT_EXPIRES` | `7d` | 令牌有效期 |
 | `MAX_SCENE_MB` | `40` | 单个场景 JSON 上限 |
+| `MULTIPLAYER_ENABLED` | `true` | 是否启用同端口 `/ws` 多人服务 |
+| `MAX_ROOM_SIZE` | `8` | 多人房间人数上限（2–8） |
+| `TICK_HZ` | `10` | 房间快照广播频率（1–30） |
+| `WS_TICKET_TTL` | `60` | WebSocket 一次性连接票有效期（秒） |
 | `ALLOWED_ORIGINS` | 空 | 允许的前端来源，逗号分隔；留空允许所有来源 |
 
 ## MySQL 说明
@@ -74,6 +79,7 @@ SOURCE schema.sql;
 | POST | `/api/auth/register` | 注册：`username`、`password`、`captchaToken`、`captchaX` |
 | POST | `/api/auth/login` | 登录，参数同上 |
 | GET | `/api/auth/me` | 当前用户，需要 `Authorization: Bearer <token>` |
+| POST | `/api/multiplayer/ticket` | 登录用户换取 60 秒一次性 WebSocket 连接票 |
 | GET | `/api/storage` | 存储位置列表（最多 10 条） |
 | GET | `/api/storage/:slot` | 读取指定位置的完整场景 |
 | PUT | `/api/storage/:slot` | 保存 / 覆盖：`{ name, scene }` |
@@ -83,6 +89,18 @@ SOURCE schema.sql;
 | DELETE | `/api/shares/:token` | 删除链接；重新分享生成新 token |
 
 `slot` 取值为 1-10，每个用户独立。
+
+## 多人漫游 /ws
+
+多人漫游与 HTTP 共用 `3020` 端口。连接必须登录：
+
+1. 浏览器带 JWT 调用 `POST /api/multiplayer/ticket`；
+2. 服务端返回 60 秒、单次使用、绑定 userId 的票；
+3. 浏览器连接 `/ws?ticket=...`；
+4. 服务端在 upgrade 阶段消费票，并把数据库中的当前用户名绑定到连接；
+5. 之后沿用原有 `create / join / state / interact / profile / gate / weather / time / message / kick / leave` 协议。
+
+房间昵称固定为账号名，`profile` 只接受颜色；无票、过期票、重复票和跨 Origin 的升级会被拒绝。房间只存在内存，服务重启即清空。
 
 ## 分享与实时评审接口
 
@@ -143,12 +161,24 @@ VITE_CLOUD_STORAGE_ENABLED=true
 ## 部署示例（Nginx）
 
 ```nginx
-location /api/ {
+location ^~ /api/ {
   proxy_pass http://127.0.0.1:3020;
   proxy_set_header Host $host;
   proxy_set_header X-Real-IP $remote_addr;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_buffering off;
   client_max_body_size 50m;
+}
+
+location ^~ /ws {
+  proxy_pass http://127.0.0.1:3020;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_read_timeout 3600s;
 }
 ```
 

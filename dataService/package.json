@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Grid Massing Studio cloud storage service: accounts, slider captcha and versioned scene slots",
+  "description": "Grid Massing Studio service: accounts, cloud storage, sharing/review SSE and authenticated multiplayer WebSocket",
   "main": "server.mjs",
   "scripts": {
     "start": "node server.mjs",
@@ -14,6 +14,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.11.5"
+    "mysql2": "^3.11.5",
+    "ws": "^8.18.0"
   }
 }

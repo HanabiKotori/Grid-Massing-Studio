@@ -46,6 +46,7 @@ import {
   loadStoredProject,
   saveStoredProject,
 } from './core/projectStore'
+import { setMultiplayerSceneHandoff } from './multiplayer/sceneHandoff'
 import sampleSceneJson from './data/sample-scene.json'
 import { exportBoothList, type SceneJson } from './core/sceneFile'
 import {
@@ -1869,24 +1870,41 @@ function confirmPendingAction() {
   toast('已清空场景数据')
 }
 
-/** 多人漫游在新页面运行；先落盘当前场景，避免跳转丢失最新编辑 */
+/** 进入多人页：场景优先内存直传，落盘只作为刷新兜底，不阻塞跳转 */
 async function openMultiplayer() {
   if (!venue.value) {
     toast('请先创建场馆')
     return
   }
   const snapshot = { version: 1, savedAt: Date.now(), scene: buildSceneJson() }
-  try {
-    // 云模式完全不用 IndexedDB，改为同一标签页的 sessionStorage 传递场景
-    if (cloud.enabled) {
+  setMultiplayerSceneHandoff(snapshot)
+
+  // 大型场景可能超过 sessionStorage 配额；失败时再尝试 IndexedDB，
+  // 两者都失败也不阻止同页跳转，因为多人页会直接读取内存快照。
+  if (cloud.enabled) {
+    try {
       sessionStorage.setItem('gms.multiplayer.scene', JSON.stringify(snapshot))
-    } else {
-      await saveStoredProject(snapshot)
+    } catch (err) {
+      console.warn('多人场景写入 sessionStorage 失败，尝试本地兜底', err)
+      try {
+        await saveStoredProject(snapshot)
+      } catch (fallbackErr) {
+        console.warn('多人场景本地兜底失败，使用内存交接', fallbackErr)
+      }
     }
+  } else {
+    try {
+      await saveStoredProject(snapshot)
+    } catch (err) {
+      console.warn('多人场景写入 IndexedDB 失败，使用内存交接', err)
+    }
+  }
+
+  try {
     await router.push({ name: 'multiplayer' })
   } catch (err) {
     console.error(err)
-    toast('进入多人漫游失败：无法保存当前场景')
+    toast('进入多人漫游失败，请重试')
   }
 }
 

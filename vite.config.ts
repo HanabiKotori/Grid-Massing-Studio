@@ -13,6 +13,12 @@ export default defineConfig({
         target: 'http://127.0.0.1:3020',
         changeOrigin: true,
       },
+      // 多人 WebSocket 与生产一致走 dataService 的 /ws
+      '/ws': {
+        target: 'ws://127.0.0.1:3020',
+        ws: true,
+        changeOrigin: true,
+      },
     },
   },
   build: {

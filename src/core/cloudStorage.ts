@@ -174,6 +174,13 @@ export const cloudApi = {
 
   me: () => request<{ user: CloudUser }>('/api/auth/me', {}, true),
 
+  multiplayerTicket: () =>
+    request<{ ticket: string; expiresIn: number }>(
+      '/api/multiplayer/ticket',
+      { method: 'POST' },
+      true,
+    ),
+
   listSlots: () =>
     request<{ slotLimit: number; slots: CloudSlotMeta[] }>('/api/storage', {}, true),
 
